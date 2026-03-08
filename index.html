@@ -220,23 +220,32 @@
         </div>
       </div>
 
-      <!-- Action Row: status + CTA -->
+      <!-- Action Row: CTA only -->
       <div class="action-row">
-        <div class="status-inline" aria-live="polite">
-          <span id="status-phase" class="status-phase">Ready</span>
-          <span class="status-sep" aria-hidden="true">&middot;</span>
-          <span id="status-source" class="status-source">Nothing queued</span>
-        </div>
         <button id="transcribe-button" class="transcribe-btn" type="button">
           Transcribe
         </button>
       </div>
-      <p id="status-message" class="status-message" aria-live="polite">
-        Choose an upload or a YouTube link to begin.
-      </p>
 
-      <!-- Transcript Card -->
-      <div class="card result-card">
+      <!-- Progress Card (shown while busy, dismissed on success) -->
+      <div
+        id="progress-card"
+        class="card progress-card"
+        aria-live="polite"
+        hidden>
+        <div class="progress-card-head">
+          <p id="progress-phase" class="progress-phase">Processing</p>
+          <p id="progress-source" class="progress-source"></p>
+        </div>
+        <div class="progress-track">
+          <div id="progress-bar" class="progress-bar"></div>
+        </div>
+        <p id="progress-message" class="progress-message"></p>
+        <ol id="progress-timeline" class="progress-timeline"></ol>
+      </div>
+
+      <!-- Transcript Card (hidden until first success) -->
+      <div id="transcript-card" class="card result-card card-reveal" hidden>
         <div class="card-head">
           <h2 class="card-title">Transcript</h2>
           <div class="card-actions">
@@ -253,6 +262,9 @@
               type="button"
               disabled>
               Summarize
+              <span class="quota-tag"
+                ><strong id="summary-quota">2</strong> left</span
+              >
             </button>
           </div>
         </div>
@@ -267,17 +279,13 @@
           placeholder="Your transcript will appear here after a successful run."></textarea>
       </div>
 
-      <!-- Summary Card -->
-      <div class="card summary-card">
+      <!-- Summary Card (hidden until summary completes) -->
+      <div id="summary-card" class="card summary-card card-reveal" hidden>
         <div class="card-head">
           <h2 class="card-title">Summary</h2>
-          <span class="quota-tag"
-            ><strong id="summary-quota">2</strong> summaries left</span
-          >
         </div>
         <div id="summary-output" class="summary-output">
-          Hit Summarize after a transcript completes. Two summaries are
-          available per day on the free tier.
+          Hit Summarize after a transcript completes.
         </div>
       </div>
 

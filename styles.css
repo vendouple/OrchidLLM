@@ -684,6 +684,7 @@ button {
   display: flex;
   width: 200%;
   will-change: transform;
+  /* height matches the taller panel; JS overrides via --panel-h */
   transition: transform 0.45s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
 
@@ -697,6 +698,13 @@ button {
   display: grid;
   gap: 0.85rem;
   padding: 1.25rem;
+}
+
+/* YouTube panel — compact, no wasted height */
+#panel-youtube {
+  align-content: start;
+  gap: 0.65rem;
+  padding: 1rem 1.25rem;
 }
 
 /* Dropzone */
@@ -798,54 +806,15 @@ button {
 }
 
 /* =========================================================
-   Action Row — status + CTA
+   Action Row — CTA only
    ========================================================= */
 .action-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 1rem;
   flex-wrap: wrap;
-}
-
-.status-inline {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  min-width: 0;
-  flex: 1;
-  overflow: hidden;
-}
-
-.status-phase {
-  font-size: 0.82rem;
-  font-weight: 650;
-  color: var(--text);
-  white-space: nowrap;
-}
-
-.status-sep {
-  color: var(--text-3);
-  font-size: 0.82rem;
-}
-
-.status-source {
-  font-size: 0.82rem;
-  color: var(--text-2);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.status-message {
-  margin: -0.35rem 0 0;
-  font-size: 0.79rem;
-  color: var(--text-3);
-  line-height: 1.5;
-}
-
-.status-message.is-error {
-  color: var(--text-error);
+  padding: 0 0.1rem;
 }
 
 /* Transcribe CTA */
@@ -883,6 +852,217 @@ button {
   opacity: 0.4;
   cursor: not-allowed;
   transform: none;
+}
+
+/* =========================================================
+   Progress Card
+   ========================================================= */
+
+/* Keyframes */
+@keyframes progressPulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+@keyframes progressIndeterminate {
+  0% {
+    transform: translateX(-100%) scaleX(0.4);
+  }
+  50% {
+    transform: translateX(50%) scaleX(0.7);
+  }
+  100% {
+    transform: translateX(200%) scaleX(0.4);
+  }
+}
+
+@keyframes cardReveal {
+  0% {
+    opacity: 0;
+    transform: translateY(12px) scale(0.97);
+    max-height: 0;
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    max-height: 1200px;
+  }
+}
+
+@keyframes cardDismiss {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+    max-height: 400px;
+    margin-bottom: 0;
+    padding-top: 1.4rem;
+    padding-bottom: 1.4rem;
+  }
+  40% {
+    transform: scale(1.015);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(0.96);
+    max-height: 0;
+    margin-bottom: -0.85rem;
+    padding-top: 0;
+    padding-bottom: 0;
+  }
+}
+
+.card-reveal {
+  animation: none;
+}
+
+/* When JS removes [hidden] and adds .is-revealed */
+.card-reveal.is-revealed {
+  animation: cardReveal 0.5s cubic-bezier(0.34, 1.2, 0.64, 1) both;
+}
+
+.progress-card {
+  overflow: hidden;
+}
+
+/* JS adds .is-dismissing just before setting hidden again */
+.progress-card.is-dismissing {
+  animation: cardDismiss 0.52s cubic-bezier(0.36, 0, 0.66, -0.56) forwards;
+  pointer-events: none;
+}
+
+.progress-card-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.75rem;
+  margin-bottom: 0.85rem;
+  flex-wrap: wrap;
+}
+
+.progress-phase {
+  margin: 0;
+  font-size: 0.88rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--text);
+  animation: progressPulse 2s ease-in-out infinite;
+}
+
+.progress-source {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 60%;
+}
+
+/* Track */
+.progress-track {
+  height: 4px;
+  border-radius: 999px;
+  background: var(--glass-input);
+  overflow: hidden;
+  margin-bottom: 0.8rem;
+  border: 1px solid var(--border);
+}
+
+/* Determinate fill OR indeterminate sweep */
+.progress-bar {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(
+    90deg,
+    rgba(200, 205, 255, 0.9) 0%,
+    rgba(255, 255, 255, 0.95) 50%,
+    rgba(200, 205, 255, 0.9) 100%
+  );
+  box-shadow: 0 0 8px rgba(200, 205, 255, 0.5);
+  transition: width 0.6s var(--ease);
+  width: 0%;
+}
+
+.progress-bar.is-indeterminate {
+  width: 40% !important;
+  animation: progressIndeterminate 1.6s ease-in-out infinite;
+}
+
+.progress-message {
+  margin: 0 0 0.85rem;
+  font-size: 0.8rem;
+  color: var(--text-2);
+  line-height: 1.5;
+}
+
+/* Timeline */
+.progress-timeline {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+}
+
+.progress-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.6rem;
+  font-size: 0.79rem;
+  line-height: 1.45;
+  color: var(--text-3);
+  transition: color 0.3s ease;
+}
+
+.progress-step.is-done {
+  color: var(--text-2);
+}
+
+.progress-step.is-active {
+  color: var(--text);
+}
+
+.progress-step-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border-strong);
+  flex-shrink: 0;
+  margin-top: 0.32em;
+  transition:
+    background 0.3s ease,
+    box-shadow 0.3s ease;
+}
+
+.progress-step.is-done .progress-step-dot {
+  background: rgba(200, 205, 255, 0.7);
+}
+
+.progress-step.is-active .progress-step-dot {
+  background: rgba(220, 225, 255, 0.95);
+  box-shadow: 0 0 6px rgba(200, 205, 255, 0.7);
+  animation: progressPulse 1.4s ease-in-out infinite;
+}
+
+.progress-step.is-error .progress-step-dot {
+  background: var(--text-error);
+  box-shadow: 0 0 6px rgba(248, 113, 113, 0.5);
+}
+.progress-step.is-error {
+  color: var(--text-error);
+}
+
+/* quota-tag inside a button */
+.ghost-btn .quota-tag {
+  margin-left: 0.3rem;
+  padding: 0.18rem 0.45rem;
+  font-size: 0.67rem;
+  vertical-align: middle;
 }
 
 /* =========================================================
@@ -1158,7 +1338,8 @@ button {
     flex-direction: column;
     align-items: stretch;
   }
-  .transcribe-btn {
+
+  .action-row .transcribe-btn {
     width: 100%;
     justify-content: center;
     padding: 0.85rem 1.5rem;

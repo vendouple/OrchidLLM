@@ -79,13 +79,20 @@ const dom = {
   youtubeUrl: document.querySelector("#youtube-url"),
   panelsTrack: document.querySelector("#panels-track"),
   transcribeButton: document.querySelector("#transcribe-button"),
-  statusPhase: document.querySelector("#status-phase"),
-  statusSource: document.querySelector("#status-source"),
-  statusMessage: document.querySelector("#status-message"),
+  // Progress card
+  progressCard: document.querySelector("#progress-card"),
+  progressPhase: document.querySelector("#progress-phase"),
+  progressSource: document.querySelector("#progress-source"),
+  progressBar: document.querySelector("#progress-bar"),
+  progressMessage: document.querySelector("#progress-message"),
+  progressTimeline: document.querySelector("#progress-timeline"),
+  // Result
+  transcriptCard: document.querySelector("#transcript-card"),
   resultMeta: document.querySelector("#result-meta"),
   transcriptOutput: document.querySelector("#transcript-output"),
   downloadTranscript: document.querySelector("#download-transcript"),
   summarizeButton: document.querySelector("#summarize-button"),
+  summaryCard: document.querySelector("#summary-card"),
   summaryOutput: document.querySelector("#summary-output"),
   historyList: document.querySelector("#history-list"),
   trimDialog: document.querySelector("#trim-dialog"),
@@ -115,7 +122,6 @@ function initialize() {
   renderSummaryQuota();
   renderSourceMode();
   renderFileMeta();
-  renderStatus();
   renderHistory();
   renderActiveEntry();
 }
@@ -279,7 +285,6 @@ function setSourceMode(mode) {
   state.sourceMode = mode === "youtube" ? "youtube" : "upload";
   persistUiState();
   renderSourceMode();
-  renderStatus();
 }
 
 function renderSourceMode() {
@@ -325,12 +330,6 @@ async function setSelectedFile(file) {
     return;
   }
 
-  updateStatusCard({
-    phase: "Inspecting",
-    source: file.name,
-    message: "Reading media metadata locally before upload.",
-  });
-
   try {
     const durationSeconds = await loadMediaDuration(file);
     state.selectedFile = file;
@@ -344,23 +343,9 @@ async function setSelectedFile(file) {
     };
     renderFileMeta();
     persistUiState();
-    updateStatusCard({
-      phase: "Ready",
-      source: file.name,
-      message:
-        durationSeconds > MAX_CLIP_SECONDS
-          ? "This file is over five minutes. A clip picker will open when you start transcription."
-          : "File is ready for transcription.",
-    });
   } catch (error) {
     const message = getErrorMessage(error, "Could not inspect this file.");
     showToast(message, true);
-    updateStatusCard({
-      phase: "Error",
-      source: file.name,
-      message,
-      isError: true,
-    });
     renderFileMeta();
   }
 }
@@ -372,25 +357,11 @@ async function handleInspectYoutube() {
     return;
   }
 
-  updateStatusCard({
-    phase: "Inspecting",
-    source: "YouTube",
-    message: "Reading YouTube metadata in the browser.",
-  });
-
   try {
     const youtubeInfo = await inspectYoutubeUrl(url);
     state.youtubeInfo = youtubeInfo;
     persistUiState();
     renderYoutubeMeta();
-    updateStatusCard({
-      phase: "Ready",
-      source: youtubeInfo.title || youtubeInfo.videoId,
-      message:
-        youtubeInfo.durationSeconds > MAX_CLIP_SECONDS
-          ? "This video is over five minutes. A clip picker will open before transcription."
-          : "YouTube link is ready for transcription.",
-    });
   } catch (error) {
     const message = getErrorMessage(
       error,
@@ -398,12 +369,6 @@ async function handleInspectYoutube() {
     );
     state.youtubeInfo = null;
     renderYoutubeMeta();
-    updateStatusCard({
-      phase: "Error",
-      source: "YouTube",
-      message,
-      isError: true,
-    });
     showToast(message, true);
   }
 }
@@ -433,11 +398,6 @@ async function handleTranscribe() {
     });
 
     if (!clipRange) {
-      updateStatusCard({
-        phase: "Cancelled",
-        source: source.label,
-        message: "No clip was selected.",
-      });
       return;
     }
   }
@@ -448,41 +408,72 @@ async function handleTranscribe() {
   setBusyState(true);
   persistHistory();
   renderHistory();
-  renderActiveEntry();
+
+  // Define the steps for this job
+  const steps =
+    source.kind === "upload"
+      ? ["Uploading file", "Processing audio", "Transcribing"]
+      : ["Connecting to server", "Downloading audio", "Transcribing"];
+
+  showProgressCard({
+    phase: source.kind === "upload" ? "Uploading" : "Preparing",
+    source: source.label,
+    message:
+      source.kind === "upload"
+        ? clipRange
+          ? "Sending the file and clip range to the backend for trimming and transcription."
+          : "Sending the file for transcription."
+        : "Sending the YouTube link to the backend for processing.",
+    steps,
+    activeStep: 0,
+  });
 
   try {
     let transcriptText = "";
 
     if (source.kind === "upload") {
-      updateTask(entry.id, {
+      updateProgressCard({
         phase: "Uploading",
-        source: source.label,
+        activeStep: 0,
         message: clipRange
           ? "Sending the file and clip range to the backend for trimming and transcription."
           : "Sending the file for transcription.",
       });
       updateEntryStatus(entry.id, "transcribing");
       renderHistory();
-      renderActiveEntry();
       transcriptText = await transcribeUploadedFile(
         source.file,
         source,
         clipRange,
+        (stepIndex, message) =>
+          updateProgressCard({
+            phase: "Transcribing",
+            activeStep: stepIndex,
+            message,
+          }),
       );
     } else {
-      updateTask(entry.id, {
-        phase: "Transcribing",
-        source: source.label,
+      updateProgressCard({
+        phase: "Connecting",
+        activeStep: 0,
         message: "Sending the YouTube link to the backend for processing.",
       });
       updateEntryStatus(entry.id, "transcribing");
       renderHistory();
-      renderActiveEntry();
       console.log(
         "[Onescriber] Starting YouTube transcription for:",
         source.youtubeUrl,
       );
-      transcriptText = await transcribeYoutubeSource(source, clipRange);
+      transcriptText = await transcribeYoutubeSource(
+        source,
+        clipRange,
+        (stepIndex, message) =>
+          updateProgressCard({
+            phase: "Transcribing",
+            activeStep: stepIndex,
+            message,
+          }),
+      );
     }
 
     const completedEntry = updateEntry(entry.id, {
@@ -495,11 +486,9 @@ async function handleTranscribe() {
     clearActiveTask();
     renderHistory();
     renderActiveEntry();
-    updateStatusCard({
-      phase: "Completed",
-      source: source.label,
-      message: "Transcript is ready.",
-    });
+    // Dismiss the progress card with a spring bounce, then reveal transcript
+    await dismissProgressCard();
+    revealCard(dom.transcriptCard);
     showToast(`Transcript ready for ${completedEntry.title}.`);
   } catch (error) {
     const baseMessage = getErrorMessage(
@@ -519,13 +508,8 @@ async function handleTranscribe() {
     });
     clearActiveTask();
     renderHistory();
-    renderActiveEntry();
-    updateStatusCard({
-      phase: "Error",
-      source: source.label,
-      message,
-      isError: true,
-    });
+    // Show error state in progress card
+    updateProgressCard({ phase: "Error", message, isError: true });
     showToast(message, true);
   } finally {
     setBusyState(false);
@@ -670,13 +654,22 @@ async function handleSummarize(entryId = state.activeEntryId) {
   }
 
   setBusyState(true);
-  updateStatusCard({
+
+  // Show progress card for summarization
+  showProgressCard({
     phase: "Summarizing",
     source: entry.title,
     message: "Sending the transcript to gemini-fast.",
+    steps: ["Sending transcript", "Generating summary"],
+    activeStep: 0,
   });
 
   try {
+    updateProgressCard({
+      phase: "Generating",
+      activeStep: 1,
+      message: "AI is writing the summary.",
+    });
     const summary = await summarizeTranscript(entry.transcript);
     incrementSummaryQuota();
     updateEntry(entry.id, {
@@ -686,20 +679,12 @@ async function handleSummarize(entryId = state.activeEntryId) {
     renderSummaryQuota();
     renderHistory();
     renderActiveEntry();
-    updateStatusCard({
-      phase: "Completed",
-      source: entry.title,
-      message: "Summary is ready.",
-    });
+    await dismissProgressCard();
+    revealCard(dom.summaryCard);
     showToast("Summary generated.");
   } catch (error) {
     const message = getErrorMessage(error, "Summary generation failed.");
-    updateStatusCard({
-      phase: "Error",
-      source: entry.title,
-      message,
-      isError: true,
-    });
+    updateProgressCard({ phase: "Error", message, isError: true });
     showToast(message, true);
   } finally {
     setBusyState(false);
@@ -889,8 +874,9 @@ function persistUiState() {
 function setBusyState(isBusy) {
   state.isBusy = isBusy;
   dom.transcribeButton.disabled = isBusy;
-  dom.summarizeButton.disabled = isBusy || !getActiveEntry()?.transcript;
-  dom.downloadTranscript.disabled = !getActiveEntry()?.transcript;
+  const hasTranscript = Boolean(getActiveEntry()?.transcript);
+  dom.summarizeButton.disabled = isBusy || !hasTranscript;
+  dom.downloadTranscript.disabled = !hasTranscript;
 }
 
 function updateTask(entryId, task) {
@@ -903,7 +889,6 @@ function updateTask(entryId, task) {
     STORAGE_KEYS.activeTask,
     JSON.stringify(state.activeTask),
   );
-  updateStatusCard(task);
 }
 
 function clearActiveTask() {
@@ -911,48 +896,89 @@ function clearActiveTask() {
   sessionStorage.removeItem(STORAGE_KEYS.activeTask);
 }
 
-function updateStatusCard({ phase, source, message, isError = false }) {
-  dom.statusPhase.textContent = phase;
-  dom.statusSource.textContent = source;
-  dom.statusMessage.textContent = message;
-  dom.statusMessage.classList.toggle("is-error", Boolean(isError));
+/* --- Progress Card helpers --- */
+
+let _progressSteps = [];
+
+function showProgressCard({
+  phase,
+  source,
+  message,
+  steps = [],
+  activeStep = 0,
+}) {
+  _progressSteps = steps;
+  dom.progressCard.hidden = false;
+  dom.progressCard.classList.remove("is-dismissing");
+  dom.progressPhase.textContent = phase;
+  dom.progressSource.textContent = source || "";
+  dom.progressMessage.textContent = message || "";
+  dom.progressBar.classList.add("is-indeterminate");
+  dom.progressBar.style.width = "0%";
+  _renderProgressTimeline(activeStep, false);
 }
 
-function renderStatus() {
-  if (state.activeTask) {
-    updateStatusCard({
-      phase: state.activeTask.phase,
-      source: state.activeTask.source,
-      message: state.activeTask.restored
-        ? `${state.activeTask.message} Last known status restored after refresh.`
-        : state.activeTask.message,
-    });
-    return;
+function updateProgressCard({ phase, activeStep, message, isError = false }) {
+  if (phase) dom.progressPhase.textContent = phase;
+  if (message !== undefined) dom.progressMessage.textContent = message;
+  if (activeStep !== undefined) {
+    _renderProgressTimeline(activeStep, isError);
+    // Approximate deterministic fill: (step+1)/total * 90%, cap at 90 until done
+    const pct = Math.min(
+      90,
+      Math.round(((activeStep + 1) / Math.max(1, _progressSteps.length)) * 90),
+    );
+    if (!isError) {
+      dom.progressBar.classList.remove("is-indeterminate");
+      dom.progressBar.style.width = `${pct}%`;
+    }
   }
-
-  const activeEntry = getActiveEntry();
-  if (activeEntry) {
-    updateStatusCard({
-      phase: formatStatus(activeEntry.status),
-      source: activeEntry.title,
-      message:
-        activeEntry.status === "error"
-          ? activeEntry.errorMessage || "The last run failed."
-          : activeEntry.status === "interrupted"
-            ? activeEntry.errorMessage
-            : activeEntry.transcript
-              ? "Ready for download or summary."
-              : "Select a source to start a new transcript.",
-      isError: activeEntry.status === "error",
-    });
-    return;
+  if (isError) {
+    dom.progressBar.classList.remove("is-indeterminate");
+    dom.progressBar.style.width = "0%";
+    _renderProgressTimeline(-1, true);
   }
+}
 
-  updateStatusCard({
-    phase: "Ready",
-    source: state.sourceMode === "upload" ? "Upload media" : "YouTube",
-    message: "Choose an upload or a YouTube link to begin.",
+function _renderProgressTimeline(activeStep, isError) {
+  dom.progressTimeline.innerHTML = _progressSteps
+    .map((label, i) => {
+      let cls = "progress-step";
+      if (isError && i === activeStep) cls += " is-error";
+      else if (i < activeStep) cls += " is-done";
+      else if (i === activeStep) cls += " is-active";
+      return `<li class="${cls}"><span class="progress-step-dot"></span>${escapeHtml(label)}</li>`;
+    })
+    .join("");
+}
+
+function dismissProgressCard() {
+  return new Promise((resolve) => {
+    // Snap bar to 100% then dismiss
+    dom.progressBar.classList.remove("is-indeterminate");
+    dom.progressBar.style.width = "100%";
+    setTimeout(() => {
+      dom.progressCard.classList.add("is-dismissing");
+      dom.progressCard.addEventListener(
+        "animationend",
+        () => {
+          dom.progressCard.hidden = true;
+          dom.progressCard.classList.remove("is-dismissing");
+          dom.progressBar.style.width = "0%";
+          resolve();
+        },
+        { once: true },
+      );
+    }, 300);
   });
+}
+
+function revealCard(cardEl) {
+  if (!cardEl) return;
+  cardEl.hidden = false;
+  // Force reflow so the animation triggers
+  void cardEl.offsetWidth;
+  cardEl.classList.add("is-revealed");
 }
 
 function renderFileMeta() {
@@ -1043,18 +1069,29 @@ function renderHistory() {
 
 function renderActiveEntry() {
   const entry = getActiveEntry();
-  dom.downloadTranscript.disabled = !entry?.transcript;
+  const hasTranscript = Boolean(entry?.transcript);
+  dom.downloadTranscript.disabled = !hasTranscript;
   dom.summarizeButton.disabled =
     state.isBusy ||
-    !entry?.transcript ||
+    !hasTranscript ||
     getSummaryQuota().count >= MAX_SUMMARIES_PER_DAY;
 
   if (!entry) {
     dom.resultMeta.innerHTML = "Completed transcripts will show metadata here.";
     dom.transcriptOutput.value = "";
     dom.summaryOutput.textContent =
-      "Each browser gets two summaries per day on the free tier.";
+      "Hit Summarize after a transcript completes.";
     return;
+  }
+
+  // Show transcript card if we have a transcript
+  if (hasTranscript && dom.transcriptCard.hidden) {
+    revealCard(dom.transcriptCard);
+  }
+
+  // Show summary card if we have a summary
+  if (entry.summary && dom.summaryCard.hidden) {
+    revealCard(dom.summaryCard);
   }
 
   dom.resultMeta.innerHTML = `
@@ -1075,9 +1112,7 @@ function renderActiveEntry() {
   `;
   dom.transcriptOutput.value = entry.transcript || "";
   dom.summaryOutput.textContent =
-    entry.summary ||
-    "Each browser gets two summaries per day on the free tier.";
-  renderStatus();
+    entry.summary || "Hit Summarize after a transcript completes.";
 }
 
 function renderSummaryQuota() {
