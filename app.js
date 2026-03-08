@@ -1,16 +1,8 @@
-import { FFmpeg } from "https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.15/dist/esm/index.js";
-import {
-  fetchFile,
-  toBlobURL,
-} from "https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/esm/index.js";
-
 const MAX_HISTORY_ITEMS = 3;
 const MAX_SUMMARIES_PER_DAY = 2;
 const MAX_CLIP_SECONDS = 5 * 60;
 const TRANSCRIPTION_MODEL = "whisper-large-v3";
 const SUMMARY_MODEL = "gemini-fast";
-const FFMPEG_CORE_BASE_URL =
-  "https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.10/dist/esm";
 
 const SUPPORTED_EXTENSIONS = new Set([
   ".mp3",
@@ -40,20 +32,21 @@ const backendBaseUrl = normalizeBaseUrl(
 
 const API_CONFIG = {
   directApiKey: runtimeConfig.apiKey || runtimeConfig.directApiKey || "",
-  directTranscribeUrl:
-    runtimeConfig.directTranscribeUrl ||
-    "https://gen.pollinations.ai/v1/audio/transcriptions",
   directSummaryUrl:
     runtimeConfig.directSummaryUrl ||
     "https://gen.pollinations.ai/v1/chat/completions",
-  transcribeProxyUrl:
-    runtimeConfig.transcribeUrl ||
-    joinUrl(backendBaseUrl, "/transcribe") ||
-    "/transcribe",
+  transcribeYoutubeUrl:
+    runtimeConfig.transcribeYoutubeUrl ||
+    joinUrl(backendBaseUrl, "/api/transcribe/youtube") ||
+    "/api/transcribe/youtube",
+  transcribeUploadUrl:
+    runtimeConfig.transcribeUploadUrl ||
+    joinUrl(backendBaseUrl, "/api/transcribe/upload") ||
+    "/api/transcribe/upload",
   summarizeProxyUrl:
     runtimeConfig.summarizeUrl ||
-    joinUrl(backendBaseUrl, "/summarize") ||
-    "/summarize",
+    joinUrl(backendBaseUrl, "/api/summarize") ||
+    "/api/summarize",
 };
 
 const state = {
@@ -68,8 +61,6 @@ const state = {
   youtubeInfo: null,
   isBusy: false,
   toastTimerId: null,
-  ffmpeg: null,
-  ffmpegPromise: null,
   youtubeApiPromise: null,
   youtubePlayerPromise: null,
 };
@@ -86,8 +77,7 @@ const dom = {
   dropzone: document.querySelector("#dropzone"),
   fileMeta: document.querySelector("#file-meta"),
   youtubeUrl: document.querySelector("#youtube-url"),
-  inspectYoutube: document.querySelector("#inspect-youtube"),
-  youtubeMeta: document.querySelector("#youtube-meta"),
+  panelsTrack: document.querySelector("#panels-track"),
   transcribeButton: document.querySelector("#transcribe-button"),
   statusPhase: document.querySelector("#status-phase"),
   statusSource: document.querySelector("#status-source"),
@@ -125,7 +115,6 @@ function initialize() {
   renderSummaryQuota();
   renderSourceMode();
   renderFileMeta();
-  renderYoutubeMeta();
   renderStatus();
   renderHistory();
   renderActiveEntry();
@@ -136,16 +125,14 @@ function bindEvents() {
   dom.tabUpload.addEventListener("click", () => setSourceMode("upload"));
   dom.tabYoutube.addEventListener("click", () => setSourceMode("youtube"));
   dom.fileInput.addEventListener("change", handleFileSelection);
-  dom.inspectYoutube.addEventListener("click", handleInspectYoutube);
   dom.transcribeButton.addEventListener("click", handleTranscribe);
   dom.downloadTranscript.addEventListener("click", handleDownloadTranscript);
   dom.summarizeButton.addEventListener("click", () => handleSummarize());
   dom.historyList.addEventListener("click", handleHistoryAction);
-  dom.youtubeUrl.addEventListener("keydown", (event) => {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      handleInspectYoutube();
-    }
+  dom.youtubeUrl.addEventListener("input", () => {
+    // Clear stale cached info when the user types a new URL
+    state.youtubeInfo = null;
+    console.log("[Onescriber] YouTube URL changed, cleared cached info.");
   });
   dom.trimStart.addEventListener("input", validateTrimDialog);
   dom.trimEnd.addEventListener("input", validateTrimDialog);
@@ -301,8 +288,8 @@ function renderSourceMode() {
   dom.tabYoutube.classList.toggle("is-active", !isUpload);
   dom.tabUpload.setAttribute("aria-selected", String(isUpload));
   dom.tabYoutube.setAttribute("aria-selected", String(!isUpload));
-  dom.panelUpload.hidden = !isUpload;
-  dom.panelYoutube.hidden = isUpload;
+  dom.panelsTrack.classList.toggle("show-youtube", !isUpload);
+  console.log("[Onescriber] Source mode set to:", state.sourceMode);
 }
 
 async function handleFileSelection(event) {
@@ -319,6 +306,14 @@ async function setSelectedFile(file) {
     return;
   }
 
+  console.log(
+    "[Onescriber] File selected:",
+    file.name,
+    "type:",
+    file.type,
+    "size:",
+    file.size,
+  );
   const extension = getFileExtension(file.name);
   if (!SUPPORTED_EXTENSIONS.has(extension)) {
     showToast(
@@ -423,6 +418,13 @@ async function handleTranscribe() {
     return;
   }
 
+  console.log(
+    "[Onescriber] Transcribe triggered. Source kind:",
+    source.kind,
+    "label:",
+    source.label,
+  );
+
   let clipRange = null;
   if (source.durationSeconds > MAX_CLIP_SECONDS) {
     clipRange = await openTrimDialog({
@@ -453,18 +455,17 @@ async function handleTranscribe() {
 
     if (source.kind === "upload") {
       updateTask(entry.id, {
-        phase: clipRange ? "Preparing clip" : "Uploading",
+        phase: "Uploading",
         source: source.label,
         message: clipRange
-          ? "Trimming the selected range in your browser before upload."
+          ? "Sending the file and clip range to the backend for trimming and transcription."
           : "Sending the file for transcription.",
       });
-      const preparedFile = await prepareUploadFile(source.file, clipRange);
       updateEntryStatus(entry.id, "transcribing");
       renderHistory();
       renderActiveEntry();
       transcriptText = await transcribeUploadedFile(
-        preparedFile,
+        source.file,
         source,
         clipRange,
       );
@@ -472,12 +473,15 @@ async function handleTranscribe() {
       updateTask(entry.id, {
         phase: "Transcribing",
         source: source.label,
-        message:
-          "Sending the YouTube link and clip window to the configured transcription endpoint.",
+        message: "Sending the YouTube link to the backend for processing.",
       });
       updateEntryStatus(entry.id, "transcribing");
       renderHistory();
       renderActiveEntry();
+      console.log(
+        "[Onescriber] Starting YouTube transcription for:",
+        source.youtubeUrl,
+      );
       transcriptText = await transcribeYoutubeSource(source, clipRange);
     }
 
@@ -498,7 +502,16 @@ async function handleTranscribe() {
     });
     showToast(`Transcript ready for ${completedEntry.title}.`);
   } catch (error) {
-    const message = getErrorMessage(error, "The transcription request failed.");
+    const baseMessage = getErrorMessage(
+      error,
+      "The transcription request failed.",
+    );
+    const youtubeHint =
+      source.kind === "youtube"
+        ? " The video may be too long or unavailable — try downloading it and uploading a local file instead."
+        : "";
+    const message = baseMessage + youtubeHint;
+    console.error("[Onescriber] Transcription error:", error);
     updateEntry(entry.id, {
       status: "error",
       errorMessage: message,
@@ -537,147 +550,108 @@ async function resolveCurrentSource() {
     };
   }
 
-  if (
-    !state.youtubeInfo ||
-    state.youtubeInfo.url !== dom.youtubeUrl.value.trim()
-  ) {
-    await handleInspectYoutube();
-  }
-
-  if (!state.youtubeInfo) {
+  const rawUrl = dom.youtubeUrl.value.trim();
+  if (!rawUrl) {
+    showToast("Paste a YouTube link first.", true);
+    console.log("[Onescriber] YouTube transcribe blocked: no URL.");
     return null;
   }
 
+  const videoId = parseYoutubeVideoId(rawUrl);
+  if (!videoId) {
+    showToast("That doesn't look like a valid YouTube URL.", true);
+    console.log(
+      "[Onescriber] YouTube transcribe blocked: could not parse video ID from:",
+      rawUrl,
+    );
+    return null;
+  }
+
+  console.log("[Onescriber] YouTube source resolved:", { rawUrl, videoId });
   return {
     kind: "youtube",
-    label: state.youtubeInfo.title || state.youtubeInfo.videoId,
-    title: state.youtubeInfo.title || state.youtubeInfo.videoId,
-    durationSeconds: state.youtubeInfo.durationSeconds,
-    youtubeUrl: state.youtubeInfo.url,
-    videoId: state.youtubeInfo.videoId,
+    label: rawUrl,
+    title: `YouTube: ${videoId}`,
+    durationSeconds: 0, // unknown — server determines and may reject if too long
+    youtubeUrl: rawUrl,
+    videoId,
   };
 }
 
-async function prepareUploadFile(file, clipRange) {
-  if (!clipRange) {
-    return file;
-  }
-
-  const ffmpeg = await ensureFfmpegLoaded();
-  const inputName = `input-${crypto.randomUUID()}${getFileExtension(file.name)}`;
-  const outputName = `clip-${crypto.randomUUID()}.wav`;
-  const args = [
-    "-ss",
-    String(clipRange.startSeconds),
-    "-to",
-    String(clipRange.endSeconds),
-    "-i",
-    inputName,
-    "-vn",
-    "-ac",
-    "1",
-    "-ar",
-    "16000",
-    outputName,
-  ];
-
-  await ffmpeg.writeFile(inputName, await fetchFile(file));
-  await ffmpeg.exec(args);
-  const outputData = await ffmpeg.readFile(outputName);
-  await safeDeleteFfmpegFile(ffmpeg, inputName);
-  await safeDeleteFfmpegFile(ffmpeg, outputName);
-
-  const clipBlob = new Blob([outputData.buffer], { type: "audio/wav" });
-  return new File([clipBlob], `${stripExtension(file.name)}-clip.wav`, {
-    type: "audio/wav",
-  });
-}
-
-async function ensureFfmpegLoaded() {
-  if (state.ffmpeg) {
-    return state.ffmpeg;
-  }
-
-  if (!state.ffmpegPromise) {
-    state.ffmpegPromise = (async () => {
-      const ffmpeg = new FFmpeg();
-      updateStatusCard({
-        phase: "Preparing clip",
-        source: getActiveEntry()?.title || "Upload",
-        message: "Loading the in-browser clip processor.",
-      });
-
-      await ffmpeg.load({
-        coreURL: await toBlobURL(
-          `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.js`,
-          "text/javascript",
-        ),
-        wasmURL: await toBlobURL(
-          `${FFMPEG_CORE_BASE_URL}/ffmpeg-core.wasm`,
-          "application/wasm",
-        ),
-      });
-      state.ffmpeg = ffmpeg;
-      return ffmpeg;
-    })();
-  }
-
-  return state.ffmpegPromise;
-}
-
-async function safeDeleteFfmpegFile(ffmpeg, fileName) {
-  try {
-    await ffmpeg.deleteFile(fileName);
-  } catch (error) {
-    console.warn(`Could not delete temporary FFmpeg file ${fileName}.`, error);
-  }
-}
-
 async function transcribeUploadedFile(file, source, clipRange) {
+  console.log(
+    "[Onescriber] Uploading file:",
+    file.name,
+    "size:",
+    file.size,
+    "to:",
+    API_CONFIG.transcribeUploadUrl,
+  );
   const formData = new FormData();
   formData.append("file", file, file.name);
   formData.append("model", TRANSCRIPTION_MODEL);
-  formData.append("sessionId", state.sessionId);
-  formData.append("sourceType", "upload");
+  formData.append("tier", "free");
   if (clipRange) {
     formData.append("clipStartSeconds", String(clipRange.startSeconds));
     formData.append("clipEndSeconds", String(clipRange.endSeconds));
   }
 
-  const response = await fetch(getTranscribeUrl(), {
+  const response = await fetch(API_CONFIG.transcribeUploadUrl, {
     method: "POST",
-    headers: buildTranscribeHeaders(),
+    headers: { Accept: "application/json" },
     body: formData,
   });
 
-  const payload = await parseApiResponse(response, getTranscribeUrl());
+  console.log(
+    "[Onescriber] Upload response:",
+    response.status,
+    response.statusText,
+  );
+  const payload = await parseApiResponse(
+    response,
+    API_CONFIG.transcribeUploadUrl,
+  );
+  console.log("[Onescriber] Upload payload:", payload);
   return extractTranscriptText(payload, source.label);
 }
 
 async function transcribeYoutubeSource(source, clipRange) {
-  const response = await fetch(API_CONFIG.transcribeProxyUrl, {
+  const requestBody = {
+    youtubeUrl: source.youtubeUrl,
+    model: TRANSCRIPTION_MODEL,
+    tier: "free",
+    ...(clipRange
+      ? {
+          clipStartSeconds: clipRange.startSeconds,
+          clipEndSeconds: clipRange.endSeconds,
+        }
+      : {}),
+  };
+  console.log(
+    "[Onescriber] Sending YouTube transcription request to:",
+    API_CONFIG.transcribeYoutubeUrl,
+  );
+  console.log("[Onescriber] YouTube request body:", requestBody);
+
+  const response = await fetch(API_CONFIG.transcribeYoutubeUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       Accept: "application/json",
     },
-    body: JSON.stringify({
-      model: TRANSCRIPTION_MODEL,
-      sessionId: state.sessionId,
-      sourceType: "youtube",
-      youtubeUrl: source.youtubeUrl,
-      videoId: source.videoId,
-      clipStartSeconds: clipRange?.startSeconds ?? 0,
-      clipEndSeconds:
-        clipRange?.endSeconds ??
-        Math.min(source.durationSeconds, MAX_CLIP_SECONDS),
-    }),
+    body: JSON.stringify(requestBody),
   });
 
+  console.log(
+    "[Onescriber] YouTube transcription response:",
+    response.status,
+    response.statusText,
+  );
   const payload = await parseApiResponse(
     response,
-    API_CONFIG.transcribeProxyUrl,
+    API_CONFIG.transcribeYoutubeUrl,
   );
+  console.log("[Onescriber] YouTube transcription payload:", payload);
   return extractTranscriptText(payload, source.label);
 }
 
@@ -1012,34 +986,7 @@ function renderFileMeta() {
 }
 
 function renderYoutubeMeta() {
-  if (!state.youtubeInfo) {
-    dom.youtubeMeta.innerHTML = "Paste a link, then inspect it.";
-    return;
-  }
-
-  const info = state.youtubeInfo;
-  const clipMessage =
-    info.durationSeconds > MAX_CLIP_SECONDS
-      ? "This video exceeds 5:00. A clip picker will enforce a shorter range before transcription."
-      : "This video is within the free-tier limit.";
-
-  dom.youtubeMeta.innerHTML = `
-    <div class="meta-grid">
-      <article class="meta-chip">
-        <span class="meta-label">Title</span>
-        <div class="meta-value">${escapeHtml(info.title || info.videoId)}</div>
-      </article>
-      <article class="meta-chip">
-        <span class="meta-label">Duration</span>
-        <div class="meta-value">${escapeHtml(formatDuration(info.durationSeconds))}</div>
-      </article>
-      <article class="meta-chip">
-        <span class="meta-label">Video ID</span>
-        <div class="meta-value">${escapeHtml(info.videoId)}</div>
-      </article>
-    </div>
-    <p class="history-copy">${escapeHtml(clipMessage)}</p>
-  `;
+  // YouTube meta panel has been removed from UI — inspect flow replaced by direct server transcription
 }
 
 function renderHistory() {
@@ -1167,27 +1114,10 @@ function useDirectPollinations() {
   return Boolean(API_CONFIG.directApiKey);
 }
 
-function getTranscribeUrl() {
-  return useDirectPollinations()
-    ? API_CONFIG.directTranscribeUrl
-    : API_CONFIG.transcribeProxyUrl;
-}
-
 function getSummaryUrl() {
   return useDirectPollinations()
     ? API_CONFIG.directSummaryUrl
     : API_CONFIG.summarizeProxyUrl;
-}
-
-function buildTranscribeHeaders() {
-  if (!useDirectPollinations()) {
-    return { Accept: "application/json" };
-  }
-
-  return {
-    Authorization: `Bearer ${API_CONFIG.directApiKey}`,
-    Accept: "application/json",
-  };
 }
 
 function buildSummaryHeaders() {
@@ -1208,6 +1138,14 @@ function buildSummaryHeaders() {
 async function parseApiResponse(response, url) {
   const rawText = await response.text();
   const payload = tryParseJson(rawText);
+  console.log(
+    "[Onescriber] parseApiResponse — url:",
+    url,
+    "status:",
+    response.status,
+    "raw (first 400 chars):",
+    rawText.slice(0, 400),
+  );
 
   if (!response.ok) {
     throw new Error(buildApiErrorMessage(response, url, payload, rawText));

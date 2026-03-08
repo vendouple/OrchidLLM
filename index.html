@@ -9,9 +9,10 @@
       content="Transcribe audio or YouTube links with AI — minimalist, browser-side history, clip selection, and summary tools." />
     <script>
       window.ONESCRIBER_CONFIG = {
-        backendBaseUrl: "https://onescriber-backend-production.up.railway.app",
-        transcribeUrl:
-          "https://onescriber-backend-production.up.railway.app/api/transcribe",
+        transcribeYoutubeUrl:
+          "https://onescriber-backend-production.up.railway.app/api/transcribe/youtube",
+        transcribeUploadUrl:
+          "https://onescriber-backend-production.up.railway.app/api/transcribe/upload",
         summarizeUrl:
           "https://onescriber-backend-production.up.railway.app/api/summarize",
       };
@@ -127,9 +128,6 @@
             <p class="history-popup-sub">Last 3 &middot; stored locally</p>
           </div>
           <div class="history-popup-controls">
-            <span class="quota-tag"
-              ><strong id="summary-quota">2</strong> summaries left</span
-            >
             <button
               id="history-close"
               class="icon-btn icon-btn-sm"
@@ -165,63 +163,61 @@
     <main class="main-wrap">
       <!-- Source Input Card -->
       <div class="card source-card">
-        <!-- Upload Panel -->
-        <section
-          id="panel-upload"
-          class="source-panel"
-          role="tabpanel"
-          aria-labelledby="tab-upload">
-          <label id="dropzone" class="dropzone" for="file-input">
-            <input
-              id="file-input"
-              type="file"
-              accept=".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,audio/*,video/*" />
-            <svg
-              class="dropzone-icon"
-              width="30"
-              height="30"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.4"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-              <polyline points="17 8 12 3 7 8" />
-              <line x1="12" y1="3" x2="12" y2="15" />
-            </svg>
-            <span class="dropzone-title">Drop audio or video here</span>
-            <span class="dropzone-hint"
-              >mp3 &middot; mp4 &middot; m4a &middot; wav &middot; webm
-              &nbsp;&mdash;&nbsp; max 5 min per run</span
-            >
-          </label>
-          <div id="file-meta" class="source-meta">No file selected yet.</div>
-        </section>
+        <div class="panels-track" id="panels-track">
+          <!-- Upload Panel -->
+          <section
+            id="panel-upload"
+            class="source-panel"
+            role="tabpanel"
+            aria-labelledby="tab-upload">
+            <label id="dropzone" class="dropzone" for="file-input">
+              <input
+                id="file-input"
+                type="file"
+                accept=".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,audio/*,video/*" />
+              <svg
+                class="dropzone-icon"
+                width="30"
+                height="30"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="1.4"
+                stroke-linecap="round"
+                stroke-linejoin="round"
+                aria-hidden="true">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                <polyline points="17 8 12 3 7 8" />
+                <line x1="12" y1="3" x2="12" y2="15" />
+              </svg>
+              <span class="dropzone-title">Drop audio or video here</span>
+              <span class="dropzone-hint"
+                >mp3 &middot; mp4 &middot; m4a &middot; wav &middot; webm
+                &nbsp;&mdash;&nbsp; max 5 min per run</span
+              >
+            </label>
+            <div id="file-meta" class="source-meta">No file selected yet.</div>
+          </section>
 
-        <!-- YouTube Panel -->
-        <section
-          id="panel-youtube"
-          class="source-panel"
-          role="tabpanel"
-          aria-labelledby="tab-youtube"
-          hidden>
-          <div class="yt-row">
+          <!-- YouTube Panel -->
+          <section
+            id="panel-youtube"
+            class="source-panel"
+            role="tabpanel"
+            aria-labelledby="tab-youtube">
             <input
               id="youtube-url"
               type="url"
               inputmode="url"
               class="yt-input"
               placeholder="https://www.youtube.com/watch?v=..." />
-            <button id="inspect-youtube" class="ghost-btn" type="button">
-              Inspect
-            </button>
-          </div>
-          <div id="youtube-meta" class="source-meta">
-            Paste a link, then inspect it.
-          </div>
-        </section>
+            <p class="yt-hint">
+              Paste a YouTube link and hit Transcribe. Videos under 5 minutes
+              work best — longer ones may fail. If so, download the video
+              locally and upload it as a file instead.
+            </p>
+          </section>
+        </div>
       </div>
 
       <!-- Action Row: status + CTA -->
@@ -275,9 +271,13 @@
       <div class="card summary-card">
         <div class="card-head">
           <h2 class="card-title">Summary</h2>
+          <span class="quota-tag"
+            ><strong id="summary-quota">2</strong> summaries left</span
+          >
         </div>
         <div id="summary-output" class="summary-output">
-          Two summaries per day is available on the free tier.
+          Hit Summarize after a transcript completes. Two summaries are
+          available per day on the free tier.
         </div>
       </div>
 
