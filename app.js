@@ -1,3 +1,5 @@
+const POLLINATIONS_API_KEY = "pk_BU8jPqG7RBj8yOxh";
+
 const MAX_HISTORY_ITEMS = 3;
 const MAX_SUMMARIES_PER_DAY = 2;
 const MAX_CLIP_SECONDS = 5 * 60;
@@ -201,9 +203,6 @@ function restoreHistory() {
 
 function restoreUiState() {
   const uiState = readJson(sessionStorage.getItem(STORAGE_KEYS.uiState), {});
-  if (uiState?.sourceMode === "youtube") {
-    state.sourceMode = "youtube";
-  }
   if (uiState?.youtubeUrl) {
     dom.youtubeUrl.value = uiState.youtubeUrl;
   }
@@ -282,7 +281,8 @@ function setTheme(theme, persist) {
 }
 
 function setSourceMode(mode) {
-  state.sourceMode = mode === "youtube" ? "youtube" : "upload";
+  if (mode === "youtube") return; // YouTube is temporarily disabled
+  state.sourceMode = "upload";
   persistUiState();
   renderSourceMode();
 }
@@ -390,16 +390,13 @@ async function handleTranscribe() {
     source.label,
   );
 
-  let clipRange = null;
+  const clipRange = null;
   if (source.durationSeconds > MAX_CLIP_SECONDS) {
-    clipRange = await openTrimDialog({
-      label: source.label,
-      durationSeconds: source.durationSeconds,
-    });
-
-    if (!clipRange) {
-      return;
-    }
+    showToast(
+      `"${source.label}" is over 5 minutes. Please trim it before uploading.`,
+      true,
+    );
+    return;
   }
 
   const entry = createHistoryEntry({ source, clipRange });
@@ -435,9 +432,7 @@ async function handleTranscribe() {
       updateProgressCard({
         phase: "Uploading",
         activeStep: 0,
-        message: clipRange
-          ? "Sending the file and clip range to the backend for trimming and transcription."
-          : "Sending the file for transcription.",
+        message: "Sending the file to Pollinations for transcription.",
       });
       updateEntryStatus(entry.id, "transcribing");
       renderHistory();
@@ -562,44 +557,46 @@ async function resolveCurrentSource() {
   };
 }
 
-async function transcribeUploadedFile(file, source, clipRange) {
-  console.log(
-    "[Onescriber] Uploading file:",
-    file.name,
-    "size:",
-    file.size,
-    "to:",
-    API_CONFIG.transcribeUploadUrl,
-  );
+async function transcribeUploadedFile(file, source, _clipRange, onProgress) {
+  const TRANSCRIPTION_URL =
+    "https://gen.pollinations.ai/v1/audio/transcriptions";
   const formData = new FormData();
   formData.append("file", file, file.name);
   formData.append("model", TRANSCRIPTION_MODEL);
-  formData.append("tier", "free");
-  if (clipRange) {
-    formData.append("clipStartSeconds", String(clipRange.startSeconds));
-    formData.append("clipEndSeconds", String(clipRange.endSeconds));
+
+  onProgress?.(0, "Uploading file to Pollinations…");
+  const progressTimers = _simulateProgress(onProgress, [
+    [1800, 1, "Processing audio…"],
+    [4000, 2, "Running Whisper transcription…"],
+  ]);
+
+  const headers = {
+    Authorization: `Bearer ${POLLINATIONS_API_KEY}`,
+  };
+
+  try {
+    const response = await fetch(TRANSCRIPTION_URL, {
+      method: "POST",
+      headers,
+      body: formData,
+    });
+
+    progressTimers.forEach(clearTimeout);
+    console.log(
+      "[Onescriber] Transcription response:",
+      response.status,
+      response.statusText,
+    );
+    const payload = await parseApiResponse(response, TRANSCRIPTION_URL);
+    console.log("[Onescriber] Transcription payload:", payload);
+    return extractTranscriptText(payload, source.label);
+  } catch (err) {
+    progressTimers.forEach(clearTimeout);
+    throw err;
   }
-
-  const response = await fetch(API_CONFIG.transcribeUploadUrl, {
-    method: "POST",
-    headers: { Accept: "application/json" },
-    body: formData,
-  });
-
-  console.log(
-    "[Onescriber] Upload response:",
-    response.status,
-    response.statusText,
-  );
-  const payload = await parseApiResponse(
-    response,
-    API_CONFIG.transcribeUploadUrl,
-  );
-  console.log("[Onescriber] Upload payload:", payload);
-  return extractTranscriptText(payload, source.label);
 }
 
-async function transcribeYoutubeSource(source, clipRange) {
+async function transcribeYoutubeSource(source, clipRange, onProgress) {
   const requestBody = {
     youtubeUrl: source.youtubeUrl,
     model: TRANSCRIPTION_MODEL,
@@ -617,26 +614,48 @@ async function transcribeYoutubeSource(source, clipRange) {
   );
   console.log("[Onescriber] YouTube request body:", requestBody);
 
-  const response = await fetch(API_CONFIG.transcribeYoutubeUrl, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(requestBody),
-  });
+  // Simulate progress steps while the YouTube download+transcription is in-flight
+  onProgress?.(0, "Connected — downloading audio from YouTube…");
+  const progressTimers = _simulateProgress(onProgress, [
+    [3500, 1, "Audio downloaded — running Whisper transcription…"],
+    [7000, 2, "Transcription in progress…"],
+  ]);
 
-  console.log(
-    "[Onescriber] YouTube transcription response:",
-    response.status,
-    response.statusText,
+  try {
+    const response = await fetch(API_CONFIG.transcribeYoutubeUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+      body: JSON.stringify(requestBody),
+    });
+
+    progressTimers.forEach(clearTimeout);
+    console.log(
+      "[Onescriber] YouTube transcription response:",
+      response.status,
+      response.statusText,
+    );
+    const payload = await parseApiResponse(
+      response,
+      API_CONFIG.transcribeYoutubeUrl,
+    );
+    console.log("[Onescriber] YouTube transcription payload:", payload);
+    return extractTranscriptText(payload, source.label);
+  } catch (err) {
+    progressTimers.forEach(clearTimeout);
+    throw err;
+  }
+}
+
+// Helper: schedule progress step updates during a long-running fetch.
+// Returns an array of timer IDs so callers can cancel them on early return.
+function _simulateProgress(onProgress, schedule) {
+  if (!onProgress) return [];
+  return schedule.map(([delay, stepIndex, message]) =>
+    setTimeout(() => onProgress(stepIndex, message), delay),
   );
-  const payload = await parseApiResponse(
-    response,
-    API_CONFIG.transcribeYoutubeUrl,
-  );
-  console.log("[Onescriber] YouTube transcription payload:", payload);
-  return extractTranscriptText(payload, source.label);
 }
 
 async function handleSummarize(entryId = state.activeEntryId) {
@@ -692,6 +711,7 @@ async function handleSummarize(entryId = state.activeEntryId) {
 }
 
 async function summarizeTranscript(transcript) {
+  const SUMMARY_URL = "https://gen.pollinations.ai/v1/chat/completions";
   const prompt = [
     "Summarize the transcript below.",
     "Return plain text with three short sections:",
@@ -703,25 +723,25 @@ async function summarizeTranscript(transcript) {
     transcript,
   ].join("\n\n");
 
-  const body = useDirectPollinations()
-    ? {
-        model: SUMMARY_MODEL,
-        messages: [{ role: "user", content: prompt }],
-      }
-    : {
-        model: SUMMARY_MODEL,
-        sessionId: state.sessionId,
-        transcript,
-        prompt,
-      };
+  const headers = {
+    "Content-Type": "application/json",
+    Accept: "application/json",
+    Authorization: `Bearer ${POLLINATIONS_API_KEY}`,
+  };
 
-  const response = await fetch(getSummaryUrl(), {
+  const response = await fetch(SUMMARY_URL, {
     method: "POST",
-    headers: buildSummaryHeaders(),
-    body: JSON.stringify(body),
+    headers,
+    body: JSON.stringify({
+      model: SUMMARY_MODEL,
+      messages: [
+        { role: "system", content: "You are a helpful assistant." },
+        { role: "user", content: prompt },
+      ],
+    }),
   });
 
-  const payload = await parseApiResponse(response, getSummaryUrl());
+  const payload = await parseApiResponse(response, SUMMARY_URL);
   return extractSummaryText(payload);
 }
 
@@ -989,8 +1009,8 @@ function renderFileMeta() {
 
   const info = state.selectedFileInfo;
   const clipMessage = info.isOverLimit
-    ? "Over the free-tier limit. You will be asked to pick a clip under 5:00."
-    : "Fits inside the free-tier limit.";
+    ? "Over 5 minutes — please trim the file before uploading."
+    : "Fits inside the 5-minute limit.";
 
   dom.fileMeta.innerHTML = `
     <div class="meta-grid">
