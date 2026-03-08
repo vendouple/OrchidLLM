@@ -791,6 +791,7 @@ function setBusyState(isBusy) {
 function startTimer() {
   stopTimer();
   state.timerStartedAt = Date.now();
+  dom.statusTimer.classList.add("is-running");
   updateTimerDisplay();
   state.timerId = window.setInterval(updateTimerDisplay, 1000);
 }
@@ -802,6 +803,7 @@ function stopTimer() {
   }
 
   state.timerStartedAt = null;
+  dom.statusTimer.classList.remove("is-running");
   dom.statusTimer.textContent = "00:00";
 }
 

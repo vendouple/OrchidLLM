@@ -1,24 +1,51 @@
 :root {
   color-scheme: light;
-  --bg: #e7edf9;
-  --bg-secondary: #eef3ff;
-  --panel: #e9eefb;
-  --panel-strong: #f3f6ff;
-  --text: #334155;
-  --muted: #64748b;
-  --line: rgba(100, 116, 139, 0.18);
-  --accent: #6f7cff;
-  --accent-strong: #4f5de6;
-  --accent-soft: rgba(111, 124, 255, 0.14);
+
+  /* ─── Neumorphism surface ─── */
+  /* Single flat background that all shadows are calibrated against */
+  --nm-base: #e8edf8;
+  --nm-dark: #c4cade; /* ~18% darker + slightly saturated */
+  --nm-light: #ffffff; /* pure white highlight */
+
+  /* Depth levels */
+  --shadow-raise-sm:
+    5px 5px 10px var(--nm-dark), -5px -5px 10px var(--nm-light);
+  --shadow-raise:
+    10px 10px 20px var(--nm-dark), -10px -10px 20px var(--nm-light);
+  --shadow-raise-lg:
+    16px 16px 32px var(--nm-dark), -16px -16px 32px var(--nm-light);
+  --shadow-inset-sm:
+    inset 4px 4px 8px var(--nm-dark), inset -4px -4px 8px var(--nm-light);
+  --shadow-inset:
+    inset 7px 7px 14px var(--nm-dark), inset -7px -7px 14px var(--nm-light);
+  --shadow-inset-lg:
+    inset 10px 10px 20px var(--nm-dark), inset -10px -10px 20px var(--nm-light);
+
+  /* ─── Accent ─── */
+  --accent: #5c6ef5;
+  --accent-strong: #3d50e0;
+  --accent-dark-shadow: #3f4fb8;
+  --accent-light-shadow: #8fa4ff;
+  --accent-soft: rgba(92, 110, 245, 0.14);
+
+  /* ─── Semantic ─── */
+  --text: #2e3354;
+  --muted: #6b7698;
+  --line: rgba(92, 110, 245, 0.1);
+
+  /* ─── Colours ─── */
   --success: #22c55e;
   --warning: #f59e0b;
   --danger: #ef4444;
-  --shadow-dark: #c7d0e3;
-  --shadow-light: #ffffff;
-  --radius-xl: 30px;
-  --radius-lg: 22px;
-  --radius-md: 16px;
-  --radius-sm: 12px;
+
+  /* ─── Shape ─── */
+  --radius-xl: 28px;
+  --radius-lg: 20px;
+  --radius-md: 14px;
+  --radius-sm: 10px;
+
+  /* ─── Transition ─── */
+  --transition: 0.18s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 * {
@@ -34,18 +61,8 @@ body {
   min-height: 100vh;
   font-family: "Inter", sans-serif;
   color: var(--text);
-  background:
-    radial-gradient(
-      circle at top left,
-      rgba(255, 255, 255, 0.8),
-      transparent 28%
-    ),
-    radial-gradient(
-      circle at top right,
-      rgba(111, 124, 255, 0.12),
-      transparent 24%
-    ),
-    linear-gradient(180deg, #edf2fd 0%, #dde7f8 100%);
+  /* flat base — critical for neumorphism: shadows must be calibrated to exactly this value */
+  background-color: var(--nm-base);
 }
 
 button,
@@ -58,10 +75,11 @@ select {
 button,
 a {
   transition:
-    transform 0.2s ease,
-    box-shadow 0.2s ease,
-    opacity 0.2s ease,
-    background 0.2s ease;
+    transform var(--transition),
+    box-shadow var(--transition),
+    opacity var(--transition),
+    background var(--transition),
+    color var(--transition);
 }
 
 a {
@@ -89,27 +107,36 @@ a {
 .soft-pill,
 .toggle-card {
   border-radius: var(--radius-xl);
-  background: linear-gradient(
-    145deg,
-    var(--panel) 0%,
-    var(--panel-strong) 100%
-  );
-  box-shadow:
-    14px 14px 28px var(--shadow-dark),
-    -14px -14px 28px var(--shadow-light);
+  /* flat base — no gradient so shadows have exact calibrated color to work against */
+  background-color: var(--nm-base);
+}
+
+/* ─── Raised surfaces ─── */
+.soft-card,
+.soft-pill,
+.soft-link,
+.action-button {
+  box-shadow: var(--shadow-raise);
+}
+
+/* ─── Recessed (inset) surfaces ─── */
+.inset-card,
+.result-panel {
+  box-shadow: var(--shadow-inset);
 }
 
 .soft-card {
-  padding: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.55);
+  padding: 28px;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
 }
 
 .hero-card {
   display: flex;
   justify-content: space-between;
-  gap: 20px;
-  margin-bottom: 24px;
-  padding: 30px;
+  gap: 24px;
+  margin-bottom: 28px;
+  padding: 36px 40px;
+  border-radius: var(--radius-xl);
 }
 
 .hero-copy,
@@ -124,10 +151,11 @@ a {
 .eyebrow {
   margin: 0 0 8px;
   text-transform: uppercase;
-  letter-spacing: 0.16em;
-  font-size: 0.74rem;
+  letter-spacing: 0.18em;
+  font-size: 0.72rem;
   font-weight: 800;
   color: var(--accent-strong);
+  opacity: 0.85;
 }
 
 h1,
@@ -142,15 +170,18 @@ h1 {
   font-size: clamp(2rem, 5vw, 3rem);
   line-height: 1.02;
   margin-bottom: 12px;
+  letter-spacing: -0.02em;
 }
 
 h2 {
   font-size: 1.45rem;
   margin-bottom: 4px;
+  letter-spacing: -0.01em;
 }
 
 h3 {
   font-size: 1.05rem;
+  letter-spacing: -0.01em;
 }
 
 .hero-copy {
@@ -178,19 +209,27 @@ h3 {
 .soft-pill {
   display: inline-flex;
   align-items: center;
-  padding: 10px 16px;
+  padding: 10px 18px;
   border-radius: 999px;
-  font-size: 0.86rem;
+  font-size: 0.84rem;
   font-weight: 700;
   color: var(--text);
+  box-shadow: var(--shadow-raise-sm);
+  border: 1.5px solid rgba(255, 255, 255, 0.65);
 }
 
-.soft-pill.accent,
+.soft-pill.accent {
+  color: var(--accent-strong);
+  /* accent pills still get a subtle tinted bg to stand out */
+  background-color: rgba(92, 110, 245, 0.07);
+}
+
 .badge.status-running,
 .badge.status-converting,
 .badge.status-finalizing {
   color: var(--accent-strong);
-  background: linear-gradient(145deg, #e7ebff 0%, #f8f9ff 100%);
+  background: rgba(92, 110, 245, 0.08);
+  border-color: rgba(92, 110, 245, 0.18);
 }
 
 .panel-heading {
@@ -244,51 +283,67 @@ input,
 textarea,
 select {
   width: 100%;
-  border: 1px solid rgba(255, 255, 255, 0.66);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
   border-radius: var(--radius-lg);
   color: var(--text);
-  background: var(--bg-secondary);
-  padding: 14px 16px;
+  background-color: var(--nm-base);
+  padding: 14px 18px;
   outline: none;
   resize: vertical;
-  box-shadow:
-    inset 8px 8px 16px rgba(199, 208, 227, 0.85),
-    inset -8px -8px 16px rgba(255, 255, 255, 0.92);
+  /* inset shadow = element is recessed / pressed into the surface */
+  box-shadow: var(--shadow-inset);
+  transition:
+    box-shadow var(--transition),
+    border-color var(--transition);
+}
+
+input::placeholder,
+textarea::placeholder {
+  color: var(--muted);
+  opacity: 0.7;
 }
 
 input:focus,
 textarea:focus,
 select:focus {
-  border-color: rgba(111, 124, 255, 0.42);
+  border-color: rgba(92, 110, 245, 0.45);
   box-shadow:
-    inset 8px 8px 16px rgba(199, 208, 227, 0.9),
-    inset -8px -8px 16px rgba(255, 255, 255, 0.96),
-    0 0 0 4px rgba(111, 124, 255, 0.12);
+    var(--shadow-inset),
+    0 0 0 3px rgba(92, 110, 245, 0.12);
 }
 
-textarea:disabled {
+input:disabled,
+textarea:disabled,
+select:disabled {
   cursor: not-allowed;
-  opacity: 0.6;
+  opacity: 0.5;
 }
 
 .toggle-card {
   grid-template-columns: 1fr auto;
   align-items: center;
-  padding: 18px;
+  padding: 20px;
+  box-shadow: var(--shadow-raise);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
 }
 
 .toggle-card input {
-  width: 56px;
-  height: 28px;
+  width: 58px;
+  height: 30px;
   appearance: none;
   border-radius: 999px;
-  background: linear-gradient(145deg, #dbe3f3 0%, #ffffff 100%);
-  box-shadow:
-    inset 6px 6px 12px rgba(199, 208, 227, 0.85),
-    inset -6px -6px 12px rgba(255, 255, 255, 0.92);
+  background-color: var(--nm-base);
+  /* the track is inset */
+  box-shadow: var(--shadow-inset-sm);
+  border: 1px solid rgba(255, 255, 255, 0.5);
   position: relative;
   padding: 0;
   margin: 0;
+  flex-shrink: 0;
+  transition:
+    background-color var(--transition),
+    box-shadow var(--transition);
+  cursor: pointer;
 }
 
 .toggle-card input::after {
@@ -296,24 +351,30 @@ textarea:disabled {
   position: absolute;
   top: 4px;
   left: 4px;
-  width: 20px;
-  height: 20px;
+  width: 22px;
+  height: 22px;
   border-radius: 50%;
-  background: linear-gradient(145deg, #ffffff 0%, #d7ddf0 100%);
-  box-shadow: 4px 4px 10px rgba(156, 169, 193, 0.4);
-  transition: transform 0.2s ease;
+  background-color: var(--nm-base);
+  /* the knob is raised */
+  box-shadow: var(--shadow-raise-sm);
+  transition:
+    transform var(--transition),
+    box-shadow var(--transition);
 }
 
 .toggle-card input:checked {
-  background: linear-gradient(
-    145deg,
-    rgba(111, 124, 255, 0.8) 0%,
-    rgba(79, 93, 230, 0.95) 100%
-  );
+  background-color: var(--accent);
+  box-shadow:
+    inset 3px 3px 6px var(--accent-dark-shadow),
+    inset -3px -3px 6px var(--accent-light-shadow);
 }
 
 .toggle-card input:checked::after {
   transform: translateX(28px);
+  background-color: #fff;
+  box-shadow:
+    3px 3px 6px rgba(0, 0, 0, 0.2),
+    -1px -1px 4px rgba(255, 255, 255, 0.5);
 }
 
 .status-row {
@@ -327,16 +388,14 @@ textarea:disabled {
 .result-panel,
 .history-item,
 .metric-card {
-  padding: 18px;
+  padding: 20px;
 }
 
 .inset-card,
-.history-item,
-.result-panel {
-  background: linear-gradient(145deg, #edf2fd 0%, #dfe7f8 100%);
-  box-shadow:
-    inset 12px 12px 24px rgba(199, 208, 227, 0.78),
-    inset -12px -12px 24px rgba(255, 255, 255, 0.95);
+.history-item {
+  background-color: var(--nm-base);
+  box-shadow: var(--shadow-inset);
+  border: 1px solid rgba(255, 255, 255, 0.55);
 }
 
 .status-card {
@@ -375,31 +434,71 @@ textarea:disabled {
   justify-content: center;
   gap: 10px;
   min-height: 58px;
-  padding: 0 24px;
+  padding: 0 28px;
   color: var(--text);
   font-weight: 800;
+  letter-spacing: 0.02em;
 }
 
+/* ─── Primary CTA: accent pill raised with colored shadows ─── */
 .generate-button {
   min-width: 190px;
-  background: linear-gradient(145deg, #7d88ff 0%, #5667f0 100%);
-  color: white;
+  background-color: var(--accent);
+  color: #fff;
+  border-radius: var(--radius-xl);
+  /* colored neumorphic shadows — darkened & lightened accent tones */
+  box-shadow:
+    6px 6px 14px var(--accent-dark-shadow),
+    -4px -4px 10px var(--accent-light-shadow);
+  border: 0;
 }
 
-.generate-button:hover:not(:disabled),
+.generate-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow:
+    8px 8px 18px var(--accent-dark-shadow),
+    -5px -5px 14px var(--accent-light-shadow);
+}
+
+/* Simulate pressing the button inward */
+.generate-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow:
+    inset 4px 4px 8px var(--accent-dark-shadow),
+    inset -2px -2px 6px var(--accent-light-shadow);
+}
+
+.generate-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+  box-shadow:
+    3px 3px 8px var(--nm-dark),
+    -3px -3px 8px var(--nm-light);
+}
+
 .soft-link:hover,
-.action-button:hover {
-  transform: translateY(-1px);
+.action-button:hover:not(:disabled) {
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-raise-lg);
 }
 
-.generate-button:disabled,
+.soft-link:active,
+.action-button:active:not(:disabled) {
+  transform: translateY(0);
+  box-shadow: var(--shadow-inset-sm);
+}
+
 .action-button:disabled {
   cursor: not-allowed;
-  opacity: 0.55;
+  opacity: 0.5;
 }
 
 .result-panel {
-  margin-top: 22px;
+  margin-top: 24px;
+  background-color: var(--nm-base);
+  box-shadow: var(--shadow-inset);
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(255, 255, 255, 0.55);
 }
 
 .current-result {
@@ -425,8 +524,11 @@ textarea:disabled {
 }
 
 .metric-card {
-  border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.48);
+  border-radius: var(--radius-md);
+  /* slightly raised inside the already-inset component = pop forward */
+  box-shadow: var(--shadow-raise-sm);
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+  background-color: var(--nm-base);
 }
 
 .metric-label {
@@ -466,12 +568,24 @@ textarea:disabled {
 
 .history-item {
   border-radius: var(--radius-lg);
-  border: 1px solid rgba(255, 255, 255, 0.48);
+  transition: box-shadow var(--transition);
+}
+
+.history-item[open] {
+  /* when expanded, deepen the inset slightly */
+  box-shadow: var(--shadow-inset-lg);
 }
 
 .history-item > summary {
   list-style: none;
   cursor: pointer;
+  padding: 2px;
+  border-radius: var(--radius-lg);
+  transition: opacity var(--transition);
+}
+
+.history-item > summary:hover {
+  opacity: 0.82;
 }
 
 .history-item > summary::-webkit-details-marker {
@@ -506,45 +620,44 @@ textarea:disabled {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 8px 12px;
+  padding: 6px 12px;
   border-radius: 999px;
-  font-size: 0.74rem;
+  font-size: 0.72rem;
   font-weight: 800;
-  border: 1px solid rgba(255, 255, 255, 0.48);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  /* flat badge with a hint of raised edge via a border */
+  border: 1.5px solid transparent;
 }
 
 .badge.scope-public {
   color: var(--accent-strong);
-  background: rgba(111, 124, 255, 0.1);
+  background: rgba(92, 110, 245, 0.1);
+  border-color: rgba(92, 110, 245, 0.2);
 }
 
 .badge.scope-local {
   color: #0f766e;
-  background: rgba(20, 184, 166, 0.12);
+  background: rgba(20, 184, 166, 0.1);
+  border-color: rgba(20, 184, 166, 0.22);
 }
 
 .badge.status-completed {
   color: #166534;
-  background: rgba(34, 197, 94, 0.14);
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.22);
 }
 
 .badge.status-error {
   color: #991b1b;
-  background: rgba(239, 68, 68, 0.14);
+  background: rgba(239, 68, 68, 0.1);
+  border-color: rgba(239, 68, 68, 0.22);
 }
 
 .badge.status-running,
 .badge.status-converting,
 .badge.status-finalizing {
-  background: rgba(111, 124, 255, 0.12);
-}
-
-.history-body {
-  display: grid;
-  gap: 16px;
-  margin-top: 18px;
-  padding-top: 16px;
-  border-top: 1px solid var(--line);
+  background: rgba(92, 110, 245, 0.08);
 }
 
 .history-body pre,
@@ -556,23 +669,28 @@ textarea:disabled {
 .soft-link,
 .action-button {
   min-height: 46px;
-  padding: 0 16px;
-  border-radius: 16px;
-  background: linear-gradient(
-    145deg,
-    var(--panel) 0%,
-    var(--panel-strong) 100%
-  );
+  padding: 0 18px;
+  border-radius: var(--radius-md);
+  background-color: var(--nm-base);
+  font-size: 0.9rem;
+  font-weight: 700;
 }
 
 .action-button.primary {
-  background: linear-gradient(145deg, #7d88ff 0%, #5667f0 100%);
+  background-color: var(--accent);
   color: white;
+  box-shadow:
+    5px 5px 12px var(--accent-dark-shadow),
+    -3px -3px 8px var(--accent-light-shadow);
 }
 
 .audio-player {
   width: 100%;
-  border-radius: 14px;
+  border-radius: var(--radius-md);
+  /* give the browser audio control an inset look */
+  box-shadow: var(--shadow-inset-sm);
+  background-color: var(--nm-base);
+  border: 1px solid rgba(255, 255, 255, 0.6);
 }
 
 .error-copy {
@@ -582,9 +700,61 @@ textarea:disabled {
 
 .empty-state {
   text-align: center;
-  padding: 28px 18px;
+  padding: 32px 20px;
   border-radius: var(--radius-lg);
-  border: 1px dashed rgba(100, 116, 139, 0.26);
+  color: var(--muted);
+  /* gently inset the empty box */
+  box-shadow: var(--shadow-inset-sm);
+  border: 1.5px dashed rgba(92, 110, 245, 0.18);
+  font-size: 0.9rem;
+  line-height: 1.7;
+}
+
+/* ─── Neumorphic scrollbar (webkit) ─── */
+.history-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  border-radius: 999px;
+  background-color: var(--nm-base);
+  box-shadow: var(--shadow-inset-sm);
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  border-radius: 999px;
+  background-color: var(--nm-base);
+  box-shadow: var(--shadow-raise-sm);
+  border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.history-list::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(92, 110, 245, 0.18);
+}
+
+/* ─── Timer pulse when running ─── */
+@keyframes nm-pulse {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.55;
+  }
+}
+
+.timer.is-running {
+  animation: nm-pulse 1.4s ease-in-out infinite;
+  color: var(--accent);
+}
+
+/* ─── Divider in history body ─── */
+.history-body {
+  display: grid;
+  gap: 16px;
+  margin-top: 18px;
+  padding-top: 16px;
+  border-top: 1.5px solid rgba(255, 255, 255, 0.55);
 }
 
 @media (max-width: 1120px) {
