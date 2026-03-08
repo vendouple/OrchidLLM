@@ -34,17 +34,26 @@ const STORAGE_KEYS = {
 };
 
 const runtimeConfig = window.ONESCRIBER_CONFIG || {};
+const backendBaseUrl = normalizeBaseUrl(
+  runtimeConfig.railwayBaseUrl || runtimeConfig.backendBaseUrl || "",
+);
 
 const API_CONFIG = {
-  directApiKey: runtimeConfig.apiKey || "",
+  directApiKey: runtimeConfig.apiKey || runtimeConfig.directApiKey || "",
   directTranscribeUrl:
     runtimeConfig.directTranscribeUrl ||
     "https://gen.pollinations.ai/v1/audio/transcriptions",
   directSummaryUrl:
     runtimeConfig.directSummaryUrl ||
     "https://gen.pollinations.ai/v1/chat/completions",
-  transcribeProxyUrl: runtimeConfig.transcribeUrl || "/api/transcribe",
-  summarizeProxyUrl: runtimeConfig.summarizeUrl || "/api/summarize",
+  transcribeProxyUrl:
+    runtimeConfig.transcribeUrl ||
+    joinUrl(backendBaseUrl, "/transcribe") ||
+    "/transcribe",
+  summarizeProxyUrl:
+    runtimeConfig.summarizeUrl ||
+    joinUrl(backendBaseUrl, "/summarize") ||
+    "/summarize",
 };
 
 const state = {
@@ -68,9 +77,7 @@ const state = {
 const dom = {
   body: document.body,
   themeToggle: document.querySelector("#theme-toggle"),
-  sessionId: document.querySelector("#session-id"),
   summaryQuota: document.querySelector("#summary-quota"),
-  transportCopy: document.querySelector("#transport-copy"),
   tabUpload: document.querySelector("#tab-upload"),
   tabYoutube: document.querySelector("#tab-youtube"),
   panelUpload: document.querySelector("#panel-upload"),
@@ -99,6 +106,10 @@ const dom = {
   trimApply: document.querySelector("#trim-apply"),
   toast: document.querySelector("#toast"),
   youtubeProbe: document.querySelector("#youtube-probe"),
+  historyToggle: document.querySelector("#history-toggle"),
+  historyClose: document.querySelector("#history-close"),
+  historyPopup: document.querySelector("#history-popup"),
+  historyBackdrop: document.querySelector("#history-backdrop"),
 };
 
 initialize();
@@ -111,7 +122,6 @@ function initialize() {
   restoreActiveTask();
   finalizeAbandonedTasks();
   bindEvents();
-  updateTransportCopy();
   renderSummaryQuota();
   renderSourceMode();
   renderFileMeta();
@@ -140,6 +150,12 @@ function bindEvents() {
   dom.trimStart.addEventListener("input", validateTrimDialog);
   dom.trimEnd.addEventListener("input", validateTrimDialog);
   dom.trimDialog.addEventListener("close", handleTrimDialogClose);
+  dom.historyToggle.addEventListener("click", toggleHistoryPopup);
+  dom.historyClose.addEventListener("click", closeHistoryPopup);
+  dom.historyBackdrop.addEventListener("click", closeHistoryPopup);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") closeHistoryPopup();
+  });
 
   ["dragenter", "dragover"].forEach((eventName) => {
     dom.dropzone.addEventListener(eventName, (event) => {
@@ -180,7 +196,6 @@ function restoreSessionId() {
   const existing = sessionStorage.getItem(STORAGE_KEYS.sessionId);
   state.sessionId = existing || crypto.randomUUID();
   sessionStorage.setItem(STORAGE_KEYS.sessionId, state.sessionId);
-  dom.sessionId.textContent = state.sessionId.slice(0, 12);
 }
 
 function restoreHistory() {
@@ -237,6 +252,28 @@ function finalizeAbandonedTasks() {
   if (didUpdate) {
     persistHistory();
   }
+}
+
+function toggleHistoryPopup() {
+  const isOpen = dom.historyPopup.getAttribute("aria-hidden") === "false";
+  if (isOpen) {
+    closeHistoryPopup();
+  } else {
+    openHistoryPopup();
+  }
+}
+
+function openHistoryPopup() {
+  dom.historyPopup.setAttribute("aria-hidden", "false");
+  dom.historyToggle.setAttribute("aria-expanded", "true");
+  dom.historyBackdrop.classList.add("is-open");
+  renderHistory();
+}
+
+function closeHistoryPopup() {
+  dom.historyPopup.setAttribute("aria-hidden", "true");
+  dom.historyToggle.setAttribute("aria-expanded", "false");
+  dom.historyBackdrop.classList.remove("is-open");
 }
 
 function handleThemeToggle() {
@@ -1126,12 +1163,6 @@ function incrementSummaryQuota() {
   localStorage.setItem(STORAGE_KEYS.summaryQuota, JSON.stringify(nextQuota));
 }
 
-function updateTransportCopy() {
-  dom.transportCopy.textContent = useDirectPollinations()
-    ? "Runtime API key detected. Uploads and summaries can go straight to Pollinations.ai from the browser. YouTube transcription still expects /api/transcribe so a function can resolve and clip the source."
-    : "No runtime API key found. The frontend will call /api/transcribe and /api/summarize so Vercel functions can inject the secret later.";
-}
-
 function useDirectPollinations() {
   return Boolean(API_CONFIG.directApiKey);
 }
@@ -1240,8 +1271,8 @@ function buildApiErrorMessage(response, url, payload, rawText) {
     rawText ||
     `Request failed with status ${response.status}.`;
 
-  if (response.status === 404 && url.startsWith("/api/")) {
-    return `${message} Configure ${url} as a Vercel function. Direct browser calls with window.ONESCRIBER_CONFIG.apiKey only cover file uploads and summaries; YouTube transcription still needs a server helper.`;
+  if (response.status === 404) {
+    return `${message} Configure the Railway backend endpoint at ${url}. Set window.ONESCRIBER_CONFIG.backendBaseUrl or serve this frontend from the same Railway domain so /transcribe and /summarize resolve correctly.`;
   }
 
   return String(message).trim();
@@ -1577,6 +1608,20 @@ function tryParseJson(raw) {
   } catch (error) {
     return null;
   }
+}
+
+function normalizeBaseUrl(value) {
+  return String(value || "")
+    .trim()
+    .replace(/\/$/, "");
+}
+
+function joinUrl(base, path) {
+  const normalizedBase = normalizeBaseUrl(base);
+  if (!normalizedBase) {
+    return "";
+  }
+  return `${normalizedBase}${path.startsWith("/") ? path : `/${path}`}`;
 }
 
 function getFileExtension(fileName) {
