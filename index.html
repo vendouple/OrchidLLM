@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>MusicGen Studio</title>
+    <meta
+      name="description"
+      content="A GitHub Pages-ready Suno generation UI with a neumorphic layout, live progress, and recent generation history." />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+      rel="stylesheet" />
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+  <body>
+    <div class="page-shell">
+      <header class="soft-card hero-card">
+        <div>
+          <p class="eyebrow">GitHub Pages · custom=true · Neumorphism</p>
+          <h1>MusicGen Studio</h1>
+          <p class="hero-copy">
+            Generate songs from lyrics and style prompts with a clean static
+            frontend. The page streams progress, auto-converts video results to
+            MP3 in the browser, and keeps a recent history list on the right.
+          </p>
+        </div>
+
+        <div class="hero-badges" aria-label="Application badges">
+          <span class="soft-pill accent">Suno v5 / v4.5</span>
+          <span class="soft-pill">Streaming status</span>
+          <span class="soft-pill">Local MP3 conversion</span>
+        </div>
+      </header>
+
+      <main class="layout-grid">
+        <section class="soft-card composer-panel">
+          <div class="panel-heading">
+            <div>
+              <p class="eyebrow">Generator</p>
+              <h2>Create a new song</h2>
+            </div>
+            <div class="panel-badge-wrap">
+              <span class="soft-pill">Custom: On</span>
+            </div>
+          </div>
+
+          <form id="generation-form" class="generator-form">
+            <div class="form-grid two-up">
+              <label class="field">
+                <span class="field-label">API key</span>
+                <input
+                  id="api-key"
+                  name="apiKey"
+                  type="password"
+                  autocomplete="off"
+                  placeholder="Paste your API key"
+                  required />
+                <span class="field-help">
+                  Stored only in this browser. A static GitHub Pages site cannot
+                  safely hide secrets. The API and media URLs also need browser
+                  CORS enabled.
+                </span>
+              </label>
+
+              <label class="field">
+                <span class="field-label">Model</span>
+                <select id="model" name="model">
+                  <option value="suno-v5">suno-v5</option>
+                  <option value="suno-v4.5">suno-v4.5</option>
+                </select>
+              </label>
+            </div>
+
+            <div class="form-grid two-up align-end">
+              <label class="field grow">
+                <span class="field-label">Style</span>
+                <textarea
+                  id="style"
+                  name="style"
+                  rows="4"
+                  placeholder="Describe the sound, mood, tempo, and vocal style"
+                  required></textarea>
+              </label>
+
+              <label class="toggle-card" for="instrumental">
+                <span>
+                  <span class="field-label">Instrumental only</span>
+                  <span class="field-help">
+                    When enabled, the lyrics box is disabled and the request is
+                    sent as instrumental.
+                  </span>
+                </span>
+                <input id="instrumental" name="instrumental" type="checkbox" />
+              </label>
+            </div>
+
+            <label class="field">
+              <span class="field-label">Lyrics</span>
+              <textarea
+                id="lyrics"
+                name="lyrics"
+                rows="16"
+                placeholder="Write your lyrics here. Use sections like [Verse], [Pre-Chorus], and [Chorus] if you want."></textarea>
+              <span id="lyrics-help" class="field-help">
+                Lyrics are required unless instrumental mode is enabled.
+              </span>
+            </label>
+
+            <div class="status-row">
+              <div class="status-card inset-card" aria-live="polite">
+                <div>
+                  <p class="status-label">Status</p>
+                  <p id="status-text" class="status-text">
+                    Ready when you are.
+                  </p>
+                </div>
+                <div>
+                  <p class="status-label">Timer</p>
+                  <p id="status-timer" class="timer">00:00</p>
+                </div>
+              </div>
+
+              <button
+                id="generate-button"
+                class="generate-button"
+                type="submit">
+                Generate song
+              </button>
+            </div>
+          </form>
+
+          <section class="result-panel inset-card" aria-live="polite">
+            <div class="panel-heading compact">
+              <div>
+                <p class="eyebrow">Newest result</p>
+                <h3>Latest local generation</h3>
+              </div>
+            </div>
+
+            <div id="current-result" class="current-result empty-state">
+              Generate a track to see the newest MP3, source link, and playback
+              controls here.
+            </div>
+          </section>
+        </section>
+
+        <aside class="soft-card history-panel">
+          <div class="panel-heading sticky-heading">
+            <div>
+              <p class="eyebrow">History</p>
+              <h2>Latest song generations</h2>
+              <p class="panel-copy">
+                This list merges the optional public feed in history.json with
+                local items created in this browser.
+              </p>
+            </div>
+          </div>
+
+          <div id="history-list" class="history-list" aria-live="polite">
+            <div class="empty-state">
+              No generations yet. Your newest items will appear here.
+            </div>
+          </div>
+        </aside>
+      </main>
+    </div>
+
+    <script type="module" src="app.js"></script>
+  </body>
+</html>
