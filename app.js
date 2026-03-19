@@ -199,7 +199,14 @@ function clearHistoryData() {
 }
 
 function exportHistory() {
-  const dataStr = JSON.stringify(state.history, null, 2);
+  const disclaimer = "Note: Data is saved locally in your browser. Processing is done via Pollinations.ai API only.";
+  const exportData = {
+    disclaimer,
+    exportDate: new Date().toISOString(),
+    history: state.history
+  };
+  
+  const dataStr = JSON.stringify(exportData, null, 2);
   const dataBlob = new Blob([dataStr], { type: "application/json" });
   const url = URL.createObjectURL(dataBlob);
   const link = document.createElement("a");
@@ -249,9 +256,31 @@ async function fetchAvailableModels() {
     const baseUrl = getBaseUrl();
     const apiKey = getApiKey();
 
-    // For Pollinations, try to fetch models
+    let textModels = [];
+    let imageModels = [];
+
+    // For Pollinations, fetch from specific endpoints
     if (baseUrl.includes("pollinations.ai")) {
-      const response = await fetch(`${baseUrl}/v1/models`, {
+      try {
+        const [textRes, imageRes] = await Promise.all([
+          fetch(`https://text.pollinations.ai/models`),
+          fetch(`https://image.pollinations.ai/models`)
+        ]);
+
+        if (textRes.ok) {
+          const textData = await textRes.json();
+          textModels = textData.map(m => m.name || m.id);
+        }
+        if (imageRes.ok) {
+          const imageData = await imageRes.json();
+          imageModels = imageData;
+        }
+      } catch (err) {
+        console.error("Failed to fetch Pollinations models:", err);
+      }
+    } else {
+      // For BYOK (OpenAI compatible)
+      const response = await fetch(`${baseUrl}/models`, {
         headers: {
           Authorization: `Bearer ${apiKey}`,
         },
@@ -259,16 +288,29 @@ async function fetchAvailableModels() {
 
       if (response.ok) {
         const data = await response.json();
-        state.availableModels = data.data || [];
-        return state.availableModels;
+        // Assuming OpenAI format where 'data' is an array of objects with 'id'
+        const models = (data.data || []).map(m => m.id);
+        textModels = models;
+        imageModels = models; // Since we don't know which is which, put them in both
       }
     }
 
-    // Fallback to default models
-    return getDefaultModels();
+    const defaultModels = getDefaultModels();
+    
+    state.availableModels = {
+      image: imageModels.length > 0 ? imageModels : defaultModels.image,
+      text: textModels.length > 0 ? textModels : defaultModels.text,
+      audio: defaultModels.audio,
+      music: defaultModels.music,
+      video: defaultModels.video,
+      transcription: defaultModels.transcription
+    };
+
+    return state.availableModels;
   } catch (err) {
     console.error("Failed to fetch models:", err);
-    return getDefaultModels();
+    state.availableModels = getDefaultModels();
+    return state.availableModels;
   }
 }
 
@@ -285,7 +327,7 @@ function getDefaultModels() {
 
 async function validateByopKey(apiKey) {
   try {
-    const response = await fetch(`${POLLINATIONS_GEN_URL}/v1/models`, {
+    const response = await fetch(`${POLLINATIONS_GEN_URL}/models`, {
       headers: {
         Authorization: `Bearer ${apiKey}`,
       },
@@ -318,7 +360,7 @@ async function generateImage(prompt, model = "flux") {
   const apiKey = getApiKey();
 
   // Pollinations direct image generation
-  const imageUrl = `${POLLINATIONS_BASE_URL}/p/${encodeURIComponent(prompt)}?model=${model}&width=1024&height=1024&seed=${Math.floor(Math.random() * 1000000)}&nologo=true`;
+  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=${encodeURIComponent(model)}&width=1024&height=1024&seed=${Math.floor(Math.random() * 1000000)}&nologo=true&private=true&key=${encodeURIComponent(apiKey)}`;
 
   return {
     type: "image",
@@ -402,10 +444,10 @@ async function generateAudio(text, model = "parler-tts", voice = "default") {
 }
 
 async function generateMusic(prompt, duration = 30) {
-  const baseUrl = POLLINATIONS_BASE_URL;
+  const apiKey = getApiKey();
 
   // Pollinations music generation endpoint
-  const musicUrl = `${baseUrl}/audio/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}`;
+  const musicUrl = `https://gen.pollinations.ai/audio/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}&key=${encodeURIComponent(apiKey)}`;
 
   return {
     type: "music",
@@ -417,10 +459,10 @@ async function generateMusic(prompt, duration = 30) {
 }
 
 async function generateVideo(prompt, duration = 5) {
-  const baseUrl = POLLINATIONS_BASE_URL;
+  const apiKey = getApiKey();
 
   // Pollinations video generation endpoint
-  const videoUrl = `${baseUrl}/video/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}`;
+  const videoUrl = `https://gen.pollinations.ai/video/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}&key=${encodeURIComponent(apiKey)}`;
 
   return {
     type: "video",
@@ -499,6 +541,11 @@ async function handleDemoMode() {
   showToast("Demo mode activated");
   await fetchAvailableModels();
   showPlaygroundPage();
+  if (!state.currentGenMode) {
+    dom.genModeButtons[0].click();
+  } else {
+    renderGenerationPanel(state.currentGenMode);
+  }
 }
 
 async function handleByopMode() {
@@ -539,6 +586,11 @@ async function submitByop() {
   showToast("BYOP mode activated");
   await fetchAvailableModels();
   showPlaygroundPage();
+  if (!state.currentGenMode) {
+    dom.genModeButtons[0].click();
+  } else {
+    renderGenerationPanel(state.currentGenMode);
+  }
 }
 
 function cancelByop() {
@@ -560,6 +612,9 @@ function handleLogout() {
 // =========================================================
 
 function createImagePanel() {
+  const models = state.availableModels?.image || getDefaultModels().image;
+  const optionsHtml = models.map(m => `<option value="${m}">${m}</option>`).join("");
+
   return `
     <div class="gen-panel card" data-panel="image">
       <h2 class="gen-panel-title">Image Generation</h2>
@@ -576,12 +631,7 @@ function createImagePanel() {
         <label class="gen-field">
           <span class="gen-label">Model</span>
           <select id="image-model" class="gen-select">
-            <option value="flux">Flux</option>
-            <option value="flux-realism">Flux Realism</option>
-            <option value="flux-cablyai">Flux Cably</option>
-            <option value="flux-anime">Flux Anime</option>
-            <option value="flux-3d">Flux 3D</option>
-            <option value="turbo">Turbo</option>
+            ${optionsHtml}
           </select>
         </label>
 
@@ -600,6 +650,9 @@ function createImagePanel() {
 }
 
 function createTextPanel() {
+  const models = state.availableModels?.text || getDefaultModels().text;
+  const optionsHtml = models.map(m => `<option value="${m}">${m}</option>`).join("");
+
   return `
     <div class="gen-panel card" data-panel="text">
       <h2 class="gen-panel-title">Text Completion</h2>
@@ -625,10 +678,7 @@ function createTextPanel() {
         <label class="gen-field">
           <span class="gen-label">Model</span>
           <select id="text-model" class="gen-select">
-            <option value="openai">OpenAI</option>
-            <option value="gemini-fast">Gemini Fast</option>
-            <option value="claude-sonnet">Claude Sonnet</option>
-            <option value="llama-v3p1-405b">Llama 3.1 405B</option>
+            ${optionsHtml}
           </select>
         </label>
 
@@ -1262,6 +1312,11 @@ async function init() {
     await fetchAvailableModels();
     showPlaygroundPage();
     renderHistory();
+    if (!state.currentGenMode) {
+      dom.genModeButtons[0].click();
+    } else {
+      renderGenerationPanel(state.currentGenMode);
+    }
   } else {
     // Show login page
     showLoginPage();
