@@ -13,13 +13,16 @@
   padding: 12px;
   border-radius: var(--shape-large);
   cursor: pointer;
+  transition:
+    background-color var(--duration-short-4) var(--ease-standard),
+    transform var(--duration-short-2) var(--ease-expressive);
   color: var(--md-sys-color-on-surface-variant);
   transition: background-color 0.2s var(--ease-standard), transform 0.2s var(--ease-standard);
 }
 
 .chat-history-item:hover {
   background-color: var(--md-sys-color-surface-container-high);
-  transform: translateX(2px);
+  transform: translateX(4px);
 }
 
 .chat-history-item.active {
@@ -48,8 +51,19 @@
 
 .chat-bubble-container {
   display: flex;
-  max-width: min(78ch, 86%);
-  animation: bubbleEnter 0.22s var(--ease-emphasized-decelerate);
+  max-width: 80%;
+  animation: chatBubbleFadeIn var(--duration-medium-3) var(--ease-emphasized-decelerate);
+}
+
+@keyframes chatBubbleFadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(16px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .chat-bubble-container.user {
@@ -104,8 +118,17 @@
 .chat-input-toolbar {
   display: flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  padding: 8px;
+  gap: 8px;
+  box-shadow: var(--elevation-1);
+  transition:
+    box-shadow var(--duration-short-4) var(--ease-standard),
+    transform var(--duration-short-2) var(--ease-expressive);
+}
+
+.chat-input-wrapper:focus-within {
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  transform: scale(1.01);
 }
 
 .selector-wrapper {
@@ -160,10 +183,26 @@
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 10px;
-  font: var(--type-label-lg);
-  text-align: left;
+  box-shadow: var(--elevation-2);
+  z-index: 10;
+  animation: attachmentSlideIn var(--duration-medium-2) var(--ease-emphasized-decelerate);
+}
+
+@keyframes attachmentSlideIn {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.attachment-preview button {
+  background: none;
+  border: none;
+  color: inherit;
   cursor: pointer;
   transition: background-color 0.16s var(--ease-standard), color 0.16s var(--ease-standard);
 }

@@ -244,6 +244,7 @@ export async function fetchModels() {
       fetch(`${API_BASE}/image/models`)
     ]);
 
+
     if (textRes.ok) {
       const textData = await textRes.json();
       const textModels = Array.isArray(textData?.data) ? textData.data : [];
