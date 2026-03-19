@@ -1,0 +1,321 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+	<meta charset="UTF-8">
+	<meta name="viewport" content="width=device-width, initial-scale=1.0">
+	<title>OneLLM Apps Explorer</title>
+	<link rel="preconnect" href="https://fonts.googleapis.com">
+	<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+	<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+	<style>
+		:root {
+			--bg: #f8f8ff;
+			--surface: #ffffff;
+			--text: #171829;
+			--muted: #66708a;
+			--primary: #5a29d8;
+			--primary-container: #ede5ff;
+			--border: #d9d8f1;
+			--ok: #0f7a52;
+			--ok-container: #d8f8ea;
+			--official: #0f5bd7;
+			--official-container: #e0ecff;
+			--shadow: 0 16px 34px rgba(43, 20, 102, .14);
+			--r-xl: 30px;
+			--r-lg: 20px;
+			--r-pill: 999px;
+		}
+
+		* { box-sizing: border-box; }
+		html, body { margin: 0; min-height: 100%; }
+		body {
+			font-family: "Plus Jakarta Sans", sans-serif;
+			background: radial-gradient(circle at 15% 10%, #ece4ff, transparent 38%),
+									radial-gradient(circle at 86% 6%, #dbe9ff, transparent 34%),
+									var(--bg);
+			color: var(--text);
+		}
+
+		.wrap {
+			width: min(1040px, calc(100% - 24px));
+			margin: 22px auto;
+			display: grid;
+			gap: 14px;
+		}
+
+		.topbar {
+			background: color-mix(in srgb, var(--surface) 85%, transparent);
+			border: 1px solid var(--border);
+			border-radius: var(--r-xl);
+			box-shadow: var(--shadow);
+			padding: 16px 18px;
+			display: flex;
+			align-items: center;
+			justify-content: space-between;
+			gap: 10px;
+			backdrop-filter: blur(10px);
+		}
+
+		.title {
+			display: grid;
+			gap: 2px;
+		}
+
+		.title h1 {
+			margin: 0;
+			font-size: clamp(22px, 2.8vw, 34px);
+			line-height: 1.05;
+			letter-spacing: -.02em;
+		}
+
+		.title p {
+			margin: 0;
+			font-size: 13px;
+			color: var(--muted);
+		}
+
+		.badge {
+			display: inline-flex;
+			align-items: center;
+			gap: 6px;
+			border-radius: var(--r-pill);
+			padding: 7px 12px;
+			font-weight: 800;
+			font-size: 12px;
+			background: var(--primary-container);
+			color: var(--primary);
+			border: 1px solid color-mix(in srgb, var(--primary) 30%, var(--border));
+			text-transform: uppercase;
+			letter-spacing: .07em;
+		}
+
+		.grid {
+			display: grid;
+			grid-template-columns: 1fr;
+			gap: 14px;
+		}
+
+		.app-card {
+			background: var(--surface);
+			border: 1px solid var(--border);
+			border-radius: var(--r-xl);
+			box-shadow: var(--shadow);
+			overflow: hidden;
+		}
+
+		.app-header {
+			padding: 18px;
+			border-bottom: 1px solid var(--border);
+			display: flex;
+			align-items: center;
+			gap: 12px;
+			flex-wrap: wrap;
+		}
+
+		.app-icon {
+			width: 56px;
+			height: 56px;
+			border-radius: 18px;
+			display: grid;
+			place-items: center;
+			background: linear-gradient(140deg, #5a29d8, #ec3f72);
+			color: white;
+			font-size: 28px;
+			box-shadow: 0 10px 22px rgba(90, 41, 216, .34);
+		}
+
+		.app-meta {
+			flex: 1;
+			min-width: 220px;
+		}
+
+		.app-meta h2 {
+			margin: 0;
+			font-size: 24px;
+			letter-spacing: -.02em;
+		}
+
+		.app-meta p {
+			margin: 6px 0 0;
+			color: var(--muted);
+			line-height: 1.55;
+			font-size: 14px;
+		}
+
+		.status-tags {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+			margin-top: 10px;
+		}
+
+		.tag {
+			display: inline-flex;
+			align-items: center;
+			gap: 5px;
+			border-radius: var(--r-pill);
+			padding: 6px 11px;
+			font-size: 11px;
+			font-weight: 800;
+			letter-spacing: .04em;
+			text-transform: uppercase;
+			border: 1px solid transparent;
+		}
+
+		.tag.official {
+			background: var(--official-container);
+			color: var(--official);
+			border-color: color-mix(in srgb, var(--official) 28%, var(--official-container));
+		}
+
+		.tag.verified {
+			background: var(--ok-container);
+			color: var(--ok);
+			border-color: color-mix(in srgb, var(--ok) 28%, var(--ok-container));
+		}
+
+		.tag.live {
+			background: var(--primary-container);
+			color: var(--primary);
+			border-color: color-mix(in srgb, var(--primary) 28%, var(--primary-container));
+		}
+
+		.app-body {
+			padding: 18px;
+			display: grid;
+			gap: 12px;
+		}
+
+		.panel {
+			border: 1px dashed var(--border);
+			background: #faf9ff;
+			border-radius: var(--r-lg);
+			padding: 13px 14px;
+			line-height: 1.55;
+			color: var(--text);
+			font-size: 14px;
+		}
+
+		.panel strong {
+			color: var(--primary);
+		}
+
+		.bottom-tags {
+			display: flex;
+			flex-wrap: wrap;
+			gap: 8px;
+		}
+
+		.bottom-tag {
+			padding: 6px 12px;
+			border-radius: var(--r-pill);
+			background: white;
+			border: 1px solid var(--border);
+			font-size: 12px;
+			font-weight: 700;
+			color: var(--muted);
+		}
+
+		.actions {
+			display: flex;
+			gap: 8px;
+			flex-wrap: wrap;
+		}
+
+		.btn {
+			border: 1px solid transparent;
+			border-radius: var(--r-pill);
+			padding: 10px 15px;
+			font-weight: 700;
+			font-size: 13px;
+			display: inline-flex;
+			align-items: center;
+			gap: 8px;
+			cursor: pointer;
+			transition: transform .2s ease, box-shadow .2s ease;
+		}
+
+		.btn:hover {
+			transform: translateY(-1px);
+			box-shadow: 0 8px 16px rgba(26, 20, 49, .1);
+		}
+
+		.btn.primary {
+			background: var(--primary);
+			color: white;
+		}
+
+		.btn.ghost {
+			background: #fff;
+			border-color: var(--border);
+			color: var(--text);
+		}
+
+		.ms {
+			font-family: 'Material Symbols Rounded';
+			font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24;
+			font-size: 20px;
+			line-height: 1;
+		}
+
+		@media (max-width: 700px) {
+			.app-header { padding: 14px; }
+			.app-body { padding: 14px; }
+			.app-meta h2 { font-size: 21px; }
+		}
+	</style>
+</head>
+<body>
+	<div class="wrap">
+		<header class="topbar">
+			<div class="title">
+				<h1>Explore Apps</h1>
+				<p>Discover OneLLM apps generated and launched in real time.</p>
+			</div>
+			<div class="badge">
+				<span class="ms">deployed_code</span>
+				M3 Expressive
+			</div>
+		</header>
+
+		<section class="grid">
+			<article class="app-card">
+				<div class="app-header">
+					<div class="app-icon"><span class="ms">memory</span></div>
+					<div class="app-meta">
+						<h2>LLM OS</h2>
+						<p>AI-generated applications running inside the OneLLM operating layer. Apps are generated on the fly and mounted instantly.</p>
+						<div class="status-tags">
+							<span class="tag official"><span class="ms" style="font-size:14px">workspace_premium</span>Official</span>
+							<span class="tag verified"><span class="ms" style="font-size:14px">verified</span>Verified</span>
+							<span class="tag live"><span class="ms" style="font-size:14px">bolt</span>On-The-Fly</span>
+						</div>
+					</div>
+				</div>
+				<div class="app-body">
+					<div class="panel">
+						<strong>Current state:</strong> This is the base app in the explorer. App creation UI is not exposed yet, but runtime generation hooks are reserved for future release.
+					</div>
+
+					<div class="actions">
+						<button class="btn primary" type="button">
+							<span class="ms">rocket_launch</span>
+							Open LLM OS
+						</button>
+						<button class="btn ghost" type="button">
+							<span class="ms">info</span>
+							View Details
+						</button>
+					</div>
+
+					<div class="bottom-tags">
+						<span class="bottom-tag">#AppGenerator</span>
+						<span class="bottom-tag">#OfficialStack</span>
+						<span class="bottom-tag">#TechDemoBase</span>
+					</div>
+				</div>
+			</article>
+		</section>
+	</div>
+</body>
+</html>

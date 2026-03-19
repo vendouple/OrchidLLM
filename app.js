@@ -11,47 +11,54 @@ const CATS = [
   { id:'transcription', label:'Transcribe', icon:'mic_external_on', badge:'cb-transcription' },
 ];
 
+const POLL_BASE = 'https://gen.pollinations.ai';
+const DEMO_API_KEY = 'pk_BU8jPqG7RBj8yOxh';
+const DEFAULT_BYOP_KEY = 'pk_dfgOjlw1zrrhB5eZ';
+
 const MODELS = {
   text: [
-    { id:'openai', name:'openai', desc:'GPT-4o via Pollinations', caps:['vision','reasoning'] },
-    { id:'openai-large', name:'openai-large', desc:'GPT-4o large context', caps:['vision','reasoning','code'] },
-    { id:'openai-reasoning', name:'openai-reasoning', desc:'o3-mini — reasoning model', caps:['reasoning','code'] },
-    { id:'mistral', name:'mistral', desc:'Mistral Large latest', caps:[] },
-    { id:'llama', name:'llama', desc:'Meta Llama 3.3 70B', caps:['reasoning'] },
-    { id:'llama-large', name:'llama-large', desc:'Llama 3.1 405B', caps:['reasoning'] },
-    { id:'gemini', name:'gemini', desc:'Google Gemini 2.0 Flash', caps:['vision','search'] },
-    { id:'gemini-thinking', name:'gemini-thinking', desc:'Gemini 2.0 Flash Thinking', caps:['reasoning','search'] },
-    { id:'deepseek', name:'deepseek', desc:'DeepSeek V3', caps:['reasoning','code'] },
-    { id:'deepseek-r1', name:'deepseek-r1', desc:'DeepSeek R1 — thinking', caps:['reasoning','code'] },
-    { id:'qwen-coder', name:'qwen-coder', desc:'Qwen 2.5 Coder 32B', caps:['code'] },
-    { id:'claude-hybridspace', name:'claude-hybridspace', desc:'Claude Hybridspace', caps:['vision','reasoning'] },
+    { id:'openai', name:'openai', desc:'GPT-5 Mini — fast and balanced', caps:['tools'] },
+    { id:'openai-fast', name:'openai-fast', desc:'GPT-5 Nano — ultra fast', caps:['tools'] },
+    { id:'openai-large', name:'openai-large', desc:'GPT-5.2 — strongest general model', caps:['tools','reasoning'] },
+    { id:'qwen-coder', name:'qwen-coder', desc:'Qwen3 Coder 30B', caps:['code','tools'] },
+    { id:'mistral', name:'mistral', desc:'Mistral Small 3.2 24B', caps:['tools'] },
+    { id:'gemini', name:'gemini', desc:'Gemini 3 Flash', caps:['search','reasoning','code'] },
+    { id:'deepseek', name:'deepseek', desc:'DeepSeek V3.2', caps:['reasoning','tools'] },
+    { id:'claude-fast', name:'claude-fast', desc:'Claude Haiku 4.5', caps:['tools'] },
+    { id:'claude', name:'claude', desc:'Claude Sonnet 4.6', caps:['tools'] },
   ],
   image: [
-    { id:'flux', name:'flux', desc:'FLUX.1 — high quality', caps:['vision'] },
-    { id:'flux-realism', name:'flux-realism', desc:'FLUX Realism LoRA', caps:[] },
-    { id:'flux-anime', name:'flux-anime', desc:'FLUX Anime style', caps:[] },
-    { id:'flux-3d', name:'flux-3d', desc:'FLUX 3D rendering', caps:[] },
-    { id:'flux-pro', name:'flux-pro', desc:'FLUX Pro — premium', caps:[] },
-    { id:'turbo', name:'turbo', desc:'Fast SDXL Turbo', caps:[] },
-    { id:'gptimage', name:'gptimage', desc:'GPT Image Generation', caps:['vision'] },
+    { id:'flux', name:'flux', desc:'Flux Schnell image generation', caps:['vision'] },
+    { id:'zimage', name:'zimage', desc:'Z-Image Turbo', caps:['vision'] },
+    { id:'gptimage', name:'gptimage', desc:'GPT Image 1 Mini', caps:['vision'] },
+    { id:'gptimage-large', name:'gptimage-large', desc:'GPT Image 1.5', caps:['vision'] },
+    { id:'kontext', name:'kontext', desc:'FLUX.1 Kontext in-context editing', caps:['vision'] },
   ],
   video: [
-    { id:'video-soon', name:'Video Models', desc:'Coming soon — stay tuned!', caps:[], disabled:true },
+    { id:'veo', name:'veo', desc:'Veo 3.1 Fast', caps:['vision'] },
+    { id:'seedance', name:'seedance', desc:'Seedance Lite video generation', caps:['vision'] },
+    { id:'wan', name:'wan', desc:'Wan 2.6 video with audio', caps:['vision','audio-out'] },
+    { id:'ltx-2', name:'ltx-2', desc:'LTX-2 text-to-video', caps:['vision','audio-out'] },
   ],
   'audio-out': [
-    { id:'audio-out-soon', name:'TTS Models', desc:'Text-to-speech coming soon', caps:[], disabled:true },
+    { id:'elevenlabs', name:'elevenlabs', desc:'ElevenLabs v3 TTS', caps:['audio-out'] },
+    { id:'elevenmusic', name:'elevenmusic', desc:'ElevenLabs music generation', caps:['audio-out'] },
+    { id:'qwen3-tts', name:'qwen3-tts', desc:'Qwen3 TTS', caps:['audio-out'] },
   ],
   'audio-in': [
-    { id:'audio-in-soon', name:'Audio Input', desc:'Audio input models coming soon', caps:[], disabled:true },
+    { id:'whisper', name:'whisper', desc:'Whisper Large V3 transcription', caps:['audio-in'] },
+    { id:'scribe', name:'scribe', desc:'ElevenLabs Scribe v2', caps:['audio-in'] },
   ],
   transcription: [
-    { id:'transcription-soon', name:'Transcription', desc:'Whisper & more coming soon', caps:[], disabled:true },
+    { id:'whisper-large-v3', name:'whisper-large-v3', desc:'Whisper Large V3', caps:['audio-in'] },
+    { id:'scribe', name:'scribe', desc:'Scribe transcription', caps:['audio-in'] },
   ],
 };
 
 const CAPS_META = {
   vision:    { label:'Vision',    icon:'visibility' },
   reasoning: { label:'Reasoning', icon:'psychology' },
+  tools:     { label:'Tools',     icon:'build' },
   search:    { label:'Search',    icon:'search' },
   code:      { label:'Code',      icon:'code' },
   'audio-in':  { label:'Audio In',  icon:'mic' },
@@ -78,6 +85,8 @@ let S = {
   demoMode: false,
   demoCount: 0,  // used today
   demoUiMode: false,
+  apiMode: 'demo',
+  byopKey: DEFAULT_BYOP_KEY,
   systemPrompt: '',
   enhanceModel: 'openai',
   selectedCat: 'text',
@@ -104,6 +113,9 @@ function loadState() {
       S.demoCount = saved.demoCount || 0;
       S.systemPrompt = saved.systemPrompt || '';
       S.enhanceModel = saved.enhanceModel || 'openai';
+      S.apiMode = saved.apiMode || 'demo';
+      S.byopKey = saved.byopKey || DEFAULT_BYOP_KEY;
+      S.demoUiMode = saved.demoUiMode || false;
       S.chats = saved.chats || {};
       // Reset daily demo count if new day
       if (saved.demoDate !== new Date().toDateString()) {
@@ -121,6 +133,9 @@ function saveState() {
       demoDate: new Date().toDateString(),
       systemPrompt: S.systemPrompt,
       enhanceModel: S.enhanceModel,
+      apiMode: S.apiMode,
+      byopKey: S.byopKey,
+      demoUiMode: S.demoUiMode,
       chats: S.chats,
     }));
   } catch(e) {}
@@ -151,6 +166,94 @@ function groupChats() {
 function getCatInfo(catId) { return CATS.find(c=>c.id===catId)||CATS[0]; }
 function isTextCat(catId) { return catId==='text'; }
 function demoRemaining() { return Math.max(0, 20 - S.demoCount); }
+
+function getActiveApiKey() {
+  return S.apiMode === 'byop' ? (S.byopKey || '').trim() : DEMO_API_KEY;
+}
+
+function getAuthHeaders() {
+  const key = getActiveApiKey();
+  return key ? { Authorization: `Bearer ${key}` } : {};
+}
+
+function getImageUrl(prompt, modelId, extras = {}) {
+  const encoded = encodeURIComponent(prompt || '');
+  const params = new URLSearchParams({ model: modelId, nologo: 'true', ...extras });
+  const key = getActiveApiKey();
+  if (key) params.set('key', key);
+  return `${POLL_BASE}/image/${encoded}?${params.toString()}`;
+}
+
+async function bootstrapPollinationsModels() {
+  try {
+    const [textRes, imageRes] = await Promise.all([
+      fetch(`${POLL_BASE}/v1/models`),
+      fetch(`${POLL_BASE}/image/models`),
+    ]);
+
+    if (textRes.ok) {
+      const textPayload = await textRes.json();
+      const textModels = Array.isArray(textPayload?.data)
+        ? textPayload.data
+        : Array.isArray(textPayload) ? textPayload : [];
+
+      if (textModels.length) {
+        MODELS.text = textModels
+          .filter((m) => m && m.id)
+          .map((m) => ({
+            id: m.id,
+            name: m.id,
+            desc: m.description || 'Pollinations text model',
+            caps: Array.isArray(m.capabilities) ? m.capabilities : ['tools'],
+          }));
+      }
+    }
+
+    if (imageRes.ok) {
+      const imagePayload = await imageRes.json();
+      const imageModels = Array.isArray(imagePayload?.data)
+        ? imagePayload.data
+        : Array.isArray(imagePayload) ? imagePayload : [];
+
+      if (imageModels.length) {
+        const imageBucket = [];
+        const videoBucket = [];
+
+        imageModels.forEach((m) => {
+          if (!m || !m.id) return;
+          const model = {
+            id: m.id,
+            name: m.id,
+            desc: m.description || 'Pollinations image model',
+            caps: ['vision'],
+          };
+
+          const type = String(m.type || '').toLowerCase();
+          const isVideo = type.includes('video') || /veo|seedance|wan|ltx|video/i.test(m.id);
+          if (isVideo) {
+            model.caps = ['vision', 'audio-out'];
+            videoBucket.push(model);
+          } else {
+            imageBucket.push(model);
+          }
+        });
+
+        if (imageBucket.length) MODELS.image = imageBucket;
+        if (videoBucket.length) MODELS.video = videoBucket;
+      }
+    }
+
+    const keepModel = (MODELS[S.selectedCat] || []).some((m) => m.id === S.selectedModel.id);
+    if (!keepModel) {
+      S.selectedCat = 'text';
+      S.selectedModel = MODELS.text[0] || S.selectedModel;
+    }
+
+    selectModel(S.selectedCat, S.selectedModel.id, { silent: true });
+  } catch {
+    // Keep fallback model catalog if network/catalog bootstrap fails.
+  }
+}
 
 /* ══════════════════════════════════════════════
    THEME
@@ -333,6 +436,10 @@ function buildMsgEl(msg) {
 
   if (msg.imageUrl) {
     bubbleContent += `<img src="${escHtml(msg.imageUrl)}" class="msg-img" alt="Generated image" loading="lazy" onerror="this.style.display='none'">`;
+  } else if (msg.videoUrl) {
+    bubbleContent += `<video class="msg-img" controls playsinline src="${escHtml(msg.videoUrl)}"></video>`;
+  } else if (msg.audioUrl) {
+    bubbleContent += `<audio controls src="${escHtml(msg.audioUrl)}" style="width:100%"></audio>`;
   } else if (msg.content) {
     bubbleContent += escHtml(msg.content);
   }
@@ -504,9 +611,14 @@ async function sendMessage() {
   // In temp chat mode we keep the flow clean with no typing spinner.
   if (!S.isTempChat) showTyping();
   try {
-    const isImg = S.selectedCat === 'image';
-    if (isImg) {
+    if (S.selectedCat === 'image') {
       await callImageAPI(chatId, text);
+    } else if (S.selectedCat === 'video') {
+      await callVideoAPI(chatId, text);
+    } else if (S.selectedCat === 'audio-out') {
+      await callAudioOutAPI(chatId, text);
+    } else if (S.selectedCat === 'audio-in' || S.selectedCat === 'transcription') {
+      await callTranscriptionAPI(chatId);
     } else if (isTextCat(S.selectedCat)) {
       if (S.isTempChat) {
         const presetLabel = TEMP_MODEL_PRESETS.find((preset) => preset.id === S.tempModelPreset)?.label || 'Balanced';
@@ -538,20 +650,22 @@ async function callTextAPI(chatId, userText, userMsg) {
   }
 
   const body = {
-    messages,
     model: S.selectedModel.id,
+    messages,
     seed: -1,
     stream: false,
+    temperature: 0.7,
   };
   if (S.systemPrompt) body.system = S.systemPrompt;
 
-  const res = await fetch('https://text.pollinations.ai/', {
+  const res = await fetch(`${POLL_BASE}/v1/chat/completions`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
     body: JSON.stringify(body),
   });
   if (!res.ok) throw new Error(`API error ${res.status}`);
-  const text = await res.text();
+  const payload = await res.json();
+  const text = payload?.choices?.[0]?.message?.content || 'No response content.';
 
   removeTyping();
   const aiMsg = { role:'assistant', content: text.trim(), time: ts(), model: S.selectedModel.name };
@@ -560,18 +674,82 @@ async function callTextAPI(chatId, userText, userMsg) {
 }
 
 async function callImageAPI(chatId, prompt) {
-  const encoded = encodeURIComponent(prompt);
-  const url = `https://image.pollinations.ai/prompt/${encoded}?model=${S.selectedModel.id}&nologo=true&width=1024&height=1024&seed=${Math.floor(Math.random()*9999)}`;
-  
-  // Pre-load image
-  await new Promise((res, rej) => {
-    const img = new Image();
-    img.onload = res; img.onerror = () => rej(new Error('Image generation failed'));
-    img.src = url;
+  const url = getImageUrl(prompt, S.selectedModel.id, {
+    width: '1024',
+    height: '1024',
+    seed: String(Math.floor(Math.random() * 9999)),
+    enhance: 'false',
   });
 
   removeTyping();
   const aiMsg = { role:'assistant', imageUrl: url, time: ts(), model: S.selectedModel.name };
+  addMessage(chatId, aiMsg);
+  addMsgToView(aiMsg);
+}
+
+async function callVideoAPI(chatId, prompt) {
+  const url = getImageUrl(prompt, S.selectedModel.id, {
+    duration: '4',
+    aspectRatio: '16:9',
+    audio: 'true',
+    seed: String(Math.floor(Math.random() * 9999)),
+  });
+
+  removeTyping();
+  const aiMsg = { role:'assistant', videoUrl: url, time: ts(), model: S.selectedModel.name };
+  addMessage(chatId, aiMsg);
+  addMsgToView(aiMsg);
+}
+
+async function callAudioOutAPI(chatId, text) {
+  const encoded = encodeURIComponent(text || 'Hello from OneLLM');
+  const params = new URLSearchParams({
+    model: S.selectedModel.id,
+    voice: 'nova',
+  });
+  const key = getActiveApiKey();
+  if (key) params.set('key', key);
+  const url = `${POLL_BASE}/audio/${encoded}?${params.toString()}`;
+
+  removeTyping();
+  const aiMsg = {
+    role: 'assistant',
+    audioUrl: url,
+    content: `Generated audio with ${S.selectedModel.name} (voice: nova).`,
+    time: ts(),
+    model: S.selectedModel.name,
+  };
+  addMessage(chatId, aiMsg);
+  addMsgToView(aiMsg);
+}
+
+async function callTranscriptionAPI(chatId) {
+  const audioAttachment = S.attachments.find((a) => a.type?.startsWith('audio/'));
+  if (!audioAttachment || !audioAttachment.data) {
+    removeTyping();
+    throw new Error('Attach an audio file for transcription.');
+  }
+
+  const blob = await fetch(audioAttachment.data).then((res) => res.blob());
+  const form = new FormData();
+  form.append('file', new File([blob], audioAttachment.name || 'audio.wav', { type: blob.type || 'audio/wav' }));
+  form.append('model', S.selectedModel.id === 'scribe' ? 'scribe' : 'whisper-large-v3');
+
+  const res = await fetch(`${POLL_BASE}/v1/audio/transcriptions`, {
+    method: 'POST',
+    headers: { ...getAuthHeaders() },
+    body: form,
+  });
+
+  if (!res.ok) {
+    throw new Error(`Transcription error ${res.status}`);
+  }
+
+  const payload = await res.json().catch(async () => ({ text: await res.text() }));
+  const transcript = payload?.text || payload?.transcript || 'Transcription complete.';
+
+  removeTyping();
+  const aiMsg = { role: 'assistant', content: transcript, time: ts(), model: S.selectedModel.name };
   addMessage(chatId, aiMsg);
   addMsgToView(aiMsg);
 }
@@ -705,14 +883,30 @@ function openSettings() {
   document.getElementById('s-demo-tog').classList.toggle('on', S.demoMode);
   document.getElementById('s-demo-ui-tog').classList.toggle('on', S.demoUiMode);
   document.getElementById('demo-ui-note').style.display = S.demoUiMode ? '' : 'none';
+  document.getElementById('byop-key-input').value = S.byopKey;
+  document.getElementById('s-key-mode-tog').classList.toggle('on', S.apiMode === 'byop');
+  syncApiModeUI();
   renderEnhanceModelList('s-eml', S.enhanceModel);
   openDlg('settings-dlg');
 }
 
 function saveSettings() {
   S.systemPrompt = document.getElementById('sys-prompt').value;
+  S.byopKey = document.getElementById('byop-key-input').value.trim() || DEFAULT_BYOP_KEY;
   saveState();
   toast('Settings saved', 'check_circle');
+}
+
+function syncApiModeUI() {
+  const chip = document.getElementById('active-key-chip');
+  const byopInput = document.getElementById('byop-key-input');
+  if (S.apiMode === 'byop') {
+    chip.textContent = 'BYOP Key Active';
+    byopInput.disabled = false;
+  } else {
+    chip.textContent = 'Demo Key Active';
+    byopInput.disabled = true;
+  }
 }
 
 function exportHistory() {
@@ -898,6 +1092,19 @@ document.getElementById('s-demo-tog').addEventListener('click', e => {
   updateDemoBanner(); saveState();
   toast(S.demoMode ? 'Demo mode on (20 RPD)' : 'Demo mode off', 'bolt');
 });
+document.getElementById('s-key-mode-tog').addEventListener('click', e => {
+  const on = e.target.classList.toggle('on');
+  S.apiMode = on ? 'byop' : 'demo';
+  syncApiModeUI();
+  saveState();
+  toast(on ? 'BYOP key mode enabled' : 'Demo key mode enabled', 'vpn_key');
+});
+document.getElementById('byop-link-btn').addEventListener('click', () => {
+  window.open('https://enter.pollinations.ai', '_blank', 'noopener,noreferrer');
+});
+document.getElementById('byop-key-input').addEventListener('input', e => {
+  S.byopKey = e.target.value.trim();
+});
 document.getElementById('s-demo-ui-tog').addEventListener('click', e => {
   const enabled = e.target.classList.toggle('on');
   applyDemoUiMode(enabled);
@@ -986,9 +1193,16 @@ function init() {
   renderTempModelPresets();
   document.getElementById('temp-model-row').classList.toggle('show', S.isTempChat);
   document.getElementById('temp-model-row').setAttribute('aria-hidden', String(!S.isTempChat));
+  syncApiModeUI();
 
   // Ensure the starting model chip is synced in UI.
   selectModel(S.selectedCat, S.selectedModel.id, { silent: true });
+  bootstrapPollinationsModels();
+
+  if (S.demoUiMode) {
+    document.getElementById('s-demo-ui-tog').classList.add('on');
+    applyDemoUiMode(true);
+  }
 
   // System prompt sync
   document.getElementById('sys-prompt').addEventListener('input', e => {

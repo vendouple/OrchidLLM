@@ -905,6 +905,41 @@ a:hover { text-decoration: underline; }
 .srow-col .srow-head { display: flex; align-items: center; gap: 12px; width: 100%; }
 .srow-col > * { width: 100%; }
 
+.key-mode-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.key-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 12px;
+  border-radius: var(--r-pill);
+  font-size: 12px;
+  font-weight: 800;
+  background: color-mix(in srgb, var(--p) 14%, transparent);
+  color: var(--on-pc);
+}
+
+.s-input {
+  width: 100%;
+  border: 1.5px solid var(--out-v);
+  border-radius: var(--r-md);
+  background: var(--surf);
+  color: var(--on-surf);
+  padding: 10px 12px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color .2s;
+}
+
+.s-input:focus {
+  border-color: var(--p);
+}
+
 /* Toggle */
 .tog {
   width: 52px; height: 30px; border-radius: 15px;
