@@ -1,0 +1,144 @@
+/* css/layout.css */
+.app-layout {
+  display: flex;
+  height: 100vh;
+  width: 100vw;
+  overflow: hidden;
+}
+
+.container-elevation-lowest { background-color: var(--md-sys-color-surface-container-lowest); }
+.container-elevation-low { background-color: var(--md-sys-color-surface-container-low); }
+.container-elevation-base { background-color: var(--md-sys-color-surface-container); }
+.container-elevation-high { background-color: var(--md-sys-color-surface-container-high); }
+.container-elevation-highest { background-color: var(--md-sys-color-surface-container-highest); }
+
+.sidebar {
+  width: 320px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid var(--md-sys-color-outline-variant);
+  z-index: 10;
+  transition: transform 0.3s var(--ease-standard);
+}
+
+.sidebar-header {
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebar-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.5rem;
+}
+
+.sidebar-footer {
+  padding: 1rem;
+  border-top: 1px solid var(--md-sys-color-outline-variant);
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.chat-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  position: relative;
+}
+
+.chat-header {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  padding: 0 1.5rem;
+  border-bottom: 1px solid var(--md-sys-color-outline-variant);
+}
+
+.chat-title-group {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+  scroll-behavior: smooth;
+}
+
+.welcome-placeholder {
+  margin: auto;
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  max-width: 400px;
+}
+
+.display-icon {
+  font-size: 64px;
+  font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 48;
+}
+
+.chat-input-area {
+  padding: 1rem 2rem 2rem 2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  max-width: 900px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+.auth-status {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.footer-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: space-between;
+}
+
+/* Auth overlay defaults */
+.login-overlay {
+  position: fixed;
+  inset: 0;
+  background-color: var(--md-sys-color-background);
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: opacity 0.4s var(--ease-standard);
+}
+
+.login-overlay[hidden] {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.login-card {
+  padding: 3rem;
+  border-radius: var(--shape-extra-large);
+  text-align: center;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+}
+
+.login-options {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
