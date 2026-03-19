@@ -32,20 +32,6 @@
       </button>
     </div>
 
-    <div class="mode-placeholders" id="mode-placeholders">
-      <div class="mp-label">More Modes</div>
-      <div class="mp-list">
-        <button class="mp-chip" type="button" onclick="showComingSoon('Voice Session Mode')">
-          <span class="ms sm">graphic_eq</span>
-          Voice
-        </button>
-        <button class="mp-chip" type="button" onclick="showComingSoon('Agent Mode')">
-          <span class="ms sm">smart_toy</span>
-          Agent
-        </button>
-      </div>
-    </div>
-
     <div class="hist-scroll" id="hist-scroll">
       <!-- populated by JS -->
     </div>
@@ -178,10 +164,36 @@
                 Enhance
               </button>
             </div>
+            <div class="tools-wrap" id="tools-wrap">
+              <button class="enhance-btn" id="tools-btn" type="button" title="Model tools">
+                <span class="ms sm">handyman</span>
+                Tools
+              </button>
+              <div class="tools-pop" id="tools-pop" aria-hidden="true">
+                <div class="tools-pop-title">Text Tools</div>
+                <div class="tools-chip-grid">
+                  <button class="tool-chip" type="button" data-tool="image">Image</button>
+                  <button class="tool-chip" type="button" data-tool="video">Video</button>
+                  <button class="tool-chip" type="button" data-tool="audio">Audio</button>
+                  <button class="tool-chip soon" type="button" disabled>Search Web (Soon)</button>
+                </div>
+              </div>
+            </div>
           </div>
 
           <!-- Spacer -->
           <div style="flex:1"></div>
+
+          <div class="quick-modes qm-segment" id="quick-modes" aria-label="More modes">
+            <button class="qm-pill" type="button" data-qmode="voice" disabled title="Coming soon">
+              <span class="ms sm">graphic_eq</span>
+              Voice
+            </button>
+            <button class="qm-pill" type="button" data-qmode="agentic" disabled title="Coming soon">
+              <span class="ms sm">smart_toy</span>
+              Agentic
+            </button>
+          </div>
 
           <!-- Attach button -->
           <button class="iab" id="attach-btn" title="Attach file" style="flex-shrink:0">
@@ -430,6 +442,25 @@
 
 <!-- Toast host -->
 <div id="toast-host"></div>
+
+<!-- Image Viewer -->
+<div id="img-viewer" class="img-viewer" aria-hidden="true">
+  <div class="img-viewer-bg"></div>
+  <div class="img-viewer-card" role="dialog" aria-modal="true" aria-label="Image viewer">
+    <div class="img-viewer-head">
+      <div class="img-viewer-zoom" id="img-zoom-label">100%</div>
+      <div class="img-viewer-actions">
+        <button class="ib" id="img-zoom-out" title="Zoom out"><span class="ms">remove</span></button>
+        <button class="ib" id="img-zoom-in" title="Zoom in"><span class="ms">add</span></button>
+        <a class="ib" id="img-download-btn" title="Download image" download="onellm-image.png"><span class="ms">download</span></a>
+        <button class="ib" id="img-close-btn" title="Close"><span class="ms">close</span></button>
+      </div>
+    </div>
+    <div class="img-viewer-stage">
+      <img id="img-viewer-img" alt="Expanded image">
+    </div>
+  </div>
+</div>
 
 <script src="./app.js" defer></script>
 </body>

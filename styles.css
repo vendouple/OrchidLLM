@@ -155,42 +155,6 @@ a:hover { text-decoration: underline; }
   flex-shrink: 0;
 }
 
-.mode-placeholders {
-  padding: 0 12px 12px;
-  border-bottom: 1px solid var(--out-v);
-  margin-bottom: 4px;
-}
-.mp-label {
-  font-size: 10px;
-  font-weight: 800;
-  letter-spacing: .1em;
-  text-transform: uppercase;
-  color: var(--out);
-  margin-bottom: 8px;
-}
-.mp-list {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-.mp-chip {
-  border: 1.5px dashed var(--out-v);
-  background: var(--surf);
-  border-radius: var(--r-pill);
-  font-size: 12px;
-  font-weight: 700;
-  color: var(--on-surf-v);
-  padding: 7px 12px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all .22s var(--spring);
-}
-.mp-chip:hover {
-  border-color: var(--p);
-  color: var(--on-pc);
-  background: var(--pc);
-}
 .new-chat-btn {
   flex: 1; display: flex; align-items: center; gap: 9px;
   padding: 13px 18px;
@@ -535,6 +499,76 @@ a:hover { text-decoration: underline; }
 }
 .msg-img:hover { transform: scale(1.02); }
 
+.img-viewer {
+  position: fixed;
+  inset: 0;
+  z-index: 420;
+  display: none;
+}
+
+.img-viewer.open {
+  display: block;
+}
+
+.img-viewer-bg {
+  position: absolute;
+  inset: 0;
+  background: rgba(8, 7, 14, .86);
+  backdrop-filter: blur(4px);
+}
+
+.img-viewer-card {
+  position: relative;
+  z-index: 1;
+  width: min(1080px, calc(100vw - 28px));
+  height: min(88vh, 920px);
+  margin: max(16px, 5vh) auto;
+  border-radius: var(--r-xl);
+  border: 1px solid var(--out-v);
+  background: color-mix(in srgb, var(--surf) 88%, black 12%);
+  display: grid;
+  grid-template-rows: auto 1fr;
+  overflow: hidden;
+  box-shadow: var(--sh3);
+}
+
+.img-viewer-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--out-v);
+}
+
+.img-viewer-zoom {
+  font-size: 12px;
+  font-weight: 800;
+  color: var(--on-surf-v);
+  padding: 5px 10px;
+  border: 1px solid var(--out-v);
+  border-radius: var(--r-pill);
+}
+
+.img-viewer-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.img-viewer-stage {
+  overflow: auto;
+  display: grid;
+  place-items: center;
+  padding: 14px;
+}
+
+#img-viewer-img {
+  max-width: 100%;
+  max-height: 100%;
+  transform-origin: center center;
+  transition: transform .2s var(--std);
+}
+
 /* Attachment chip in message */
 .msg-attach-chip {
   display: inline-flex; align-items: center; gap: 6px;
@@ -585,6 +619,62 @@ a:hover { text-decoration: underline; }
   flex-wrap: wrap; min-height: 36px;
 }
 
+.quick-modes {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.quick-modes.qm-segment {
+  gap: 0;
+  border: 1.5px solid var(--out-v);
+  border-radius: var(--r-pill);
+  overflow: hidden;
+  background: var(--surf);
+}
+
+.qm-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1.5px solid var(--out-v);
+  border-radius: var(--r-pill);
+  background: var(--surf);
+  color: var(--on-surf-v);
+  font-size: 12px;
+  font-weight: 700;
+  padding: 7px 11px;
+  transition: all .22s var(--spring);
+}
+
+.quick-modes.qm-segment .qm-pill {
+  border: none;
+  border-right: 1px solid var(--out-v);
+  border-radius: 0;
+  padding: 7px 12px;
+}
+
+.quick-modes.qm-segment .qm-pill:last-child {
+  border-right: none;
+}
+
+.qm-pill:hover {
+  border-color: var(--p);
+}
+
+.qm-pill.active {
+  background: var(--pc);
+  border-color: var(--p);
+  color: var(--on-pc);
+}
+
+.qm-pill:disabled {
+  opacity: .62;
+  cursor: not-allowed;
+  background: var(--surf-lo);
+  color: var(--out);
+}
+
 /* Model Bar */
 .model-bar {
   display: flex; align-items: center; gap: 8px;
@@ -631,6 +721,8 @@ a:hover { text-decoration: underline; }
 /* Enhance Button */
 .enhance-wrap { display: none; }
 .enhance-wrap.show { display: flex; }
+.tools-wrap { display: none; position: relative; }
+.tools-wrap.show { display: flex; }
 .enhance-btn {
   display: flex; align-items: center; gap: 6px;
   padding: 9px 16px;
@@ -646,6 +738,66 @@ a:hover { text-decoration: underline; }
   box-shadow: var(--sh2); border-color: var(--p);
 }
 .enhance-btn:active { transform: scale(.96); }
+
+.tools-pop {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 8px);
+  width: 260px;
+  border-radius: var(--r-lg);
+  border: 1px solid var(--out-v);
+  background: var(--surf);
+  box-shadow: var(--sh2);
+  padding: 10px;
+  display: none;
+  z-index: 16;
+}
+
+.tools-pop.open {
+  display: block;
+  animation: fadeIn .2s var(--decel);
+}
+
+.tools-pop-title {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+  color: var(--out);
+  margin-bottom: 8px;
+}
+
+.tools-chip-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.tool-chip {
+  border: 1px solid var(--out-v);
+  border-radius: var(--r-pill);
+  background: var(--surf-lo);
+  color: var(--on-surf-v);
+  padding: 6px 10px;
+  font-size: 11px;
+  font-weight: 700;
+  transition: all .2s var(--std);
+}
+
+.tool-chip:hover {
+  border-color: var(--p);
+}
+
+.tool-chip.active {
+  border-color: var(--p);
+  background: var(--pc);
+  color: var(--on-pc);
+}
+
+.tool-chip.soon {
+  opacity: .55;
+  cursor: not-allowed;
+}
 
 /* Attachment Previews */
 #attach-preview {
@@ -689,7 +841,7 @@ a:hover { text-decoration: underline; }
 #msg-input {
   flex: 1; border: none; background: transparent; outline: none;
   font-size: 15px; color: var(--on-surf); line-height: 1.55;
-  resize: none; min-height: 24px; max-height: 96px;
+  resize: none; min-height: 24px; max-height: 124px;
   padding: 4px 0;
   scrollbar-width: thin;
   overflow-y: auto;
@@ -701,8 +853,8 @@ a:hover { text-decoration: underline; }
   box-shadow: 0 0 0 4px color-mix(in srgb, var(--p) 14%, transparent);
 }
 body.composer-expanded #msg-input {
-  max-height: 52vh;
-  min-height: 220px;
+  max-height: 288px;
+  min-height: 24px;
 }
 .iab {
   width: 40px; height: 40px; border-radius: 50%;
@@ -1267,6 +1419,15 @@ label.btn { cursor: pointer; }
   .w-heading { font-size: 26px; }
   .msg-row.user .bubble,
   .msg-row.assistant .bubble { max-width: 94%; }
+  .quick-modes {
+    order: 3;
+    width: 100%;
+  }
+  .tools-pop {
+    width: min(280px, calc(100vw - 28px));
+    left: auto;
+    right: 0;
+  }
   /* On small phones, cats shown as compact icon+label pills */
   .du-cat { padding: 7px 10px; font-size: 12px; }
   .du-cat .ms { font-size: 15px; }

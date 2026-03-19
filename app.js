@@ -54,6 +54,13 @@ let S = {
   currentChatId: null,
   isTempChat: false,
   composerExpanded: false,
+  quickMode: 'voice',
+  textTools: {
+    image: true,
+    video: false,
+    audio: false,
+    web: false,
+  },
   chats: {},       // { [id]: {id,title,messages,createdAt} }
   attachments: [], // [{name,type,size,data,icon}]
   enhancedPrompt: null,
@@ -62,6 +69,10 @@ let S = {
 };
 
 let deferredInstallPrompt = null;
+const IMG_VIEWER = {
+  scale: 1,
+  src: '',
+};
 
 /* ══════════════════════════════════════════════
    LOCAL STORAGE
@@ -80,6 +91,13 @@ function loadState() {
       S.byopKey = saved.byopKey || '';
       S.demoUiMode = saved.demoUiMode || false;
       S.pwaNudgeDismissed = saved.pwaNudgeDismissed || false;
+      S.quickMode = saved.quickMode || 'voice';
+      S.textTools = {
+        image: typeof saved?.textTools?.image === 'boolean' ? saved.textTools.image : true,
+        video: typeof saved?.textTools?.video === 'boolean' ? saved.textTools.video : false,
+        audio: typeof saved?.textTools?.audio === 'boolean' ? saved.textTools.audio : false,
+        web: false,
+      };
       S.chats = saved.chats || {};
       // Reset daily demo count if new day
       if (saved.demoDate !== new Date().toDateString()) {
@@ -101,6 +119,8 @@ function saveState() {
       byopKey: S.byopKey,
       demoUiMode: S.demoUiMode,
       pwaNudgeDismissed: S.pwaNudgeDismissed,
+      quickMode: S.quickMode,
+      textTools: S.textTools,
       chats: S.chats,
     }));
   } catch(e) {}
@@ -228,6 +248,99 @@ function toggleTemp() {
 
 function showComingSoon(label) {
   toast(`${label} is coming soon`, 'hourglass_top');
+}
+
+function supportsToolCalling(model) {
+  return Array.isArray(model?.caps) && model.caps.includes('tools');
+}
+
+function syncQuickModeUI() {
+  document.querySelectorAll('[data-qmode]').forEach((button) => {
+    button.classList.remove('active');
+    button.disabled = true;
+  });
+}
+
+function toggleTextTool(tool) {
+  if (!['image', 'video', 'audio'].includes(tool)) return;
+  S.textTools[tool] = !S.textTools[tool];
+  saveState();
+  syncTextToolsUI();
+}
+
+function syncTextToolsUI() {
+  document.querySelectorAll('[data-tool]').forEach((chip) => {
+    const tool = chip.dataset.tool;
+    chip.classList.toggle('active', Boolean(S.textTools[tool]));
+  });
+}
+
+function closeToolsPop() {
+  const pop = document.getElementById('tools-pop');
+  if (!pop) return;
+  pop.classList.remove('open');
+  pop.setAttribute('aria-hidden', 'true');
+}
+
+function openToolsPop() {
+  const pop = document.getElementById('tools-pop');
+  if (!pop) return;
+  pop.classList.add('open');
+  pop.setAttribute('aria-hidden', 'false');
+}
+
+function toggleToolsPop() {
+  const pop = document.getElementById('tools-pop');
+  if (!pop) return;
+  if (pop.classList.contains('open')) closeToolsPop();
+  else openToolsPop();
+}
+
+function syncComposerModeControls() {
+  const enhanceWrap = document.getElementById('enhance-wrap');
+  const toolsWrap = document.getElementById('tools-wrap');
+  if (!enhanceWrap || !toolsWrap) return;
+
+  const cat = S.selectedCat;
+  const supportsTools = supportsToolCalling(S.selectedModel);
+  const showEnhance = cat === 'image' || cat === 'video' || cat === 'audio';
+  const showTools = cat === 'text' && supportsTools;
+
+  enhanceWrap.classList.toggle('show', showEnhance);
+  toolsWrap.classList.toggle('show', showTools);
+
+  if (!showTools) closeToolsPop();
+}
+
+function openImageViewer(src) {
+  const viewer = document.getElementById('img-viewer');
+  const img = document.getElementById('img-viewer-img');
+  const download = document.getElementById('img-download-btn');
+  if (!viewer || !img || !download) return;
+
+  IMG_VIEWER.scale = 1;
+  IMG_VIEWER.src = src;
+  img.src = src;
+  img.style.transform = 'scale(1)';
+  download.href = src;
+  document.getElementById('img-zoom-label').textContent = '100%';
+  viewer.classList.add('open');
+  viewer.setAttribute('aria-hidden', 'false');
+}
+
+function closeImageViewer() {
+  const viewer = document.getElementById('img-viewer');
+  if (!viewer) return;
+  viewer.classList.remove('open');
+  viewer.setAttribute('aria-hidden', 'true');
+}
+
+function adjustImageZoom(delta) {
+  IMG_VIEWER.scale = Math.max(0.5, Math.min(4, Number((IMG_VIEWER.scale + delta).toFixed(2))));
+  const img = document.getElementById('img-viewer-img');
+  if (img) img.style.transform = `scale(${IMG_VIEWER.scale})`;
+  const label = document.getElementById('img-zoom-label');
+  if (label) label.textContent = `${Math.round(IMG_VIEWER.scale * 100)}%`;
 }
 
 /* ══════════════════════════════════════════════
@@ -476,8 +589,7 @@ function selectModel(catId, modelId, options = {}) {
   document.getElementById('cat-badge').textContent = cat.label;
   document.getElementById('cat-badge').className = `cat-badge ${cat.badge}`;
   document.getElementById('model-name-display').textContent = model.name;
-  // Show/hide enhance
-  document.getElementById('enhance-wrap').classList.toggle('show', !isTextCat(catId));
+  syncComposerModeControls();
   updateInputModeUI();
   closeDropup();
   if (!silent) toast(`Model: ${model.name}`, 'check_circle');
@@ -504,6 +616,7 @@ function updateInputModeUI() {
     expandBtn.disabled = false;
   }
 
+  syncComposerModeControls();
   updateSendBtn();
 }
 
@@ -554,8 +667,7 @@ async function sendMessage() {
     saveState();
   }
 
-  // In temp chat mode we keep the flow clean with no typing spinner.
-  if (!S.isTempChat) showTyping();
+  showTyping();
   try {
     if (S.selectedCat === 'image') {
       await callImageAPI(chatId, text);
@@ -589,7 +701,17 @@ async function callTextAPI(chatId, userText, userMsg) {
   if (!S.isTempChat && S.chats[chatId]) {
     messages = (S.chats[chatId].messages || [])
       .filter(m => m.role === 'user' || m.role === 'assistant')
-      .map(m => ({ role: m.role, content: m.content || '' }));
+      .map((m) => {
+        const fallback = m.imageUrl
+          ? '[Image response]'
+          : m.videoUrl
+            ? '[Video response]'
+            : m.audioUrl
+              ? '[Audio response]'
+              : '';
+        return { role: m.role, content: (m.content || fallback || '').trim() };
+      })
+      .filter((m) => m.content.length > 0);
   } else {
     messages = [{ role: 'user', content: userText }];
   }
@@ -601,6 +723,14 @@ async function callTextAPI(chatId, userText, userMsg) {
     stream: false,
     temperature: 0.7,
   };
+  if (supportsToolCalling(S.selectedModel)) {
+    const enabledTools = Object.entries(S.textTools)
+      .filter(([k, v]) => k !== 'web' && v)
+      .map(([k]) => k);
+    if (enabledTools.length) {
+      body.messages.unshift({ role: 'system', content: `Enabled tools in UI: ${enabledTools.join(', ')}.` });
+    }
+  }
   if (S.systemPrompt) body.system = S.systemPrompt;
 
   const res = await fetch(`${POLL_BASE}/v1/chat/completions`, {
@@ -619,12 +749,24 @@ async function callTextAPI(chatId, userText, userMsg) {
 }
 
 async function callImageAPI(chatId, prompt) {
-  const url = getImageUrl(prompt, S.selectedModel.id, {
-    width: '1024',
-    height: '1024',
-    seed: String(Math.floor(Math.random() * 9999)),
-    enhance: 'false',
+  const res = await fetch(`${POLL_BASE}/v1/images/generations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      model: S.selectedModel.id,
+      prompt: prompt || 'Generate an image',
+      size: '1024x1024',
+      response_format: 'url',
+      seed: -1,
+      enhance: false,
+      nologo: true,
+    }),
   });
+
+  if (!res.ok) throw new Error(`Image generation error ${res.status}`);
+  const payload = await res.json();
+  const url = payload?.data?.[0]?.url;
+  if (!url) throw new Error('No image URL returned');
 
   removeTyping();
   const aiMsg = { role:'assistant', imageUrl: url, time: ts(), model: S.selectedModel.name };
@@ -633,12 +775,26 @@ async function callImageAPI(chatId, prompt) {
 }
 
 async function callVideoAPI(chatId, prompt) {
-  const url = getImageUrl(prompt, S.selectedModel.id, {
-    duration: '4',
-    aspectRatio: '16:9',
-    audio: 'true',
-    seed: String(Math.floor(Math.random() * 9999)),
+  const res = await fetch(`${POLL_BASE}/v1/images/generations`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      model: S.selectedModel.id,
+      prompt: prompt || 'Generate a short video scene',
+      size: '1280x720',
+      response_format: 'url',
+      duration: 4,
+      aspectRatio: '16:9',
+      audio: true,
+      seed: -1,
+      nologo: true,
+    }),
   });
+
+  if (!res.ok) throw new Error(`Video generation error ${res.status}`);
+  const payload = await res.json();
+  const url = payload?.data?.[0]?.url;
+  if (!url) throw new Error('No video URL returned');
 
   removeTyping();
   const aiMsg = { role:'assistant', videoUrl: url, time: ts(), model: S.selectedModel.name };
@@ -647,14 +803,19 @@ async function callVideoAPI(chatId, prompt) {
 }
 
 async function callAudioOutAPI(chatId, text) {
-  const encoded = encodeURIComponent(text || 'Hello from OneLLM');
-  const params = new URLSearchParams({
-    model: S.selectedModel.id,
-    voice: 'nova',
+  const res = await fetch(`${POLL_BASE}/v1/audio/speech`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...getAuthHeaders() },
+    body: JSON.stringify({
+      model: S.selectedModel.id || 'elevenlabs',
+      voice: 'nova',
+      input: text || 'Hello from OneLLM',
+    }),
   });
-  const key = getActiveApiKey();
-  if (key) params.set('key', key);
-  const url = `${POLL_BASE}/audio/${encoded}?${params.toString()}`;
+
+  if (!res.ok) throw new Error(`Audio generation error ${res.status}`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
 
   removeTyping();
   const aiMsg = {
@@ -1056,7 +1217,7 @@ function toast(msg, icon='info') {
    INPUT UTILITIES
 ══════════════════════════════════════════════ */
 function autoResize(el) {
-  const maxHeight = S.composerExpanded ? Math.floor(window.innerHeight * 0.52) : 96;
+  const maxHeight = S.composerExpanded ? 288 : 124;
   el.style.height = 'auto';
   el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
 }
@@ -1167,6 +1328,24 @@ document.getElementById('chat-wrap').addEventListener('drop', e => {
 // Model dropup
 document.getElementById('model-btn').addEventListener('click', openDropup);
 document.getElementById('dropup-bg').addEventListener('click', closeDropup);
+document.getElementById('tools-btn').addEventListener('click', (event) => {
+  event.stopPropagation();
+  toggleToolsPop();
+});
+document.querySelectorAll('[data-tool]').forEach((chip) => {
+  chip.addEventListener('click', () => {
+    toggleTextTool(chip.dataset.tool);
+  });
+});
+document.querySelectorAll('[data-qmode]').forEach((button) => {
+  button.addEventListener('click', () => {
+    if (button.disabled) return;
+    S.quickMode = button.dataset.qmode;
+    syncQuickModeUI();
+    saveState();
+    showComingSoon(S.quickMode === 'voice' ? 'Voice Session Mode' : 'Agentic Mode');
+  });
+});
 // Enhance
 document.getElementById('enhance-btn').addEventListener('click', openEnhanceDialog);
 document.getElementById('enhance-close').addEventListener('click', () => closeDlg('enhance-dlg'));
@@ -1182,6 +1361,20 @@ document.getElementById('install-app-btn').addEventListener('click', triggerInst
 document.getElementById('install-help-btn').addEventListener('click', () => {
   toast('Open browser menu and choose Install App or Add to Home Screen.', 'help');
 });
+document.getElementById('chat-inner').addEventListener('click', (event) => {
+  const target = event.target;
+  if (target instanceof HTMLImageElement && target.classList.contains('msg-img')) {
+    openImageViewer(target.src);
+  }
+});
+document.querySelector('#img-viewer .img-viewer-bg').addEventListener('click', closeImageViewer);
+document.getElementById('img-close-btn').addEventListener('click', closeImageViewer);
+document.getElementById('img-zoom-in').addEventListener('click', () => adjustImageZoom(0.15));
+document.getElementById('img-zoom-out').addEventListener('click', () => adjustImageZoom(-0.15));
+document.getElementById('img-viewer-stage').addEventListener('wheel', (event) => {
+  event.preventDefault();
+  adjustImageZoom(event.deltaY < 0 ? 0.08 : -0.08);
+}, { passive: false });
 
 window.addEventListener('beforeinstallprompt', (event) => {
   event.preventDefault();
@@ -1192,6 +1385,14 @@ window.addEventListener('beforeinstallprompt', (event) => {
 document.addEventListener('keydown', e => {
   if (e.key==='Escape') {
     closeDlg('settings-dlg'); closeDlg('enhance-dlg'); closeDropup();
+    closeToolsPop();
+    closeImageViewer();
+  }
+});
+document.addEventListener('click', (event) => {
+  const toolsWrap = document.getElementById('tools-wrap');
+  if (toolsWrap && !toolsWrap.contains(event.target)) {
+    closeToolsPop();
   }
 });
 // Paste images
@@ -1237,6 +1438,9 @@ async function init() {
   setApiMode(S.apiMode, { silent: true });
   updateDemoBanner();
   syncApiModeUI();
+  syncQuickModeUI();
+  syncTextToolsUI();
+  syncComposerModeControls();
 
   await loadLocalModelCatalog();
 
