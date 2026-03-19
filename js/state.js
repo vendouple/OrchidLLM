@@ -110,3 +110,34 @@ export function deleteChat(id) {
   }
   saveState();
 }
+
+export function checkQuota() {
+  return state.demoQuota > 0;
+}
+
+export function importData(file) {
+  const reader = new FileReader();
+  reader.onload = (e) => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if (data.chats) {
+        state.chats = data.chats;
+        saveState();
+      }
+    } catch (err) {
+      console.error('Failed to import', err);
+    }
+  };
+  reader.readAsText(file);
+}
+
+export function exportData() {
+  const dataStr = JSON.stringify({ chats: state.chats }, null, 2);
+  const blob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `OneLLM_Export_${new Date().toISOString().slice(0, 10)}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+}

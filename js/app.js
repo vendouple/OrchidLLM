@@ -1,8 +1,8 @@
 /**
  * Main Application initialization and event binding
  */
-import { state, loadState, saveState, validateQuota, createNewChat, addMessageToCurrentChat, importData, exportData } from './state.js';
-import { validatePollenKey, fetchModels, generateText, generateImage, generateAudio, generateMusic, generateVideo, transcribeMedia, checkQuota } from './api.js';
+import { state, loadState, saveState, checkQuota, createNewChat, addMessageToCurrentChat, importData, exportData, decrementQuota } from './state.js';
+import { validatePollenKey, fetchModels, generateText, generateImage, generateAudio, generateMusic, generateVideo, transcribeMedia } from './api.js';
 import { dom, updateAuthDisplay, updateSidebar, loadChat, updateInputToolbar, requestModeSwitch, performModeSwitch, appendMessageUI, showToast } from './ui.js';
 
 async function init() {
@@ -261,6 +261,7 @@ async function handleSend() {
       responseData = { role: 'assistant', type: 'transcription', content: text };
     }
 
+    decrementQuota();
     // Refresh quota display
     updateAuthDisplay();
     
