@@ -111,7 +111,7 @@ button:active:not(:disabled) {
   background: color-mix(in srgb, var(--m3-surface) 85%, transparent);
   backdrop-filter: blur(8px);
   transform: translateX(0);
-  transition: transform 0.35s cubic-bezier(0.2, 0.65, 0.2, 1);
+  transition: transform 0.4s cubic-bezier(0.2, 0.65, 0.2, 1);
 }
 
 .history-sidebar.collapsed {
@@ -120,6 +120,7 @@ button:active:not(:disabled) {
   width: 320px;
   height: calc(100vh - 64px);
   z-index: 20;
+  box-shadow: 4px 0 16px rgba(0, 0, 0, 0.1);
 }
 
 .sidebar-top {
@@ -202,6 +203,24 @@ button:active:not(:disabled) {
   display: grid;
   gap: 0.55rem;
   padding-right: 0.2rem;
+  scroll-behavior: smooth;
+}
+
+.history-list::-webkit-scrollbar {
+  width: 6px;
+}
+
+.history-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.history-list::-webkit-scrollbar-thumb {
+  background: var(--m3-outline);
+  border-radius: 999px;
+}
+
+.history-list::-webkit-scrollbar-thumb:hover {
+  background: var(--m3-primary);
 }
 
 .history-item {
@@ -294,6 +313,24 @@ button:active:not(:disabled) {
   display: grid;
   gap: 0.9rem;
   align-content: start;
+  scroll-behavior: smooth;
+}
+
+.message-list::-webkit-scrollbar {
+  width: 8px;
+}
+
+.message-list::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.message-list::-webkit-scrollbar-thumb {
+  background: var(--m3-outline);
+  border-radius: 999px;
+}
+
+.message-list::-webkit-scrollbar-thumb:hover {
+  background: var(--m3-primary);
 }
 
 .message-row {
@@ -319,10 +356,17 @@ button:active:not(:disabled) {
   height: 38px;
   border-radius: 12px;
   background: linear-gradient(135deg, var(--m3-primary), #22b3ca);
+  display: grid;
+  place-items: center;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: white;
+  box-shadow: 0 2px 8px rgba(47, 109, 255, 0.2);
 }
 
 .message-row.user .avatar {
   background: linear-gradient(135deg, #f89b53, #f0578e);
+  box-shadow: 0 2px 8px rgba(248, 155, 83, 0.2);
 }
 
 .message-bubble {
@@ -332,6 +376,11 @@ button:active:not(:disabled) {
   background: var(--m3-surface);
   white-space: pre-wrap;
   line-height: 1.45;
+  transition: all 0.25s ease;
+}
+
+.message-bubble:hover {
+  box-shadow: 0 2px 8px rgba(47, 109, 255, 0.08);
 }
 
 .message-row.assistant .message-bubble {
@@ -373,6 +422,7 @@ button:active:not(:disabled) {
   background: color-mix(in srgb, var(--m3-primary) 16%, var(--m3-surface));
   border-color: var(--m3-primary);
   color: var(--m3-primary);
+  animation: pulse 2s infinite;
 }
 
 .demo-badge {
@@ -550,6 +600,15 @@ button:active:not(:disabled) {
   to { opacity: 1; }
 }
 
+@keyframes pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(47, 109, 255, 0.4);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(47, 109, 255, 0);
+  }
+}
+
 .settings-card {
   width: min(560px, calc(100% - 1.2rem));
   max-height: 88vh;
@@ -680,6 +739,7 @@ button:active:not(:disabled) {
     width: min(90vw, 320px);
     z-index: 21;
     transform: translateX(-100%);
+    box-shadow: 4px 0 12px rgba(0, 0, 0, 0.15);
   }
 
   .history-sidebar.mobile-open {
@@ -696,13 +756,75 @@ button:active:not(:disabled) {
     flex-direction: column;
   }
 
+  .model-dropup {
+    right: 0.5rem;
+    left: 0.5rem;
+    width: auto;
+    bottom: 8.5rem;
+  }
+
   .composer-actions {
     gap: 0.35rem;
+    flex-direction: column;
   }
 
   .send-btn {
     width: 100%;
     justify-content: center;
     margin-left: 0;
+  }
+
+  .composer-header {
+    flex-wrap: wrap;
+  }
+
+  .model-groups {
+    max-height: 50vh;
+    overflow-y: auto;
+  }
+
+  .settings-card,
+  .enhance-card {
+    width: calc(100% - 1rem);
+  }
+}
+
+@media (max-width: 640px) {
+  .chat-surface {
+    border-radius: 16px;
+  }
+
+  .model-option {
+    font-size: 0.78rem;
+    padding: 0.4rem 0.65rem;
+    flex-direction: column;
+    align-items: start;
+    gap: 0.4rem;
+  }
+
+  .capability-chips {
+    flex-wrap: wrap;
+  }
+
+  .capability-chip {
+    font-size: 14px;
+  }
+
+  .history-item {
+    padding: 0.5rem 0.65rem;
+  }
+
+  .message-row {
+    grid-template-columns: 32px minmax(0, 1fr);
+    gap: 0.5rem;
+  }
+
+  .avatar {
+    width: 32px;
+    height: 32px;
+  }
+
+  .composer textarea {
+    min-height: 2.8rem;
   }
 }
