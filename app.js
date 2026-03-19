@@ -13,6 +13,44 @@ const MODEL_GROUPS = {
   Video: ["LTX Video", "Runway Gen-3", "Pika 2.2"]
 };
 
+// Model capabilities mapping (icons from Material Symbols)
+const MODEL_CAPABILITIES = {
+  "GPT-4.1 Mini": ["visibility", "search", "code"],
+  "Claude 3.7 Sonnet": ["visibility", "psychology", "code"],
+  "Llama 3.3 70B": ["code", "psychology"],
+  "Whisper V3": ["mic", "hearing"],
+  "Gemini Audio": ["mic", "visibility", "hearing"],
+  "Deepgram Nova": ["mic", "hearing"],
+  "Eleven Turbo": ["volume_up", "record_voice_over"],
+  "OpenVoice V2": ["volume_up", "record_voice_over"],
+  "StyleTTS 2": ["volume_up", "record_voice_over"],
+  "Whisper Large": ["mic", "subtitles"],
+  "Nemo Transcribe": ["mic", "subtitles"],
+  "AssemblyAI": ["mic", "subtitles", "search"],
+  "Flux Schnell": ["image", "auto_awesome"],
+  "SDXL Turbo": ["image", "auto_awesome"],
+  "Pollinations Image": ["image", "auto_awesome"],
+  "LTX Video": ["videocam", "auto_awesome"],
+  "Runway Gen-3": ["videocam", "auto_awesome", "psychology"],
+  "Pika 2.2": ["videocam", "auto_awesome"]
+};
+
+// Capability labels for tooltips
+const CAPABILITY_LABELS = {
+  visibility: "Vision",
+  psychology: "Reasoning",
+  mic: "Audio Input",
+  search: "Search",
+  volume_up: "Audio Output",
+  code: "Code Execution",
+  hearing: "Audio Processing",
+  record_voice_over: "Voice Synthesis",
+  subtitles: "Transcription",
+  image: "Image Generation",
+  videocam: "Video Generation",
+  auto_awesome: "Enhanced Quality"
+};
+
 const state = {
   chats: [],
   currentChatId: null,
@@ -20,6 +58,8 @@ const state = {
   mobileSidebarOpen: false,
   attachedFiles: [],
   selectedModel: { type: "Text", name: "GPT-4.1 Mini" },
+  enhanceEnabled: false,
+  enhanceModel: { type: "Text", name: "GPT-4.1 Mini" },
   settings: {
     systemPrompt: "You are a helpful, concise assistant.",
     demoMode: false,
@@ -59,7 +99,11 @@ const el = {
   clearHistoryBtn: document.getElementById("clearHistoryBtn"),
   demoBadge: document.getElementById("demoBadge"),
   demoRemaining: document.getElementById("demoRemaining"),
-  messageTemplate: document.getElementById("messageTemplate")
+  messageTemplate: document.getElementById("messageTemplate"),
+  enhanceBtn: document.getElementById("enhanceBtn"),
+  enhancePanel: document.getElementById("enhancePanel"),
+  enhanceModelSelect: document.getElementById("enhanceModelSelect"),
+  enhanceClose: document.getElementById("enhanceClose")
 };
 
 function uid() {
@@ -222,10 +266,31 @@ function renderModelDropup() {
     options.forEach((name) => {
       const chip = document.createElement("button");
       chip.className = "model-option";
-      chip.textContent = name;
       if (selected.type === group && selected.name === name) {
         chip.classList.add("active");
       }
+
+      // Model name
+      const nameSpan = document.createElement("span");
+      nameSpan.className = "model-name";
+      nameSpan.textContent = name;
+      chip.appendChild(nameSpan);
+
+      // Capability chips
+      const capabilities = MODEL_CAPABILITIES[name];
+      if (capabilities && capabilities.length > 0) {
+        const capsWrap = document.createElement("div");
+        capsWrap.className = "capability-chips";
+        capabilities.forEach((icon) => {
+          const capChip = document.createElement("span");
+          capChip.className = "capability-chip material-symbols-rounded";
+          capChip.textContent = icon;
+          capChip.setAttribute("title", CAPABILITY_LABELS[icon] || icon);
+          capsWrap.appendChild(capChip);
+        });
+        chip.appendChild(capsWrap);
+      }
+
       chip.addEventListener("click", () => {
         chooseModel(group, name);
       });
@@ -257,6 +322,47 @@ function renderFiles() {
   });
 }
 
+function renderEnhanceBtn() {
+  if (!el.enhanceBtn) return;
+  const chat = activeChat();
+  const model = chat?.model || state.selectedModel;
+  const isNonText = model.type !== "Text";
+
+  if (isNonText) {
+    el.enhanceBtn.classList.remove("hidden");
+    el.enhanceBtn.setAttribute("aria-pressed", String(state.enhanceEnabled));
+  } else {
+    el.enhanceBtn.classList.add("hidden");
+  }
+}
+
+function toggleEnhancePanel(open) {
+  if (!el.enhancePanel) return;
+  el.enhancePanel.classList.toggle("open", open);
+  el.enhancePanel.setAttribute("aria-hidden", String(!open));
+
+  if (open) {
+    renderEnhanceModelSelect();
+  }
+}
+
+function renderEnhanceModelSelect() {
+  if (!el.enhanceModelSelect) return;
+  el.enhanceModelSelect.innerHTML = "";
+
+  // Only show text models for enhancement
+  const textModels = MODEL_GROUPS.Text || [];
+  textModels.forEach((name) => {
+    const option = document.createElement("option");
+    option.value = name;
+    option.textContent = name;
+    if (state.enhanceModel.name === name) {
+      option.selected = true;
+    }
+    el.enhanceModelSelect.appendChild(option);
+  });
+}
+
 function renderAll() {
   renderHistory();
   renderMessages();
@@ -265,6 +371,7 @@ function renderAll() {
   renderTempMode();
   renderFiles();
   renderDemoBadge();
+  renderEnhanceBtn();
 }
 
 function makeChat({ temporary }) {
@@ -566,6 +673,35 @@ function bindEvents() {
   });
 
   el.clearHistoryBtn.addEventListener("click", clearAll);
+
+  if (el.enhanceBtn) {
+    el.enhanceBtn.addEventListener("click", () => {
+      state.enhanceEnabled = !state.enhanceEnabled;
+      renderEnhanceBtn();
+      if (state.enhanceEnabled) {
+        toggleEnhancePanel(true);
+      }
+    });
+  }
+
+  if (el.enhanceClose) {
+    el.enhanceClose.addEventListener("click", () => toggleEnhancePanel(false));
+  }
+
+  if (el.enhancePanel) {
+    el.enhancePanel.addEventListener("click", (event) => {
+      if (event.target === el.enhancePanel) {
+        toggleEnhancePanel(false);
+      }
+    });
+  }
+
+  if (el.enhanceModelSelect) {
+    el.enhanceModelSelect.addEventListener("change", () => {
+      const selectedName = el.enhanceModelSelect.value;
+      state.enhanceModel = { type: "Text", name: selectedName };
+    });
+  }
 
   window.addEventListener("resize", () => {
     const isMobile = window.matchMedia("(max-width: 960px)").matches;
