@@ -79,6 +79,12 @@
 
         <footer class="composer-wrap">
           <div id="demoBadge" class="demo-badge hidden">Demo Mode: <span id="demoRemaining">20</span>/20 RPD left</div>
+          <div class="composer-header">
+            <button id="enhanceBtn" class="enhance-btn transparent round-xl hidden" aria-pressed="false">
+              <span class="material-symbols-rounded">auto_awesome</span>
+              <span>Enhance Prompt</span>
+            </button>
+          </div>
           <div class="composer card round-xl">
             <textarea id="messageInput" rows="2" placeholder="Ask anything across text, image, audio, transcription, and video models..."></textarea>
             <div class="composer-actions">
@@ -160,6 +166,33 @@
           Open Pollinations.ai
           <span class="material-symbols-rounded">open_in_new</span>
         </a>
+      </div>
+    </div>
+  </aside>
+
+  <aside id="enhancePanel" class="enhance-panel" aria-hidden="true">
+    <div class="enhance-card card round-xl shadow-3">
+      <header class="enhance-head">
+        <h5>Enhance Prompt</h5>
+        <button id="enhanceClose" class="circle transparent" aria-label="Close enhance settings">
+          <span class="material-symbols-rounded">close</span>
+        </button>
+      </header>
+
+      <div class="enhance-body">
+        <p>Select a text model to enhance your prompt before sending it to the current model.</p>
+
+        <label class="field label border round-xl">
+          <select id="enhanceModelSelect">
+            <option>GPT-4.1 Mini</option>
+          </select>
+          <span>Enhancement Model</span>
+        </label>
+
+        <div class="enhance-info">
+          <span class="material-symbols-rounded">info</span>
+          <small>When enabled, your prompt will be enhanced by the selected text model before being sent to image, video, audio, or other non-text models.</small>
+        </div>
       </div>
     </div>
   </aside>
