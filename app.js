@@ -878,9 +878,6 @@ function setApiMode(mode, options = {}) {
   S.apiMode = mode === 'byop' ? 'byop' : 'demo';
   syncApiModeUI();
   saveState();
-  if (!silent) {
-    toast(S.apiMode === 'byop' ? 'BYOP mode enabled' : 'Demo mode enabled', 'vpn_key');
-  }
 }
 
 function syncSettingsSectionNav(section = 'general') {
