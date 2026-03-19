@@ -1,1330 +1,586 @@
-// =========================================================
-// OneLLM Playground - Multi-Modal AI Generation App
-// Powered by Pollinations.ai
-// =========================================================
-
-// Constants
-const PUBLIC_API_KEY = "";
-const MAX_DEMO_REQUESTS_PER_DAY = 15;
-const POLLINATIONS_BASE_URL = "https://pollinations.ai";
-const POLLINATIONS_GEN_URL = "https://gen.pollinations.ai";
-
 const STORAGE_KEYS = {
-  authMode: "onellm-auth-mode",
-  apiKey: "onellm-api-key",
-  customUrl: "onellm-custom-url",
-  theme: "onellm-theme",
-  history: "onellm-history",
-  demoQuota: "onellm-demo-quota",
-  quotaDate: "onellm-quota-date",
+  chats: "onellm_chats_v1",
+  settings: "onellm_settings_v1",
+  usage: "onellm_demo_usage_v1"
 };
 
-// State management
+const MODEL_GROUPS = {
+  Text: ["GPT-4.1 Mini", "Claude 3.7 Sonnet", "Llama 3.3 70B"],
+  Image: ["Flux Schnell", "SDXL Turbo", "Pollinations Image"],
+  "Audio In": ["Whisper V3", "Gemini Audio", "Deepgram Nova"],
+  "Audio Out": ["Eleven Turbo", "OpenVoice V2", "StyleTTS 2"],
+  Transcription: ["Whisper Large", "Nemo Transcribe", "AssemblyAI"],
+  Video: ["LTX Video", "Runway Gen-3", "Pika 2.2"]
+};
+
 const state = {
-  theme: "dark",
-  authMode: null, // 'demo', 'byop', 'byok'
-  apiKey: null,
-  customUrl: null,
-  currentGenMode: null, // 'image', 'text', 'audio', 'music', 'video', 'transcription'
-  history: [],
-  availableModels: {},
-  demoQuota: MAX_DEMO_REQUESTS_PER_DAY,
-  isBusy: false,
+  chats: [],
+  currentChatId: null,
+  tempMode: false,
+  mobileSidebarOpen: false,
+  attachedFiles: [],
+  selectedModel: { type: "Text", name: "GPT-4.1 Mini" },
+  settings: {
+    systemPrompt: "You are a helpful, concise assistant.",
+    demoMode: false,
+    theme: "light"
+  }
 };
 
-// DOM references
-const dom = {
-  // Pages
-  loginPage: document.getElementById("login-page"),
-  playgroundPage: document.getElementById("playground-page"),
-
-  // Login page elements
-  modeCards: document.querySelectorAll(".mode-card"),
-
-  // Dialogs
-  byopDialog: document.getElementById("byop-dialog"),
-  byopKeyInput: document.getElementById("byop-key-input"),
-  byopCancel: document.getElementById("byop-cancel"),
-  byopSubmit: document.getElementById("byop-submit"),
-  byopError: document.getElementById("byop-error"),
-
-  byokDialog: document.getElementById("byok-dialog"),
-  byokUrlInput: document.getElementById("byok-url-input"),
-  byokKeyInput: document.getElementById("byok-key-input"),
-  byokCancel: document.getElementById("byok-cancel"),
-  byokSubmit: document.getElementById("byok-submit"),
-  byokError: document.getElementById("byok-error"),
-
-  // Playground elements
-  themeToggle: document.getElementById("theme-toggle"),
-  historyToggle: document.getElementById("history-toggle"),
-  historyPopup: document.getElementById("history-popup"),
-  historyBackdrop: document.getElementById("history-backdrop"),
-  historyClose: document.getElementById("history-close"),
-  historyList: document.getElementById("history-list"),
-  clearHistory: document.getElementById("clear-history"),
-  exportBtn: document.getElementById("export-btn"),
-  logoutBtn: document.getElementById("logout-btn"),
-  modeBadge: document.getElementById("mode-badge"),
-  quotaDisplay: document.getElementById("quota-display"),
-
-  // Generation modes
-  genModeButtons: document.querySelectorAll(".gen-mode-btn"),
-  generationContainer: document.getElementById("generation-container"),
-
-  // Toast
-  toast: document.getElementById("toast"),
+const el = {
+  root: document.documentElement,
+  sidebarToggle: document.getElementById("sidebarToggle"),
+  historySidebar: document.getElementById("historySidebar"),
+  historyList: document.getElementById("historyList"),
+  historyCount: document.getElementById("historyCount"),
+  newChatBtn: document.getElementById("newChatBtn"),
+  tempModeToggle: document.getElementById("tempModeToggle"),
+  activeChatTitle: document.getElementById("activeChatTitle"),
+  activeModelLabel: document.getElementById("activeModelLabel"),
+  messageList: document.getElementById("messageList"),
+  messageInput: document.getElementById("messageInput"),
+  sendBtn: document.getElementById("sendBtn"),
+  attachFileBtn: document.getElementById("attachFileBtn"),
+  fileInput: document.getElementById("fileInput"),
+  filePills: document.getElementById("filePills"),
+  chatModelDropupBtn: document.getElementById("chatModelDropupBtn"),
+  modelDropup: document.getElementById("modelDropup"),
+  modelGroups: document.getElementById("modelGroups"),
+  settingsToggle: document.getElementById("settingsToggle"),
+  settingsPanel: document.getElementById("settingsPanel"),
+  settingsClose: document.getElementById("settingsClose"),
+  systemPromptInput: document.getElementById("systemPromptInput"),
+  demoModeToggle: document.getElementById("demoModeToggle"),
+  themeToggle: document.getElementById("themeToggle"),
+  settingsThemeToggle: document.getElementById("settingsThemeToggle"),
+  exportHistoryBtn: document.getElementById("exportHistoryBtn"),
+  importHistoryBtn: document.getElementById("importHistoryBtn"),
+  importFileInput: document.getElementById("importFileInput"),
+  clearHistoryBtn: document.getElementById("clearHistoryBtn"),
+  demoBadge: document.getElementById("demoBadge"),
+  demoRemaining: document.getElementById("demoRemaining"),
+  messageTemplate: document.getElementById("messageTemplate")
 };
 
-// =========================================================
-// Utility Functions
-// =========================================================
-
-function generateId() {
-  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+function uid() {
+  return `${Date.now()}-${Math.random().toString(16).slice(2, 10)}`;
 }
 
-function formatDate(timestamp) {
-  const date = new Date(timestamp);
-  return date.toLocaleString();
+function nowIso() {
+  return new Date().toISOString();
 }
 
-function showToast(message, duration = 3000) {
-  dom.toast.textContent = message;
-  dom.toast.classList.add("is-visible");
-  setTimeout(() => {
-    dom.toast.classList.remove("is-visible");
-  }, duration);
+function truncate(text, len = 48) {
+  return text.length > len ? `${text.slice(0, len - 1)}...` : text;
 }
 
-function resetDemoQuotaIfNeeded() {
-  const today = new Date().toDateString();
-  const lastQuotaDate = localStorage.getItem(STORAGE_KEYS.quotaDate);
-
-  if (lastQuotaDate !== today) {
-    state.demoQuota = MAX_DEMO_REQUESTS_PER_DAY;
-    localStorage.setItem(STORAGE_KEYS.demoQuota, state.demoQuota.toString());
-    localStorage.setItem(STORAGE_KEYS.quotaDate, today);
-  } else {
-    const savedQuota = localStorage.getItem(STORAGE_KEYS.demoQuota);
-    state.demoQuota = savedQuota ? parseInt(savedQuota, 10) : MAX_DEMO_REQUESTS_PER_DAY;
-  }
-}
-
-function decrementDemoQuota() {
-  if (state.authMode === "demo") {
-    state.demoQuota = Math.max(0, state.demoQuota - 1);
-    localStorage.setItem(STORAGE_KEYS.demoQuota, state.demoQuota.toString());
-    updateQuotaDisplay();
-  }
-}
-
-function updateQuotaDisplay() {
-  if (state.authMode === "demo") {
-    dom.quotaDisplay.textContent = `${state.demoQuota} requests left`;
-    dom.quotaDisplay.hidden = false;
-  } else {
-    dom.quotaDisplay.hidden = true;
-  }
-}
-
-// =========================================================
-// Storage Functions
-// =========================================================
-
-function saveAuthMode() {
-  if (state.authMode) {
-    localStorage.setItem(STORAGE_KEYS.authMode, state.authMode);
-  }
-  if (state.apiKey) {
-    localStorage.setItem(STORAGE_KEYS.apiKey, state.apiKey);
-  }
-  if (state.customUrl) {
-    localStorage.setItem(STORAGE_KEYS.customUrl, state.customUrl);
-  }
-}
-
-function loadAuthMode() {
-  state.authMode = localStorage.getItem(STORAGE_KEYS.authMode);
-  state.apiKey = localStorage.getItem(STORAGE_KEYS.apiKey);
-  state.customUrl = localStorage.getItem(STORAGE_KEYS.customUrl);
-
-  return state.authMode !== null;
-}
-
-function clearAuthMode() {
-  state.authMode = null;
-  state.apiKey = null;
-  state.customUrl = null;
-  localStorage.removeItem(STORAGE_KEYS.authMode);
-  localStorage.removeItem(STORAGE_KEYS.apiKey);
-  localStorage.removeItem(STORAGE_KEYS.customUrl);
-}
-
-function saveHistory() {
-  try {
-    localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(state.history));
-  } catch (err) {
-    console.error("Failed to save history:", err);
-  }
-}
-
-function loadHistory() {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEYS.history);
-    state.history = saved ? JSON.parse(saved) : [];
-  } catch (err) {
-    console.error("Failed to load history:", err);
-    state.history = [];
-  }
-}
-
-function addToHistory(entry) {
-  state.history.unshift(entry);
-  // Keep only last 100 entries
-  if (state.history.length > 100) {
-    state.history = state.history.slice(0, 100);
-  }
-  saveHistory();
-  renderHistory();
-}
-
-function clearHistoryData() {
-  if (confirm("Are you sure you want to clear all history? This cannot be undone.")) {
-    state.history = [];
-    saveHistory();
-    renderHistory();
-    showToast("History cleared");
-  }
-}
-
-function exportHistory() {
-  const disclaimer = "Note: Data is saved locally in your browser. Processing is done via Pollinations.ai API only.";
-  const exportData = {
-    disclaimer,
-    exportDate: new Date().toISOString(),
-    history: state.history
-  };
-  
-  const dataStr = JSON.stringify(exportData, null, 2);
-  const dataBlob = new Blob([dataStr], { type: "application/json" });
-  const url = URL.createObjectURL(dataBlob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `onellm-history-${Date.now()}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-  showToast("History exported");
-}
-
-// =========================================================
-// Theme Functions
-// =========================================================
-
-function loadTheme() {
-  const saved = localStorage.getItem(STORAGE_KEYS.theme);
-  state.theme = saved || "dark";
-  document.documentElement.setAttribute("data-theme", state.theme);
-}
-
-function toggleTheme() {
-  state.theme = state.theme === "dark" ? "light" : "dark";
-  document.documentElement.setAttribute("data-theme", state.theme);
-  localStorage.setItem(STORAGE_KEYS.theme, state.theme);
-}
-
-// =========================================================
-// API Functions
-// =========================================================
-
-function getApiKey() {
-  if (state.authMode === "demo") {
-    return "";
-  }
-  return state.apiKey || "";
-}
-
-function getBaseUrl() {
-  if (state.authMode === "byok" && state.customUrl) {
-    return state.customUrl;
-  }
-  return POLLINATIONS_GEN_URL;
-}
-
-async function fetchAvailableModels() {
-  try {
-    const baseUrl = getBaseUrl();
-    const apiKey = getApiKey();
-
-    let textModels = [];
-    let imageModels = [];
-
-    // For Pollinations, fetch from specific endpoints
-    if (baseUrl.includes("pollinations.ai")) {
-      try {
-        const [textRes, imageRes] = await Promise.all([
-          fetch(`https://text.pollinations.ai/models`),
-          fetch(`https://image.pollinations.ai/models`)
-        ]);
-
-        if (textRes.ok) {
-          const textData = await textRes.json();
-          textModels = textData.map(m => m.name || m.id);
-        }
-        if (imageRes.ok) {
-          const imageData = await imageRes.json();
-          imageModels = imageData;
-        }
-      } catch (err) {
-        console.error("Failed to fetch Pollinations models:", err);
-      }
-    } else {
-      // For BYOK (OpenAI compatible)
-      const response = await fetch(`${baseUrl}/models`, {
-        headers: {
-          Authorization: `Bearer ${apiKey}`,
-        },
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        // Assuming OpenAI format where 'data' is an array of objects with 'id'
-        const models = (data.data || []).map(m => m.id);
-        textModels = models;
-        imageModels = models; // Since we don't know which is which, put them in both
-      }
-    }
-
-    const defaultModels = getDefaultModels();
-    
-    state.availableModels = {
-      image: imageModels.length > 0 ? imageModels : defaultModels.image,
-      text: textModels.length > 0 ? textModels : defaultModels.text,
-      audio: defaultModels.audio,
-      music: defaultModels.music,
-      video: defaultModels.video,
-      transcription: defaultModels.transcription
-    };
-
-    return state.availableModels;
-  } catch (err) {
-    console.error("Failed to fetch models:", err);
-    state.availableModels = getDefaultModels();
-    return state.availableModels;
-  }
-}
-
-function getDefaultModels() {
-  return {
-    image: ["flux", "flux-realism", "flux-cablyai", "flux-anime", "flux-3d", "turbo"],
-    text: ["openai", "gemini-fast", "claude-sonnet", "llama-v3p1-405b"],
-    audio: ["parler-tts"],
-    music: ["music"],
-    video: ["video"],
-    transcription: ["whisper-large-v3"],
-  };
-}
-
-async function validateByopKey(apiKey) {
-  try {
-    const response = await fetch(`${POLLINATIONS_GEN_URL}/models`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
-    return response.ok;
-  } catch (err) {
-    return false;
-  }
-}
-
-async function validateByokEndpoint(url, apiKey) {
-  try {
-    const response = await fetch(`${url}/models`, {
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-      },
-    });
-    return response.ok;
-  } catch (err) {
-    return false;
-  }
-}
-
-// =========================================================
-// Generation API Functions
-// =========================================================
-
-async function generateImage(prompt, model = "flux") {
-  const baseUrl = getBaseUrl();
-  const apiKey = getApiKey();
-
-  // Pollinations direct image generation
-  const imageUrl = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=${encodeURIComponent(model)}&width=1024&height=1024&seed=${Math.floor(Math.random() * 1000000)}&nologo=true&private=true&key=${encodeURIComponent(apiKey)}`;
-
-  return {
-    type: "image",
-    url: imageUrl,
-    prompt,
-    model,
-    timestamp: Date.now(),
-  };
-}
-
-async function generateText(prompt, model = "openai", systemPrompt = "") {
-  const baseUrl = getBaseUrl();
-  const apiKey = getApiKey();
-
-  const messages = [];
-  if (systemPrompt) {
-    messages.push({ role: "system", content: systemPrompt });
-  }
-  messages.push({ role: "user", content: prompt });
-
-  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      messages,
-      stream: false,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-  const text = data.choices?.[0]?.message?.content || "";
-
-  return {
-    type: "text",
-    text,
-    prompt,
-    model,
-    timestamp: Date.now(),
-  };
-}
-
-async function generateAudio(text, model = "parler-tts", voice = "default") {
-  const baseUrl = getBaseUrl();
-  const apiKey = getApiKey();
-
-  const response = await fetch(`${baseUrl}/v1/audio/speech`, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: JSON.stringify({
-      model,
-      input: text,
-      voice,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`);
-  }
-
-  const blob = await response.blob();
-  const audioUrl = URL.createObjectURL(blob);
-
-  return {
-    type: "audio",
-    url: audioUrl,
-    text,
-    model,
-    timestamp: Date.now(),
-  };
-}
-
-async function generateMusic(prompt, duration = 30) {
-  const apiKey = getApiKey();
-
-  // Pollinations music generation endpoint
-  const musicUrl = `https://gen.pollinations.ai/audio/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}&key=${encodeURIComponent(apiKey)}`;
-
-  return {
-    type: "music",
-    url: musicUrl,
-    prompt,
-    duration,
-    timestamp: Date.now(),
-  };
-}
-
-async function generateVideo(prompt, duration = 5) {
-  const apiKey = getApiKey();
-
-  // Pollinations video generation endpoint
-  const videoUrl = `https://gen.pollinations.ai/video/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}&key=${encodeURIComponent(apiKey)}`;
-
-  return {
-    type: "video",
-    url: videoUrl,
-    prompt,
-    duration,
-    timestamp: Date.now(),
-  };
-}
-
-async function transcribeAudio(file) {
-  const baseUrl = getBaseUrl();
-  const apiKey = getApiKey();
-
-  const formData = new FormData();
-  formData.append("file", file);
-  formData.append("model", "whisper-large-v3");
-
-  const response = await fetch(`${baseUrl}/v1/audio/transcriptions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-    },
-    body: formData,
-  });
-
-  if (!response.ok) {
-    throw new Error(`API error: ${response.statusText}`);
-  }
-
-  const data = await response.json();
-
-  return {
-    type: "transcription",
-    text: data.text || "",
-    filename: file.name,
-    timestamp: Date.now(),
-  };
-}
-
-// =========================================================
-// Page Navigation
-// =========================================================
-
-function showLoginPage() {
-  dom.loginPage.hidden = false;
-  dom.playgroundPage.hidden = true;
-}
-
-function showPlaygroundPage() {
-  dom.loginPage.hidden = true;
-  dom.playgroundPage.hidden = false;
-
-  // Update UI based on auth mode
-  if (state.authMode === "demo") {
-    dom.modeBadge.textContent = "Demo Mode";
-  } else if (state.authMode === "byop") {
-    dom.modeBadge.textContent = "BYOP";
-  } else if (state.authMode === "byok") {
-    dom.modeBadge.textContent = "BYOK";
-  }
-
-  updateQuotaDisplay();
-}
-
-// =========================================================
-// Auth Mode Handlers
-// =========================================================
-
-async function handleDemoMode() {
-  state.authMode = "demo";
-  state.apiKey = "";
-  resetDemoQuotaIfNeeded();
-  saveAuthMode();
-
-  showToast("Demo mode activated");
-  await fetchAvailableModels();
-  showPlaygroundPage();
-  if (!state.currentGenMode) {
-    dom.genModeButtons[0].click();
-  } else {
-    renderGenerationPanel(state.currentGenMode);
-  }
-}
-
-async function handleByopMode() {
-  dom.byopDialog.showModal();
-}
-
-async function handleByokMode() {
-  showToast("BYOK mode coming soon");
-}
-
-async function submitByop() {
-  const apiKey = dom.byopKeyInput.value.trim();
-
-  if (!apiKey) {
-    dom.byopError.textContent = "Please enter an API key";
-    dom.byopError.hidden = false;
-    return;
-  }
-
-  // Validate the key
-  showToast("Validating API key...");
-  const isValid = await validateByopKey(apiKey);
-
-  if (!isValid) {
-    dom.byopError.textContent = "Invalid API key. Please check and try again.";
-    dom.byopError.hidden = false;
-    return;
-  }
-
-  state.authMode = "byop";
-  state.apiKey = apiKey;
-  saveAuthMode();
-
-  dom.byopDialog.close();
-  dom.byopKeyInput.value = "";
-  dom.byopError.hidden = true;
-
-  showToast("BYOP mode activated");
-  await fetchAvailableModels();
-  showPlaygroundPage();
-  if (!state.currentGenMode) {
-    dom.genModeButtons[0].click();
-  } else {
-    renderGenerationPanel(state.currentGenMode);
-  }
-}
-
-function cancelByop() {
-  dom.byopDialog.close();
-  dom.byopKeyInput.value = "";
-  dom.byopError.hidden = true;
-}
-
-function handleLogout() {
-  if (confirm("Are you sure you want to logout?")) {
-    clearAuthMode();
-    showLoginPage();
-    showToast("Logged out");
-  }
-}
-
-// =========================================================
-// Generation Mode Panels
-// =========================================================
-
-function createImagePanel() {
-  const models = state.availableModels?.image || getDefaultModels().image;
-  const optionsHtml = models.map(m => `<option value="${m}">${m}</option>`).join("");
-
-  return `
-    <div class="gen-panel card" data-panel="image">
-      <h2 class="gen-panel-title">Image Generation</h2>
-      <div class="gen-form">
-        <label class="gen-field">
-          <span class="gen-label">Prompt</span>
-          <textarea
-            id="image-prompt"
-            class="gen-textarea"
-            placeholder="Describe the image you want to generate..."
-            rows="4"></textarea>
-        </label>
-
-        <label class="gen-field">
-          <span class="gen-label">Model</span>
-          <select id="image-model" class="gen-select">
-            ${optionsHtml}
-          </select>
-        </label>
-
-        <button id="generate-image" class="cta-btn">Generate Image</button>
-      </div>
-
-      <div id="image-result" class="gen-result" hidden>
-        <div class="gen-result-head">
-          <h3 class="gen-result-title">Generated Image</h3>
-          <button class="ghost-btn" id="download-image">Download</button>
-        </div>
-        <img id="image-output" class="gen-image" alt="Generated image" />
-      </div>
-    </div>
-  `;
-}
-
-function createTextPanel() {
-  const models = state.availableModels?.text || getDefaultModels().text;
-  const optionsHtml = models.map(m => `<option value="${m}">${m}</option>`).join("");
-
-  return `
-    <div class="gen-panel card" data-panel="text">
-      <h2 class="gen-panel-title">Text Completion</h2>
-      <div class="gen-form">
-        <label class="gen-field">
-          <span class="gen-label">System Prompt (Optional)</span>
-          <textarea
-            id="text-system"
-            class="gen-textarea"
-            placeholder="You are a helpful assistant..."
-            rows="2"></textarea>
-        </label>
-
-        <label class="gen-field">
-          <span class="gen-label">User Prompt</span>
-          <textarea
-            id="text-prompt"
-            class="gen-textarea"
-            placeholder="Ask anything..."
-            rows="4"></textarea>
-        </label>
-
-        <label class="gen-field">
-          <span class="gen-label">Model</span>
-          <select id="text-model" class="gen-select">
-            ${optionsHtml}
-          </select>
-        </label>
-
-        <button id="generate-text" class="cta-btn">Generate Text</button>
-      </div>
-
-      <div id="text-result" class="gen-result" hidden>
-        <div class="gen-result-head">
-          <h3 class="gen-result-title">Generated Text</h3>
-          <button class="ghost-btn" id="copy-text">Copy</button>
-        </div>
-        <div id="text-output" class="gen-text"></div>
-      </div>
-    </div>
-  `;
-}
-
-function createAudioPanel() {
-  return `
-    <div class="gen-panel card" data-panel="audio">
-      <h2 class="gen-panel-title">Audio Generation (Text-to-Speech)</h2>
-      <div class="gen-form">
-        <label class="gen-field">
-          <span class="gen-label">Text</span>
-          <textarea
-            id="audio-text"
-            class="gen-textarea"
-            placeholder="Enter text to convert to speech..."
-            rows="4"></textarea>
-        </label>
-
-        <label class="gen-field">
-          <span class="gen-label">Voice</span>
-          <select id="audio-voice" class="gen-select">
-            <option value="default">Default</option>
-            <option value="male">Male</option>
-            <option value="female">Female</option>
-          </select>
-        </label>
-
-        <button id="generate-audio" class="cta-btn">Generate Audio</button>
-      </div>
-
-      <div id="audio-result" class="gen-result" hidden>
-        <div class="gen-result-head">
-          <h3 class="gen-result-title">Generated Audio</h3>
-          <button class="ghost-btn" id="download-audio">Download</button>
-        </div>
-        <audio id="audio-output" class="gen-audio" controls></audio>
-      </div>
-    </div>
-  `;
-}
-
-function createMusicPanel() {
-  return `
-    <div class="gen-panel card" data-panel="music">
-      <h2 class="gen-panel-title">Music Generation</h2>
-      <div class="gen-form">
-        <label class="gen-field">
-          <span class="gen-label">Prompt</span>
-          <textarea
-            id="music-prompt"
-            class="gen-textarea"
-            placeholder="Describe the music you want to generate..."
-            rows="4"></textarea>
-        </label>
-
-        <label class="gen-field">
-          <span class="gen-label">Duration (seconds)</span>
-          <input
-            id="music-duration"
-            type="number"
-            class="gen-input"
-            value="30"
-            min="5"
-            max="120" />
-        </label>
-
-        <button id="generate-music" class="cta-btn">Generate Music</button>
-      </div>
-
-      <div id="music-result" class="gen-result" hidden>
-        <div class="gen-result-head">
-          <h3 class="gen-result-title">Generated Music</h3>
-          <button class="ghost-btn" id="download-music">Download</button>
-        </div>
-        <audio id="music-output" class="gen-audio" controls></audio>
-      </div>
-    </div>
-  `;
-}
-
-function createVideoPanel() {
-  return `
-    <div class="gen-panel card" data-panel="video">
-      <h2 class="gen-panel-title">Video Generation</h2>
-      <div class="gen-form">
-        <label class="gen-field">
-          <span class="gen-label">Prompt</span>
-          <textarea
-            id="video-prompt"
-            class="gen-textarea"
-            placeholder="Describe the video you want to generate..."
-            rows="4"></textarea>
-        </label>
-
-        <label class="gen-field">
-          <span class="gen-label">Duration (seconds)</span>
-          <input
-            id="video-duration"
-            type="number"
-            class="gen-input"
-            value="5"
-            min="3"
-            max="10" />
-        </label>
-
-        <button id="generate-video" class="cta-btn">Generate Video</button>
-      </div>
-
-      <div id="video-result" class="gen-result" hidden>
-        <div class="gen-result-head">
-          <h3 class="gen-result-title">Generated Video</h3>
-          <button class="ghost-btn" id="download-video">Download</button>
-        </div>
-        <video id="video-output" class="gen-video" controls></video>
-      </div>
-    </div>
-  `;
-}
-
-function createTranscriptionPanel() {
-  return `
-    <div class="gen-panel card" data-panel="transcription">
-      <h2 class="gen-panel-title">Audio/Video Transcription</h2>
-      <div class="gen-form">
-        <label class="gen-field">
-          <span class="gen-label">Upload Audio/Video File</span>
-          <input
-            id="transcription-file"
-            type="file"
-            class="gen-file-input"
-            accept="audio/*,video/*,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm" />
-        </label>
-
-        <button id="generate-transcription" class="cta-btn" disabled>Transcribe</button>
-      </div>
-
-      <div id="transcription-result" class="gen-result" hidden>
-        <div class="gen-result-head">
-          <h3 class="gen-result-title">Transcription Result</h3>
-          <button class="ghost-btn" id="copy-transcription">Copy</button>
-        </div>
-        <div id="transcription-output" class="gen-text"></div>
-      </div>
-    </div>
-  `;
-}
-
-function renderGenerationPanel(mode) {
-  let panelHtml = "";
-
-  switch (mode) {
-    case "image":
-      panelHtml = createImagePanel();
-      break;
-    case "text":
-      panelHtml = createTextPanel();
-      break;
-    case "audio":
-      panelHtml = createAudioPanel();
-      break;
-    case "music":
-      panelHtml = createMusicPanel();
-      break;
-    case "video":
-      panelHtml = createVideoPanel();
-      break;
-    case "transcription":
-      panelHtml = createTranscriptionPanel();
-      break;
-    default:
-      panelHtml = "<p>Select a generation mode to get started</p>";
-  }
-
-  dom.generationContainer.innerHTML = panelHtml;
-  bindGenerationEvents(mode);
-}
-
-// =========================================================
-// Generation Event Handlers
-// =========================================================
-
-function bindGenerationEvents(mode) {
-  switch (mode) {
-    case "image":
-      document.getElementById("generate-image")?.addEventListener("click", handleImageGeneration);
-      document.getElementById("download-image")?.addEventListener("click", downloadImage);
-      break;
-    case "text":
-      document.getElementById("generate-text")?.addEventListener("click", handleTextGeneration);
-      document.getElementById("copy-text")?.addEventListener("click", copyText);
-      break;
-    case "audio":
-      document.getElementById("generate-audio")?.addEventListener("click", handleAudioGeneration);
-      document.getElementById("download-audio")?.addEventListener("click", downloadAudio);
-      break;
-    case "music":
-      document.getElementById("generate-music")?.addEventListener("click", handleMusicGeneration);
-      document.getElementById("download-music")?.addEventListener("click", downloadMusic);
-      break;
-    case "video":
-      document.getElementById("generate-video")?.addEventListener("click", handleVideoGeneration);
-      document.getElementById("download-video")?.addEventListener("click", downloadVideo);
-      break;
-    case "transcription":
-      document.getElementById("transcription-file")?.addEventListener("change", handleTranscriptionFileSelect);
-      document.getElementById("generate-transcription")?.addEventListener("click", handleTranscriptionGeneration);
-      document.getElementById("copy-transcription")?.addEventListener("click", copyTranscription);
-      break;
-  }
-}
-
-async function handleImageGeneration() {
-  if (state.authMode === "demo" && state.demoQuota <= 0) {
-    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
-    return;
-  }
-
-  const prompt = document.getElementById("image-prompt").value.trim();
-  const model = document.getElementById("image-model").value;
-
-  if (!prompt) {
-    showToast("Please enter a prompt");
-    return;
-  }
-
-  try {
-    state.isBusy = true;
-    showToast("Generating image...");
-
-    const result = await generateImage(prompt, model);
-
-    document.getElementById("image-output").src = result.url;
-    document.getElementById("image-result").hidden = false;
-
-    decrementDemoQuota();
-    addToHistory({ ...result, id: generateId() });
-
-    showToast("Image generated successfully");
-  } catch (err) {
-    console.error("Image generation error:", err);
-    showToast("Failed to generate image: " + err.message);
-  } finally {
-    state.isBusy = false;
-  }
-}
-
-async function handleTextGeneration() {
-  if (state.authMode === "demo" && state.demoQuota <= 0) {
-    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
-    return;
-  }
-
-  const prompt = document.getElementById("text-prompt").value.trim();
-  const systemPrompt = document.getElementById("text-system").value.trim();
-  const model = document.getElementById("text-model").value;
-
-  if (!prompt) {
-    showToast("Please enter a prompt");
-    return;
-  }
-
-  try {
-    state.isBusy = true;
-    showToast("Generating text...");
-
-    const result = await generateText(prompt, model, systemPrompt);
-
-    document.getElementById("text-output").textContent = result.text;
-    document.getElementById("text-result").hidden = false;
-
-    decrementDemoQuota();
-    addToHistory({ ...result, id: generateId() });
-
-    showToast("Text generated successfully");
-  } catch (err) {
-    console.error("Text generation error:", err);
-    showToast("Failed to generate text: " + err.message);
-  } finally {
-    state.isBusy = false;
-  }
-}
-
-async function handleAudioGeneration() {
-  if (state.authMode === "demo" && state.demoQuota <= 0) {
-    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
-    return;
-  }
-
-  const text = document.getElementById("audio-text").value.trim();
-  const voice = document.getElementById("audio-voice").value;
-
-  if (!text) {
-    showToast("Please enter text");
-    return;
-  }
-
-  try {
-    state.isBusy = true;
-    showToast("Generating audio...");
-
-    const result = await generateAudio(text, "parler-tts", voice);
-
-    document.getElementById("audio-output").src = result.url;
-    document.getElementById("audio-result").hidden = false;
-
-    decrementDemoQuota();
-    addToHistory({ ...result, id: generateId() });
-
-    showToast("Audio generated successfully");
-  } catch (err) {
-    console.error("Audio generation error:", err);
-    showToast("Failed to generate audio: " + err.message);
-  } finally {
-    state.isBusy = false;
-  }
-}
-
-async function handleMusicGeneration() {
-  if (state.authMode === "demo" && state.demoQuota <= 0) {
-    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
-    return;
-  }
-
-  const prompt = document.getElementById("music-prompt").value.trim();
-  const duration = parseInt(document.getElementById("music-duration").value, 10);
-
-  if (!prompt) {
-    showToast("Please enter a prompt");
-    return;
-  }
-
-  try {
-    state.isBusy = true;
-    showToast("Generating music...");
-
-    const result = await generateMusic(prompt, duration);
-
-    document.getElementById("music-output").src = result.url;
-    document.getElementById("music-result").hidden = false;
-
-    decrementDemoQuota();
-    addToHistory({ ...result, id: generateId() });
-
-    showToast("Music generated successfully");
-  } catch (err) {
-    console.error("Music generation error:", err);
-    showToast("Failed to generate music: " + err.message);
-  } finally {
-    state.isBusy = false;
-  }
-}
-
-async function handleVideoGeneration() {
-  if (state.authMode === "demo" && state.demoQuota <= 0) {
-    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
-    return;
-  }
-
-  const prompt = document.getElementById("video-prompt").value.trim();
-  const duration = parseInt(document.getElementById("video-duration").value, 10);
-
-  if (!prompt) {
-    showToast("Please enter a prompt");
-    return;
-  }
-
-  try {
-    state.isBusy = true;
-    showToast("Generating video...");
-
-    const result = await generateVideo(prompt, duration);
-
-    document.getElementById("video-output").src = result.url;
-    document.getElementById("video-result").hidden = false;
-
-    decrementDemoQuota();
-    addToHistory({ ...result, id: generateId() });
-
-    showToast("Video generated successfully");
-  } catch (err) {
-    console.error("Video generation error:", err);
-    showToast("Failed to generate video: " + err.message);
-  } finally {
-    state.isBusy = false;
-  }
-}
-
-function handleTranscriptionFileSelect(e) {
-  const file = e.target.files?.[0];
-  const btn = document.getElementById("generate-transcription");
-  if (file) {
-    btn.disabled = false;
-  } else {
-    btn.disabled = true;
-  }
-}
-
-async function handleTranscriptionGeneration() {
-  if (state.authMode === "demo" && state.demoQuota <= 0) {
-    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
-    return;
-  }
-
-  const fileInput = document.getElementById("transcription-file");
-  const file = fileInput.files?.[0];
-
-  if (!file) {
-    showToast("Please select a file");
-    return;
-  }
-
-  try {
-    state.isBusy = true;
-    showToast("Transcribing...");
-
-    const result = await transcribeAudio(file);
-
-    document.getElementById("transcription-output").textContent = result.text;
-    document.getElementById("transcription-result").hidden = false;
-
-    decrementDemoQuota();
-    addToHistory({ ...result, id: generateId() });
-
-    showToast("Transcription completed");
-  } catch (err) {
-    console.error("Transcription error:", err);
-    showToast("Failed to transcribe: " + err.message);
-  } finally {
-    state.isBusy = false;
-  }
-}
-
-// Download handlers
-function downloadImage() {
-  const img = document.getElementById("image-output");
-  const link = document.createElement("a");
-  link.href = img.src;
-  link.download = `onellm-image-${Date.now()}.png`;
-  link.click();
-}
-
-function downloadAudio() {
-  const audio = document.getElementById("audio-output");
-  const link = document.createElement("a");
-  link.href = audio.src;
-  link.download = `onellm-audio-${Date.now()}.mp3`;
-  link.click();
-}
-
-function downloadMusic() {
-  const audio = document.getElementById("music-output");
-  const link = document.createElement("a");
-  link.href = audio.src;
-  link.download = `onellm-music-${Date.now()}.mp3`;
-  link.click();
-}
-
-function downloadVideo() {
-  const video = document.getElementById("video-output");
-  const link = document.createElement("a");
-  link.href = video.src;
-  link.download = `onellm-video-${Date.now()}.mp4`;
-  link.click();
-}
-
-// Copy handlers
-function copyText() {
-  const text = document.getElementById("text-output").textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast("Text copied to clipboard");
+function formatTime(iso) {
+  return new Date(iso).toLocaleString([], {
+    month: "short",
+    day: "numeric",
+    hour: "2-digit",
+    minute: "2-digit"
   });
 }
 
-function copyTranscription() {
-  const text = document.getElementById("transcription-output").textContent;
-  navigator.clipboard.writeText(text).then(() => {
-    showToast("Transcription copied to clipboard");
-  });
+function getUsageState() {
+  const raw = localStorage.getItem(STORAGE_KEYS.usage);
+  const today = new Date().toISOString().slice(0, 10);
+  const parsed = raw ? JSON.parse(raw) : { date: today, count: 0 };
+  if (parsed.date !== today) {
+    return { date: today, count: 0 };
+  }
+  return parsed;
 }
 
-// =========================================================
-// History Functions
-// =========================================================
+function setUsageState(value) {
+  localStorage.setItem(STORAGE_KEYS.usage, JSON.stringify(value));
+}
+
+function incrementUsage() {
+  const usage = getUsageState();
+  usage.count += 1;
+  setUsageState(usage);
+}
+
+function remainingDemoRequests() {
+  const usage = getUsageState();
+  return Math.max(0, 20 - usage.count);
+}
+
+function activeChat() {
+  return state.chats.find((chat) => chat.id === state.currentChatId) || null;
+}
+
+function saveChats() {
+  const persistable = state.chats.filter((chat) => !chat.temporary);
+  localStorage.setItem(STORAGE_KEYS.chats, JSON.stringify(persistable));
+}
+
+function saveSettings() {
+  localStorage.setItem(STORAGE_KEYS.settings, JSON.stringify(state.settings));
+}
+
+function applyTheme(theme) {
+  state.settings.theme = theme;
+  el.root.setAttribute("data-theme", theme);
+  const icon = el.themeToggle.querySelector(".material-symbols-rounded");
+  if (icon) {
+    icon.textContent = theme === "dark" ? "light_mode" : "dark_mode";
+  }
+  el.settingsThemeToggle.checked = theme === "dark";
+  saveSettings();
+}
 
 function renderHistory() {
-  if (state.history.length === 0) {
-    dom.historyList.innerHTML = '<p class="history-empty">Your generations will appear here.</p>';
+  el.historyList.innerHTML = "";
+  const sorted = [...state.chats].sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  for (const chat of sorted) {
+    const item = document.createElement("button");
+    item.className = "history-item";
+    if (chat.id === state.currentChatId) item.classList.add("active");
+
+    const tempMark = chat.temporary ? "Temp" : chat.model?.type || "Text";
+    item.innerHTML = `
+      <div class="history-title">${escapeHtml(chat.title || "New Conversation")}</div>
+      <div class="history-meta">
+        <span>${escapeHtml(tempMark)}</span>
+        <span>${escapeHtml(formatTime(chat.updatedAt))}</span>
+      </div>
+    `;
+
+    item.addEventListener("click", () => {
+      state.currentChatId = chat.id;
+      state.selectedModel = chat.model || state.selectedModel;
+      renderAll();
+    });
+
+    el.historyList.appendChild(item);
+  }
+
+  el.historyCount.textContent = `${sorted.length} ${sorted.length === 1 ? "chat" : "chats"}`;
+}
+
+function renderMessages() {
+  const chat = activeChat();
+  el.messageList.innerHTML = "";
+
+  if (!chat || chat.messages.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = "message-bubble card round-xl";
+    empty.textContent = "Start a conversation. Model controls, file uploads, and mode switches are ready.";
+    el.messageList.appendChild(empty);
     return;
   }
 
-  const html = state.history.map((entry) => {
-    const typeLabel = entry.type.charAt(0).toUpperCase() + entry.type.slice(1);
-    const preview = getHistoryPreview(entry);
+  for (const message of chat.messages) {
+    const frag = el.messageTemplate.content.cloneNode(true);
+    const row = frag.querySelector(".message-row");
+    const bubble = frag.querySelector(".message-bubble");
 
-    return `
-      <div class="history-item" data-id="${entry.id}">
-        <div class="history-item-head">
-          <span class="history-item-type">${typeLabel}</span>
-          <span class="history-item-date">${formatDate(entry.timestamp)}</span>
-        </div>
-        <div class="history-item-preview">${preview}</div>
-      </div>
-    `;
-  }).join("");
+    row.classList.add(message.role);
+    bubble.textContent = message.content;
+    frag.querySelector(".avatar").textContent = message.role === "user" ? "U" : "AI";
 
-  dom.historyList.innerHTML = html;
+    el.messageList.appendChild(frag);
+  }
+
+  el.messageList.scrollTop = el.messageList.scrollHeight;
 }
 
-function getHistoryPreview(entry) {
-  switch (entry.type) {
-    case "image":
-      return entry.prompt || "Image generation";
-    case "text":
-      return entry.prompt || "Text completion";
-    case "audio":
-      return entry.text?.slice(0, 50) + "..." || "Audio generation";
-    case "music":
-      return entry.prompt || "Music generation";
-    case "video":
-      return entry.prompt || "Video generation";
-    case "transcription":
-      return entry.text?.slice(0, 50) + "..." || "Transcription";
-    default:
-      return "Unknown";
+function renderActiveChatHeader() {
+  const chat = activeChat();
+  if (!chat) {
+    el.activeChatTitle.textContent = "New Conversation";
+    el.activeModelLabel.textContent = `${state.selectedModel.type} • ${state.selectedModel.name}`;
+    return;
+  }
+
+  const title = chat.title || "New Conversation";
+  const tempTag = chat.temporary ? " • Temporary" : "";
+  el.activeChatTitle.textContent = title;
+  el.activeModelLabel.textContent = `${chat.model.type} • ${chat.model.name}${tempTag}`;
+}
+
+function renderModelDropup() {
+  el.modelGroups.innerHTML = "";
+  const chat = activeChat();
+  const selected = chat?.model || state.selectedModel;
+
+  Object.entries(MODEL_GROUPS).forEach(([group, options]) => {
+    const card = document.createElement("section");
+    card.className = "model-group";
+
+    const title = document.createElement("h6");
+    title.textContent = group;
+    card.appendChild(title);
+
+    const optionsWrap = document.createElement("div");
+    optionsWrap.className = "model-options";
+
+    options.forEach((name) => {
+      const chip = document.createElement("button");
+      chip.className = "model-option";
+      chip.textContent = name;
+      if (selected.type === group && selected.name === name) {
+        chip.classList.add("active");
+      }
+      chip.addEventListener("click", () => {
+        chooseModel(group, name);
+      });
+      optionsWrap.appendChild(chip);
+    });
+
+    card.appendChild(optionsWrap);
+    el.modelGroups.appendChild(card);
+  });
+}
+
+function renderTempMode() {
+  el.tempModeToggle.setAttribute("aria-pressed", String(state.tempMode));
+}
+
+function renderDemoBadge() {
+  const isDemo = state.settings.demoMode;
+  el.demoBadge.classList.toggle("hidden", !isDemo);
+  el.demoRemaining.textContent = String(remainingDemoRequests());
+}
+
+function renderFiles() {
+  el.filePills.innerHTML = "";
+  state.attachedFiles.forEach((file) => {
+    const pill = document.createElement("span");
+    pill.className = "file-pill";
+    pill.textContent = truncate(file.name, 24);
+    el.filePills.appendChild(pill);
+  });
+}
+
+function renderAll() {
+  renderHistory();
+  renderMessages();
+  renderActiveChatHeader();
+  renderModelDropup();
+  renderTempMode();
+  renderFiles();
+  renderDemoBadge();
+}
+
+function makeChat({ temporary }) {
+  return {
+    id: uid(),
+    title: "New Conversation",
+    createdAt: nowIso(),
+    updatedAt: nowIso(),
+    temporary,
+    model: { ...state.selectedModel },
+    messages: []
+  };
+}
+
+function ensureChat() {
+  let chat = activeChat();
+  if (!chat) {
+    chat = makeChat({ temporary: state.tempMode });
+    state.chats.push(chat);
+    state.currentChatId = chat.id;
+  }
+  return chat;
+}
+
+function chooseModel(type, name) {
+  state.selectedModel = { type, name };
+  const chat = activeChat();
+  if (chat) {
+    chat.model = { type, name };
+    chat.updatedAt = nowIso();
+    if (!chat.temporary) saveChats();
+  }
+  renderAll();
+}
+
+function addMessage(role, content) {
+  const chat = ensureChat();
+  chat.messages.push({
+    id: uid(),
+    role,
+    content,
+    timestamp: nowIso(),
+    files: state.attachedFiles.map((f) => f.name)
+  });
+
+  if (chat.title === "New Conversation" && role === "user") {
+    chat.title = truncate(content, 42);
+  }
+
+  chat.updatedAt = nowIso();
+  if (!chat.temporary) saveChats();
+}
+
+function escapeHtml(input) {
+  return input
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#039;");
+}
+
+function setMessageInputHeight() {
+  el.messageInput.style.height = "auto";
+  el.messageInput.style.height = `${Math.min(180, el.messageInput.scrollHeight)}px`;
+}
+
+function fakeAssistantReply(userText) {
+  const chat = activeChat();
+  const model = chat?.model || state.selectedModel;
+  const filesNote = state.attachedFiles.length
+    ? `\n\nAttached files: ${state.attachedFiles.map((f) => f.name).join(", ")}`
+    : "";
+  return `Model: ${model.type} • ${model.name}\nSystem: ${state.settings.systemPrompt}\n\nYou said: "${userText}"${filesNote}\n\nFrontend-only demo response.`;
+}
+
+function sendMessage() {
+  const text = el.messageInput.value.trim();
+  if (!text) return;
+
+  if (state.settings.demoMode && remainingDemoRequests() <= 0) {
+    alert("Demo limit reached: 20 requests/day. Disable demo mode in Settings to continue.");
+    return;
+  }
+
+  addMessage("user", text);
+
+  if (state.settings.demoMode) {
+    incrementUsage();
+  }
+
+  const reply = fakeAssistantReply(text);
+  addMessage("assistant", reply);
+
+  state.attachedFiles = [];
+  el.fileInput.value = "";
+  el.messageInput.value = "";
+  setMessageInputHeight();
+
+  renderAll();
+}
+
+function newChat() {
+  const chat = makeChat({ temporary: state.tempMode });
+  state.chats.push(chat);
+  state.currentChatId = chat.id;
+  if (!chat.temporary) saveChats();
+  renderAll();
+  el.messageInput.focus();
+}
+
+function toggleSettings(open) {
+  el.settingsPanel.classList.toggle("open", open);
+  el.settingsPanel.setAttribute("aria-hidden", String(!open));
+  if (open) {
+    el.systemPromptInput.value = state.settings.systemPrompt;
+    el.demoModeToggle.checked = state.settings.demoMode;
+    el.settingsThemeToggle.checked = state.settings.theme === "dark";
   }
 }
 
-function toggleHistory() {
-  const isOpen = dom.historyPopup.getAttribute("aria-hidden") === "false";
+function exportData() {
+  const data = {
+    chats: state.chats.filter((c) => !c.temporary),
+    settings: state.settings,
+    exportedAt: nowIso()
+  };
 
-  if (isOpen) {
-    dom.historyPopup.setAttribute("aria-hidden", "true");
-    dom.historyBackdrop.setAttribute("aria-hidden", "true");
-    dom.historyToggle.setAttribute("aria-expanded", "false");
-  } else {
-    dom.historyPopup.setAttribute("aria-hidden", "false");
-    dom.historyBackdrop.setAttribute("aria-hidden", "false");
-    dom.historyToggle.setAttribute("aria-expanded", "true");
-  }
+  const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `onellm-history-${new Date().toISOString().slice(0, 10)}.json`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
 }
 
-// =========================================================
-// Event Bindings
-// =========================================================
+function importData(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    try {
+      const parsed = JSON.parse(String(reader.result));
+      if (!Array.isArray(parsed.chats)) {
+        throw new Error("Invalid import file");
+      }
+      state.chats = parsed.chats;
+      if (parsed.settings && typeof parsed.settings === "object") {
+        state.settings = {
+          ...state.settings,
+          ...parsed.settings
+        };
+      }
+      state.currentChatId = state.chats[0]?.id || null;
+      saveChats();
+      saveSettings();
+      applyTheme(state.settings.theme);
+      renderAll();
+    } catch (err) {
+      alert(`Import failed: ${err.message}`);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function clearAll() {
+  const ok = confirm("Clear all saved chats and reset demo usage? This cannot be undone.");
+  if (!ok) return;
+
+  state.chats = [];
+  state.currentChatId = null;
+  localStorage.removeItem(STORAGE_KEYS.chats);
+  localStorage.removeItem(STORAGE_KEYS.usage);
+  newChat();
+  renderAll();
+}
+
+function loadState() {
+  const savedChats = localStorage.getItem(STORAGE_KEYS.chats);
+  const savedSettings = localStorage.getItem(STORAGE_KEYS.settings);
+
+  if (savedChats) {
+    try {
+      state.chats = JSON.parse(savedChats);
+    } catch {
+      state.chats = [];
+    }
+  }
+
+  if (savedSettings) {
+    try {
+      state.settings = {
+        ...state.settings,
+        ...JSON.parse(savedSettings)
+      };
+    } catch {
+      // Ignore invalid persisted settings and continue with defaults.
+    }
+  }
+
+  applyTheme(state.settings.theme);
+  state.currentChatId = state.chats[0]?.id || null;
+
+  if (!state.currentChatId) {
+    newChat();
+  }
+}
 
 function bindEvents() {
-  // Login page - mode selection
-  dom.modeCards.forEach((card) => {
-    card.addEventListener("click", async () => {
-      const mode = card.dataset.mode;
-      if (mode === "demo") {
-        await handleDemoMode();
-      } else if (mode === "byop") {
-        await handleByopMode();
-      } else if (mode === "byok") {
-        await handleByokMode();
-      }
-    });
-  });
-
-  // BYOP dialog
-  dom.byopSubmit.addEventListener("click", submitByop);
-  dom.byopCancel.addEventListener("click", cancelByop);
-  dom.byopKeyInput.addEventListener("keypress", (e) => {
-    if (e.key === "Enter") {
-      submitByop();
-    }
-  });
-
-  // Theme toggle
-  dom.themeToggle?.addEventListener("click", toggleTheme);
-
-  // History
-  dom.historyToggle?.addEventListener("click", toggleHistory);
-  dom.historyClose?.addEventListener("click", toggleHistory);
-  dom.historyBackdrop?.addEventListener("click", toggleHistory);
-  dom.clearHistory?.addEventListener("click", clearHistoryData);
-
-  // Export
-  dom.exportBtn?.addEventListener("click", exportHistory);
-
-  // Logout
-  dom.logoutBtn?.addEventListener("click", handleLogout);
-
-  // Generation mode buttons
-  dom.genModeButtons.forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const mode = btn.dataset.genMode;
-      state.currentGenMode = mode;
-
-      // Update active state
-      dom.genModeButtons.forEach((b) => b.classList.remove("is-active"));
-      btn.classList.add("is-active");
-
-      // Render panel
-      renderGenerationPanel(mode);
-    });
-  });
-}
-
-// =========================================================
-// Initialization
-// =========================================================
-
-async function init() {
-  // Load theme
-  loadTheme();
-
-  // Load history
-  loadHistory();
-
-  // Check if already authenticated
-  const hasAuth = loadAuthMode();
-
-  if (hasAuth) {
-    // User is already authenticated, go to playground
-    resetDemoQuotaIfNeeded();
-    await fetchAvailableModels();
-    showPlaygroundPage();
-    renderHistory();
-    if (!state.currentGenMode) {
-      dom.genModeButtons[0].click();
+  el.sidebarToggle.addEventListener("click", () => {
+    const isMobile = window.matchMedia("(max-width: 960px)").matches;
+    if (isMobile) {
+      state.mobileSidebarOpen = !state.mobileSidebarOpen;
+      el.historySidebar.classList.toggle("mobile-open", state.mobileSidebarOpen);
     } else {
-      renderGenerationPanel(state.currentGenMode);
+      el.historySidebar.classList.toggle("collapsed");
     }
-  } else {
-    // Show login page
-    showLoginPage();
-  }
+  });
 
-  // Bind all events
-  bindEvents();
+  el.newChatBtn.addEventListener("click", newChat);
+
+  el.tempModeToggle.addEventListener("click", () => {
+    state.tempMode = !state.tempMode;
+    renderTempMode();
+  });
+
+  el.chatModelDropupBtn.addEventListener("click", () => {
+    const isOpen = el.modelDropup.classList.toggle("open");
+    el.chatModelDropupBtn.setAttribute("aria-expanded", String(isOpen));
+  });
+
+  document.addEventListener("click", (event) => {
+    if (!el.modelDropup.contains(event.target) && !el.chatModelDropupBtn.contains(event.target)) {
+      el.modelDropup.classList.remove("open");
+      el.chatModelDropupBtn.setAttribute("aria-expanded", "false");
+    }
+  });
+
+  el.messageInput.addEventListener("input", setMessageInputHeight);
+  el.messageInput.addEventListener("keydown", (event) => {
+    if (event.key === "Enter" && !event.shiftKey) {
+      event.preventDefault();
+      sendMessage();
+    }
+  });
+
+  el.sendBtn.addEventListener("click", sendMessage);
+
+  el.attachFileBtn.addEventListener("click", () => {
+    el.fileInput.click();
+  });
+
+  el.fileInput.addEventListener("change", () => {
+    state.attachedFiles = Array.from(el.fileInput.files || []);
+    renderFiles();
+  });
+
+  el.themeToggle.addEventListener("click", () => {
+    const next = state.settings.theme === "dark" ? "light" : "dark";
+    applyTheme(next);
+  });
+
+  el.settingsToggle.addEventListener("click", () => toggleSettings(true));
+  el.settingsClose.addEventListener("click", () => toggleSettings(false));
+
+  el.settingsPanel.addEventListener("click", (event) => {
+    if (event.target === el.settingsPanel) {
+      toggleSettings(false);
+    }
+  });
+
+  el.systemPromptInput.addEventListener("change", () => {
+    state.settings.systemPrompt = el.systemPromptInput.value.trim() || "You are a helpful, concise assistant.";
+    saveSettings();
+    renderAll();
+  });
+
+  el.demoModeToggle.addEventListener("change", () => {
+    state.settings.demoMode = el.demoModeToggle.checked;
+    saveSettings();
+    renderDemoBadge();
+  });
+
+  el.settingsThemeToggle.addEventListener("change", () => {
+    applyTheme(el.settingsThemeToggle.checked ? "dark" : "light");
+  });
+
+  el.exportHistoryBtn.addEventListener("click", exportData);
+
+  el.importHistoryBtn.addEventListener("click", () => {
+    el.importFileInput.click();
+  });
+
+  el.importFileInput.addEventListener("change", () => {
+    const file = el.importFileInput.files?.[0];
+    if (file) importData(file);
+    el.importFileInput.value = "";
+  });
+
+  el.clearHistoryBtn.addEventListener("click", clearAll);
+
+  window.addEventListener("resize", () => {
+    const isMobile = window.matchMedia("(max-width: 960px)").matches;
+    if (!isMobile) {
+      state.mobileSidebarOpen = false;
+      el.historySidebar.classList.remove("mobile-open");
+    }
+  });
 }
 
-// Start the app
+function init() {
+  loadState();
+  bindEvents();
+  renderAll();
+  setMessageInputHeight();
+}
+
 init();
