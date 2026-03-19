@@ -1,22 +1,12 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="en" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Onescriber</title>
+    <title>OneLLM Playground</title>
     <meta
       name="description"
-      content="Transcribe audio or YouTube links with AI — minimalist, browser-side history, clip selection, and summary tools." />
-    <script>
-      window.ONESCRIBER_CONFIG = {
-        transcribeYoutubeUrl:
-          "https://onescriber-backend-production.up.railway.app/api/transcribe/youtube",
-        transcribeUploadUrl:
-          "https://onescriber-backend-production.up.railway.app/api/transcribe/upload",
-        summarizeUrl:
-          "https://onescriber-backend-production.up.railway.app/api/summarize",
-      };
-    </script>
+      content="AI Playground with Image, Text, Audio, Music, Video Generation and Transcription powered by Pollinations.ai" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -27,323 +17,295 @@
   <body>
     <noscript>
       <div class="noscript-banner">
-        Onescriber needs JavaScript enabled to work.
+        OneLLM Playground needs JavaScript enabled to work.
       </div>
     </noscript>
 
-    <!-- Floating Liquid Glass Navbar -->
-    <header class="nav-wrap">
-      <nav class="nav-pill" aria-label="Main navigation">
-        <span class="nav-brand">Onescriber</span>
-
-        <div class="nav-tabs" role="tablist" aria-label="Source mode">
-          <button
-            id="tab-upload"
-            class="tab-btn is-active"
-            type="button"
-            role="tab"
-            aria-selected="true"
-            aria-controls="panel-upload">
-            Upload
-          </button>
-          <button
-            id="tab-youtube"
-            class="tab-btn"
-            type="button"
-            role="tab"
-            aria-selected="false"
-            aria-controls="panel-youtube"
-            disabled
-            title="YouTube support is coming soon">
-            YouTube
-          </button>
+    <!-- Login/Mode Selection Page -->
+    <div id="login-page" class="page" data-page="login">
+      <div class="login-container">
+        <div class="login-hero">
+          <h1 class="login-title">OneLLM Playground</h1>
+          <p class="login-subtitle">Create with AI: Images, Text, Audio, Music, Video & Transcription</p>
         </div>
 
-        <div class="nav-end">
-          <!-- History rollback icon -->
-          <button
-            id="history-toggle"
-            class="icon-btn"
-            type="button"
-            aria-label="View history"
-            aria-expanded="false">
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true">
-              <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-              <path d="M3 3v5h5" />
-              <path d="M12 7v5l4 2" />
-            </svg>
-          </button>
-          <!-- Sun / Moon theme toggle -->
-          <button
-            id="theme-toggle"
-            class="icon-btn"
-            type="button"
-            aria-label="Toggle light or dark mode">
-            <svg
-              class="icon-sun"
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true">
-              <circle cx="12" cy="12" r="4" />
-              <path
-                d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41" />
-            </svg>
-            <svg
-              class="icon-moon"
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="1.8"
-              stroke-linecap="round"
-              stroke-linejoin="round"
-              aria-hidden="true">
-              <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" />
-            </svg>
-          </button>
-        </div>
-      </nav>
-    </header>
-
-    <!-- History Popup -->
-    <aside id="history-popup" class="history-popup" aria-hidden="true">
-      <div class="history-popup-inner">
-        <div class="history-popup-head">
-          <div>
-            <h2 class="history-popup-title">History</h2>
-            <p class="history-popup-sub">Last 3 &middot; stored locally</p>
-          </div>
-          <div class="history-popup-controls">
-            <button
-              id="history-close"
-              class="icon-btn icon-btn-sm"
-              type="button"
-              aria-label="Close history">
-              <svg
-                width="15"
-                height="15"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2.2"
-                stroke-linecap="round"
-                aria-hidden="true">
-                <path d="M18 6 6 18M6 6l12 12" />
+        <div class="mode-cards">
+          <!-- Demo Mode -->
+          <button class="mode-card" data-mode="demo">
+            <div class="mode-card-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
               </svg>
-            </button>
-          </div>
+            </div>
+            <h2 class="mode-card-title">Demo Mode</h2>
+            <p class="mode-card-desc">Try all features with 15 requests per day using our public API</p>
+            <span class="mode-card-badge">Free</span>
+          </button>
+
+          <!-- BYOP Mode -->
+          <button class="mode-card" data-mode="byop">
+            <div class="mode-card-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+              </svg>
+            </div>
+            <h2 class="mode-card-title">BYOP</h2>
+            <p class="mode-card-desc">Bring Your Own Pollen - Use your Pollinations API key for unlimited access</p>
+            <span class="mode-card-badge">Unlimited</span>
+          </button>
+
+          <!-- BYOK Mode (Disabled) -->
+          <button class="mode-card mode-card-disabled" data-mode="byok" disabled>
+            <div class="mode-card-icon">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+            </div>
+            <h2 class="mode-card-title">BYOK</h2>
+            <p class="mode-card-desc">Bring Your Own Key - OpenAI compatible endpoint (Coming Soon)</p>
+            <span class="mode-card-badge">Coming Soon</span>
+          </button>
         </div>
-        <div id="history-list" class="history-list" aria-live="polite">
-          <p class="history-empty">
-            Your completed transcripts will appear here.
+
+        <div class="login-footer">
+          <p class="login-disclaimer">
+            Your data is processed and sent only to Pollinations.ai. No data is stored on our servers.
+            <a href="https://pollinations.ai/privacy" target="_blank" rel="noopener noreferrer">Privacy Policy</a>
           </p>
         </div>
       </div>
-    </aside>
-    <div
-      id="history-backdrop"
-      class="history-backdrop"
-      aria-hidden="true"></div>
+    </div>
 
-    <!-- Main Content -->
-    <main class="main-wrap">
-      <!-- Source Input Card -->
-      <div class="card source-card">
-        <div class="panels-track" id="panels-track">
-          <!-- Upload Panel -->
-          <section
-            id="panel-upload"
-            class="source-panel"
-            role="tabpanel"
-            aria-labelledby="tab-upload">
-            <label id="dropzone" class="dropzone" for="file-input">
-              <input
-                id="file-input"
-                type="file"
-                accept=".mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm,audio/*,video/*" />
-              <svg
-                class="dropzone-icon"
-                width="30"
-                height="30"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="1.4"
-                stroke-linecap="round"
-                stroke-linejoin="round"
-                aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                <polyline points="17 8 12 3 7 8" />
-                <line x1="12" y1="3" x2="12" y2="15" />
-              </svg>
-              <span class="dropzone-title">Drop audio or video here</span>
-              <span class="dropzone-hint"
-                >mp3 &middot; mp4 &middot; m4a &middot; wav &middot; webm
-                &nbsp;&mdash;&nbsp; max 5 min per run</span
-              >
-            </label>
-            <div id="file-meta" class="source-meta">No file selected yet.</div>
-          </section>
+    <!-- BYOP Key Input Dialog -->
+    <dialog id="byop-dialog" class="auth-dialog">
+      <form method="dialog" class="auth-form">
+        <h2 class="auth-heading">Enter Your Pollen API Key</h2>
+        <p class="auth-desc">Get your API key from <a href="https://enter.pollinations.ai/api/docs" target="_blank" rel="noopener noreferrer">Pollinations</a></p>
 
-          <!-- YouTube Panel -->
-          <section
-            id="panel-youtube"
-            class="source-panel"
-            role="tabpanel"
-            aria-labelledby="tab-youtube">
-            <input
-              id="youtube-url"
-              type="url"
-              inputmode="url"
-              class="yt-input"
-              placeholder="https://www.youtube.com/watch?v=..." />
-            <p class="yt-hint">
-              Paste a YouTube link and hit Transcribe. Videos under 5 minutes
-              work best — longer ones may fail. If so, download the video
-              locally and upload it as a file instead.
-            </p>
-          </section>
-        </div>
-      </div>
+        <label class="auth-field">
+          <span class="auth-label">API Key</span>
+          <input
+            id="byop-key-input"
+            type="password"
+            placeholder="pk_..."
+            autocomplete="off" />
+        </label>
 
-      <!-- Action Row: CTA only -->
-      <div class="action-row">
-        <button id="transcribe-button" class="transcribe-btn" type="button">
-          Transcribe
-        </button>
-      </div>
+        <p id="byop-error" class="auth-error" hidden></p>
 
-      <!-- Progress Card (shown while busy, dismissed on success) -->
-      <div
-        id="progress-card"
-        class="card progress-card"
-        aria-live="polite"
-        hidden>
-        <div class="progress-card-head">
-          <p id="progress-phase" class="progress-phase">Processing</p>
-          <p id="progress-source" class="progress-source"></p>
-        </div>
-        <div class="progress-track">
-          <div id="progress-bar" class="progress-bar"></div>
-        </div>
-        <p id="progress-message" class="progress-message"></p>
-        <ol id="progress-timeline" class="progress-timeline"></ol>
-      </div>
-
-      <!-- Transcript Card (hidden until first success) -->
-      <div id="transcript-card" class="card result-card card-reveal" hidden>
-        <div class="card-head">
-          <h2 class="card-title">Transcript</h2>
-          <div class="card-actions">
-            <button
-              id="download-transcript"
-              class="ghost-btn"
-              type="button"
-              disabled>
-              Download
-            </button>
-            <button
-              id="summarize-button"
-              class="ghost-btn"
-              type="button"
-              disabled>
-              Summarize
-              <span class="quota-tag"
-                ><strong id="summary-quota">2</strong> left</span
-              >
-            </button>
-          </div>
-        </div>
-        <div id="result-meta" class="result-meta">
-          Completed transcripts will show metadata here.
-        </div>
-        <label class="sr-only" for="transcript-output">Transcript text</label>
-        <textarea
-          id="transcript-output"
-          class="transcript-output"
-          readonly
-          placeholder="Your transcript will appear here after a successful run."></textarea>
-      </div>
-
-      <!-- Summary Card (hidden until summary completes) -->
-      <div id="summary-card" class="card summary-card card-reveal" hidden>
-        <div class="card-head">
-          <h2 class="card-title">Summary</h2>
-        </div>
-        <div id="summary-output" class="summary-output">
-          Hit Summarize after a transcript completes.
-        </div>
-      </div>
-
-      <footer class="footer-note">
-        <p>
-          Transcription and summary use Pollinations.ai. YouTube audio is
-          fetched server-side before being sent to Pollinations. Data is not
-          stored server-side; only the last three transcripts are kept locally
-          in your browser.
-        </p>
-      </footer>
-    </main>
-
-    <!-- Trim / Clip Dialog -->
-    <dialog id="trim-dialog" class="trim-dialog">
-      <form method="dialog" class="trim-form">
-        <p class="trim-kicker">Clip selection</p>
-        <h2 class="trim-heading">Choose a window under five minutes</h2>
-        <p id="trim-description" class="trim-desc"></p>
-        <div class="trim-inputs">
-          <label class="trim-field">
-            <span class="trim-label">Start</span>
-            <input
-              id="trim-start"
-              type="text"
-              inputmode="numeric"
-              placeholder="0:00" />
-          </label>
-          <label class="trim-field">
-            <span class="trim-label">End</span>
-            <input
-              id="trim-end"
-              type="text"
-              inputmode="numeric"
-              placeholder="5:00" />
-          </label>
-        </div>
-        <p id="trim-feedback" class="trim-feedback">Clip length: 5:00</p>
-        <div class="trim-actions">
-          <button class="ghost-btn" type="submit" value="cancel">Cancel</button>
-          <button
-            id="trim-apply"
-            class="transcribe-btn"
-            type="submit"
-            value="apply">
-            Use clip
-          </button>
+        <div class="auth-actions">
+          <button class="ghost-btn" type="button" id="byop-cancel">Cancel</button>
+          <button class="cta-btn" type="button" id="byop-submit">Continue</button>
         </div>
       </form>
     </dialog>
 
+    <!-- BYOK URL Input Dialog (Disabled for now) -->
+    <dialog id="byok-dialog" class="auth-dialog">
+      <form method="dialog" class="auth-form">
+        <h2 class="auth-heading">Enter OpenAI Compatible URL</h2>
+        <p class="auth-desc">Enter the base URL of your OpenAI-compatible API endpoint</p>
+
+        <label class="auth-field">
+          <span class="auth-label">Base URL</span>
+          <input
+            id="byok-url-input"
+            type="url"
+            placeholder="https://api.example.com/v1"
+            autocomplete="off" />
+        </label>
+
+        <label class="auth-field">
+          <span class="auth-label">API Key</span>
+          <input
+            id="byok-key-input"
+            type="password"
+            placeholder="sk-..."
+            autocomplete="off" />
+        </label>
+
+        <p id="byok-error" class="auth-error" hidden></p>
+
+        <div class="auth-actions">
+          <button class="ghost-btn" type="button" id="byok-cancel">Cancel</button>
+          <button class="cta-btn" type="button" id="byok-submit">Continue</button>
+        </div>
+      </form>
+    </dialog>
+
+    <!-- Main Playground Page -->
+    <div id="playground-page" class="page" data-page="playground" hidden>
+      <!-- Floating Liquid Glass Navbar -->
+      <header class="nav-wrap">
+        <nav class="nav-pill" aria-label="Main navigation">
+          <span class="nav-brand">OneLLM Playground</span>
+
+          <div class="nav-center">
+            <span class="nav-mode-badge" id="mode-badge">Demo Mode</span>
+            <span class="nav-quota" id="quota-display">15 requests left</span>
+          </div>
+
+          <div class="nav-end">
+            <!-- Export Data -->
+            <button
+              id="export-btn"
+              class="icon-btn"
+              type="button"
+              aria-label="Export data"
+              title="Export your generation history">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+            </button>
+            <!-- History -->
+            <button
+              id="history-toggle"
+              class="icon-btn"
+              type="button"
+              aria-label="View history"
+              aria-expanded="false">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/>
+                <path d="M3 3v5h5"/>
+                <path d="M12 7v5l4 2"/>
+              </svg>
+            </button>
+            <!-- Theme toggle -->
+            <button
+              id="theme-toggle"
+              class="icon-btn"
+              type="button"
+              aria-label="Toggle light or dark mode">
+              <svg class="icon-sun" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="4"/>
+                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+              </svg>
+              <svg class="icon-moon" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+              </svg>
+            </button>
+            <!-- Logout -->
+            <button
+              id="logout-btn"
+              class="icon-btn"
+              type="button"
+              aria-label="Logout">
+              <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+                <polyline points="16 17 21 12 16 7"/>
+                <line x1="21" y1="12" x2="9" y2="12"/>
+              </svg>
+            </button>
+          </div>
+        </nav>
+      </header>
+
+      <!-- History Popup -->
+      <aside id="history-popup" class="history-popup" aria-hidden="true">
+        <div class="history-popup-inner">
+          <div class="history-popup-head">
+            <div>
+              <h2 class="history-popup-title">History</h2>
+              <p class="history-popup-sub">Stored locally in your browser</p>
+            </div>
+            <div class="history-popup-controls">
+              <button id="clear-history" class="ghost-btn-sm" type="button">Clear All</button>
+              <button id="history-close" class="icon-btn icon-btn-sm" type="button" aria-label="Close history">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round">
+                  <path d="M18 6 6 18M6 6l12 12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+          <div id="history-list" class="history-list" aria-live="polite">
+            <p class="history-empty">Your generations will appear here.</p>
+          </div>
+        </div>
+      </aside>
+      <div id="history-backdrop" class="history-backdrop" aria-hidden="true"></div>
+
+      <!-- Main Content -->
+      <main class="main-wrap">
+        <!-- Generation Mode Selection -->
+        <div class="generation-modes">
+          <button class="gen-mode-btn" data-gen-mode="image">
+            <div class="gen-mode-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                <circle cx="8.5" cy="8.5" r="1.5"/>
+                <polyline points="21 15 16 10 5 21"/>
+              </svg>
+            </div>
+            <span class="gen-mode-label">Image</span>
+          </button>
+
+          <button class="gen-mode-btn" data-gen-mode="text">
+            <div class="gen-mode-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <span class="gen-mode-label">Text</span>
+          </button>
+
+          <button class="gen-mode-btn" data-gen-mode="audio">
+            <div class="gen-mode-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"/>
+                <circle cx="6" cy="18" r="3"/>
+                <circle cx="18" cy="16" r="3"/>
+              </svg>
+            </div>
+            <span class="gen-mode-label">Audio</span>
+          </button>
+
+          <button class="gen-mode-btn" data-gen-mode="music">
+            <div class="gen-mode-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M9 18V5l12-2v13"/>
+                <circle cx="6" cy="18" r="3"/>
+                <circle cx="18" cy="16" r="3"/>
+              </svg>
+            </div>
+            <span class="gen-mode-label">Music</span>
+          </button>
+
+          <button class="gen-mode-btn" data-gen-mode="video">
+            <div class="gen-mode-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polygon points="23 7 16 12 23 17 23 7"/>
+                <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+              </svg>
+            </div>
+            <span class="gen-mode-label">Video</span>
+          </button>
+
+          <button class="gen-mode-btn" data-gen-mode="transcription">
+            <div class="gen-mode-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                <line x1="12" y1="19" x2="12" y2="23"/>
+                <line x1="8" y1="23" x2="16" y2="23"/>
+              </svg>
+            </div>
+            <span class="gen-mode-label">Transcribe</span>
+          </button>
+        </div>
+
+        <!-- Generation Panels Container -->
+        <div id="generation-container" class="generation-container">
+          <!-- Panels will be injected here dynamically -->
+        </div>
+      </main>
+    </div>
+
     <!-- Toast notification -->
     <div id="toast" class="toast" role="status" aria-live="assertive"></div>
-
-    <!-- Hidden YouTube IFrame probe -->
-    <div id="youtube-probe" class="youtube-probe" aria-hidden="true"></div>
 
     <script type="module" src="./app.js"></script>
   </body>

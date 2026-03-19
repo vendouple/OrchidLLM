@@ -1,1698 +1,1275 @@
-const POLLINATIONS_API_KEY = "pk_BU8jPqG7RBj8yOxh";
+// =========================================================
+// OneLLM Playground - Multi-Modal AI Generation App
+// Powered by Pollinations.ai
+// =========================================================
 
-const MAX_HISTORY_ITEMS = 3;
-const MAX_SUMMARIES_PER_DAY = 2;
-const MAX_CLIP_SECONDS = 5 * 60;
-const TRANSCRIPTION_MODEL = "whisper-large-v3";
-const SUMMARY_MODEL = "gemini-fast";
-
-const SUPPORTED_EXTENSIONS = new Set([
-  ".mp3",
-  ".mp4",
-  ".mpeg",
-  ".mpga",
-  ".m4a",
-  ".wav",
-  ".webm",
-]);
-
-const TERMINAL_STATUSES = new Set(["completed", "error", "interrupted"]);
+// Constants
+const PUBLIC_API_KEY = "pk_BU8jPqG7RBj8yOxh";
+const MAX_DEMO_REQUESTS_PER_DAY = 15;
+const POLLINATIONS_BASE_URL = "https://pollinations.ai";
+const POLLINATIONS_GEN_URL = "https://gen.pollinations.ai";
 
 const STORAGE_KEYS = {
-  history: "onescriber-history-v1",
-  theme: "onescriber-theme-v1",
-  summaryQuota: "onescriber-summary-quota-v1",
-  activeTask: "onescriber-active-task-v1",
-  sessionId: "onescriber-session-id-v1",
-  uiState: "onescriber-ui-state-v1",
+  authMode: "onellm-auth-mode",
+  apiKey: "onellm-api-key",
+  customUrl: "onellm-custom-url",
+  theme: "onellm-theme",
+  history: "onellm-history",
+  demoQuota: "onellm-demo-quota",
+  quotaDate: "onellm-quota-date",
 };
 
-const runtimeConfig = window.ONESCRIBER_CONFIG || {};
-const backendBaseUrl = normalizeBaseUrl(
-  runtimeConfig.railwayBaseUrl || runtimeConfig.backendBaseUrl || "",
-);
-
-const API_CONFIG = {
-  directApiKey: runtimeConfig.apiKey || runtimeConfig.directApiKey || "",
-  directSummaryUrl:
-    runtimeConfig.directSummaryUrl ||
-    "https://gen.pollinations.ai/v1/chat/completions",
-  transcribeYoutubeUrl:
-    runtimeConfig.transcribeYoutubeUrl ||
-    joinUrl(backendBaseUrl, "/api/transcribe/youtube") ||
-    "/api/transcribe/youtube",
-  transcribeUploadUrl:
-    runtimeConfig.transcribeUploadUrl ||
-    joinUrl(backendBaseUrl, "/api/transcribe/upload") ||
-    "/api/transcribe/upload",
-  summarizeProxyUrl:
-    runtimeConfig.summarizeUrl ||
-    joinUrl(backendBaseUrl, "/api/summarize") ||
-    "/api/summarize",
-};
-
+// State management
 const state = {
   theme: "dark",
-  sessionId: "",
-  sourceMode: "upload",
+  authMode: null, // 'demo', 'byop', 'byok'
+  apiKey: null,
+  customUrl: null,
+  currentGenMode: null, // 'image', 'text', 'audio', 'music', 'video', 'transcription'
   history: [],
-  activeEntryId: null,
-  activeTask: null,
-  selectedFile: null,
-  selectedFileInfo: null,
-  youtubeInfo: null,
+  availableModels: {},
+  demoQuota: MAX_DEMO_REQUESTS_PER_DAY,
   isBusy: false,
-  toastTimerId: null,
-  youtubeApiPromise: null,
-  youtubePlayerPromise: null,
 };
 
+// DOM references
 const dom = {
-  body: document.body,
-  themeToggle: document.querySelector("#theme-toggle"),
-  summaryQuota: document.querySelector("#summary-quota"),
-  tabUpload: document.querySelector("#tab-upload"),
-  tabYoutube: document.querySelector("#tab-youtube"),
-  panelUpload: document.querySelector("#panel-upload"),
-  panelYoutube: document.querySelector("#panel-youtube"),
-  fileInput: document.querySelector("#file-input"),
-  dropzone: document.querySelector("#dropzone"),
-  fileMeta: document.querySelector("#file-meta"),
-  youtubeUrl: document.querySelector("#youtube-url"),
-  panelsTrack: document.querySelector("#panels-track"),
-  transcribeButton: document.querySelector("#transcribe-button"),
-  // Progress card
-  progressCard: document.querySelector("#progress-card"),
-  progressPhase: document.querySelector("#progress-phase"),
-  progressSource: document.querySelector("#progress-source"),
-  progressBar: document.querySelector("#progress-bar"),
-  progressMessage: document.querySelector("#progress-message"),
-  progressTimeline: document.querySelector("#progress-timeline"),
-  // Result
-  transcriptCard: document.querySelector("#transcript-card"),
-  resultMeta: document.querySelector("#result-meta"),
-  transcriptOutput: document.querySelector("#transcript-output"),
-  downloadTranscript: document.querySelector("#download-transcript"),
-  summarizeButton: document.querySelector("#summarize-button"),
-  summaryCard: document.querySelector("#summary-card"),
-  summaryOutput: document.querySelector("#summary-output"),
-  historyList: document.querySelector("#history-list"),
-  trimDialog: document.querySelector("#trim-dialog"),
-  trimDescription: document.querySelector("#trim-description"),
-  trimStart: document.querySelector("#trim-start"),
-  trimEnd: document.querySelector("#trim-end"),
-  trimFeedback: document.querySelector("#trim-feedback"),
-  trimApply: document.querySelector("#trim-apply"),
-  toast: document.querySelector("#toast"),
-  youtubeProbe: document.querySelector("#youtube-probe"),
-  historyToggle: document.querySelector("#history-toggle"),
-  historyClose: document.querySelector("#history-close"),
-  historyPopup: document.querySelector("#history-popup"),
-  historyBackdrop: document.querySelector("#history-backdrop"),
+  // Pages
+  loginPage: document.getElementById("login-page"),
+  playgroundPage: document.getElementById("playground-page"),
+
+  // Login page elements
+  modeCards: document.querySelectorAll(".mode-card"),
+
+  // Dialogs
+  byopDialog: document.getElementById("byop-dialog"),
+  byopKeyInput: document.getElementById("byop-key-input"),
+  byopCancel: document.getElementById("byop-cancel"),
+  byopSubmit: document.getElementById("byop-submit"),
+  byopError: document.getElementById("byop-error"),
+
+  byokDialog: document.getElementById("byok-dialog"),
+  byokUrlInput: document.getElementById("byok-url-input"),
+  byokKeyInput: document.getElementById("byok-key-input"),
+  byokCancel: document.getElementById("byok-cancel"),
+  byokSubmit: document.getElementById("byok-submit"),
+  byokError: document.getElementById("byok-error"),
+
+  // Playground elements
+  themeToggle: document.getElementById("theme-toggle"),
+  historyToggle: document.getElementById("history-toggle"),
+  historyPopup: document.getElementById("history-popup"),
+  historyBackdrop: document.getElementById("history-backdrop"),
+  historyClose: document.getElementById("history-close"),
+  historyList: document.getElementById("history-list"),
+  clearHistory: document.getElementById("clear-history"),
+  exportBtn: document.getElementById("export-btn"),
+  logoutBtn: document.getElementById("logout-btn"),
+  modeBadge: document.getElementById("mode-badge"),
+  quotaDisplay: document.getElementById("quota-display"),
+
+  // Generation modes
+  genModeButtons: document.querySelectorAll(".gen-mode-btn"),
+  generationContainer: document.getElementById("generation-container"),
+
+  // Toast
+  toast: document.getElementById("toast"),
 };
 
-initialize();
+// =========================================================
+// Utility Functions
+// =========================================================
 
-function initialize() {
-  restoreTheme();
-  restoreSessionId();
-  restoreHistory();
-  restoreUiState();
-  restoreActiveTask();
-  finalizeAbandonedTasks();
-  bindEvents();
-  renderSummaryQuota();
-  renderSourceMode();
-  renderFileMeta();
-  renderHistory();
-  renderActiveEntry();
+function generateId() {
+  return `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 }
 
-function bindEvents() {
-  dom.themeToggle.addEventListener("click", handleThemeToggle);
-  dom.tabUpload.addEventListener("click", () => setSourceMode("upload"));
-  dom.tabYoutube.addEventListener("click", () => setSourceMode("youtube"));
-  dom.fileInput.addEventListener("change", handleFileSelection);
-  dom.transcribeButton.addEventListener("click", handleTranscribe);
-  dom.downloadTranscript.addEventListener("click", handleDownloadTranscript);
-  dom.summarizeButton.addEventListener("click", () => handleSummarize());
-  dom.historyList.addEventListener("click", handleHistoryAction);
-  dom.youtubeUrl.addEventListener("input", () => {
-    // Clear stale cached info when the user types a new URL
-    state.youtubeInfo = null;
-    console.log("[Onescriber] YouTube URL changed, cleared cached info.");
-  });
-  dom.trimStart.addEventListener("input", validateTrimDialog);
-  dom.trimEnd.addEventListener("input", validateTrimDialog);
-  dom.trimDialog.addEventListener("close", handleTrimDialogClose);
-  dom.historyToggle.addEventListener("click", toggleHistoryPopup);
-  dom.historyClose.addEventListener("click", closeHistoryPopup);
-  dom.historyBackdrop.addEventListener("click", closeHistoryPopup);
-  document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") closeHistoryPopup();
-  });
-
-  ["dragenter", "dragover"].forEach((eventName) => {
-    dom.dropzone.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      dom.dropzone.classList.add("is-dragging");
-    });
-  });
-
-  ["dragleave", "drop"].forEach((eventName) => {
-    dom.dropzone.addEventListener(eventName, (event) => {
-      event.preventDefault();
-      dom.dropzone.classList.remove("is-dragging");
-    });
-  });
-
-  dom.dropzone.addEventListener("drop", async (event) => {
-    const [file] = [...(event.dataTransfer?.files || [])];
-    if (!file) {
-      return;
-    }
-
-    dom.fileInput.files = event.dataTransfer.files;
-    await setSelectedFile(file);
-  });
+function formatDate(timestamp) {
+  const date = new Date(timestamp);
+  return date.toLocaleString();
 }
 
-function restoreTheme() {
-  const storedTheme = localStorage.getItem(STORAGE_KEYS.theme);
-  const preferred =
-    storedTheme ||
-    (window.matchMedia("(prefers-color-scheme: light)").matches
-      ? "light"
-      : "dark");
-  setTheme(preferred, false);
+function showToast(message, duration = 3000) {
+  dom.toast.textContent = message;
+  dom.toast.classList.add("is-visible");
+  setTimeout(() => {
+    dom.toast.classList.remove("is-visible");
+  }, duration);
 }
 
-function restoreSessionId() {
-  const existing = sessionStorage.getItem(STORAGE_KEYS.sessionId);
-  state.sessionId = existing || crypto.randomUUID();
-  sessionStorage.setItem(STORAGE_KEYS.sessionId, state.sessionId);
-}
+function resetDemoQuotaIfNeeded() {
+  const today = new Date().toDateString();
+  const lastQuotaDate = localStorage.getItem(STORAGE_KEYS.quotaDate);
 
-function restoreHistory() {
-  const history = readJson(localStorage.getItem(STORAGE_KEYS.history), []);
-  state.history = Array.isArray(history)
-    ? history.map(normalizeHistoryEntry).slice(0, MAX_HISTORY_ITEMS)
-    : [];
-  state.activeEntryId = state.history[0]?.id || null;
-}
-
-function restoreUiState() {
-  const uiState = readJson(sessionStorage.getItem(STORAGE_KEYS.uiState), {});
-  if (uiState?.youtubeUrl) {
-    dom.youtubeUrl.value = uiState.youtubeUrl;
-  }
-}
-
-function restoreActiveTask() {
-  const task = readJson(sessionStorage.getItem(STORAGE_KEYS.activeTask), null);
-  if (!task) {
-    return;
-  }
-
-  state.activeTask = { ...task, restored: true };
-  if (task.entryId) {
-    state.activeEntryId = task.entryId;
-  }
-}
-
-function finalizeAbandonedTasks() {
-  if (state.activeTask) {
-    return;
-  }
-
-  let didUpdate = false;
-  state.history = state.history.map((entry) => {
-    if (TERMINAL_STATUSES.has(entry.status)) {
-      return entry;
-    }
-
-    didUpdate = true;
-    return {
-      ...entry,
-      status: "interrupted",
-      errorMessage:
-        entry.errorMessage ||
-        "The last run ended before the result returned. Start it again to continue.",
-    };
-  });
-
-  if (didUpdate) {
-    persistHistory();
-  }
-}
-
-function toggleHistoryPopup() {
-  const isOpen = dom.historyPopup.getAttribute("aria-hidden") === "false";
-  if (isOpen) {
-    closeHistoryPopup();
+  if (lastQuotaDate !== today) {
+    state.demoQuota = MAX_DEMO_REQUESTS_PER_DAY;
+    localStorage.setItem(STORAGE_KEYS.demoQuota, state.demoQuota.toString());
+    localStorage.setItem(STORAGE_KEYS.quotaDate, today);
   } else {
-    openHistoryPopup();
+    const savedQuota = localStorage.getItem(STORAGE_KEYS.demoQuota);
+    state.demoQuota = savedQuota ? parseInt(savedQuota, 10) : MAX_DEMO_REQUESTS_PER_DAY;
   }
 }
 
-function openHistoryPopup() {
-  dom.historyPopup.setAttribute("aria-hidden", "false");
-  dom.historyToggle.setAttribute("aria-expanded", "true");
-  dom.historyBackdrop.classList.add("is-open");
+function decrementDemoQuota() {
+  if (state.authMode === "demo") {
+    state.demoQuota = Math.max(0, state.demoQuota - 1);
+    localStorage.setItem(STORAGE_KEYS.demoQuota, state.demoQuota.toString());
+    updateQuotaDisplay();
+  }
+}
+
+function updateQuotaDisplay() {
+  if (state.authMode === "demo") {
+    dom.quotaDisplay.textContent = `${state.demoQuota} requests left`;
+    dom.quotaDisplay.hidden = false;
+  } else {
+    dom.quotaDisplay.hidden = true;
+  }
+}
+
+// =========================================================
+// Storage Functions
+// =========================================================
+
+function saveAuthMode() {
+  if (state.authMode) {
+    localStorage.setItem(STORAGE_KEYS.authMode, state.authMode);
+  }
+  if (state.apiKey) {
+    localStorage.setItem(STORAGE_KEYS.apiKey, state.apiKey);
+  }
+  if (state.customUrl) {
+    localStorage.setItem(STORAGE_KEYS.customUrl, state.customUrl);
+  }
+}
+
+function loadAuthMode() {
+  state.authMode = localStorage.getItem(STORAGE_KEYS.authMode);
+  state.apiKey = localStorage.getItem(STORAGE_KEYS.apiKey);
+  state.customUrl = localStorage.getItem(STORAGE_KEYS.customUrl);
+
+  return state.authMode !== null;
+}
+
+function clearAuthMode() {
+  state.authMode = null;
+  state.apiKey = null;
+  state.customUrl = null;
+  localStorage.removeItem(STORAGE_KEYS.authMode);
+  localStorage.removeItem(STORAGE_KEYS.apiKey);
+  localStorage.removeItem(STORAGE_KEYS.customUrl);
+}
+
+function saveHistory() {
+  try {
+    localStorage.setItem(STORAGE_KEYS.history, JSON.stringify(state.history));
+  } catch (err) {
+    console.error("Failed to save history:", err);
+  }
+}
+
+function loadHistory() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEYS.history);
+    state.history = saved ? JSON.parse(saved) : [];
+  } catch (err) {
+    console.error("Failed to load history:", err);
+    state.history = [];
+  }
+}
+
+function addToHistory(entry) {
+  state.history.unshift(entry);
+  // Keep only last 100 entries
+  if (state.history.length > 100) {
+    state.history = state.history.slice(0, 100);
+  }
+  saveHistory();
   renderHistory();
 }
 
-function closeHistoryPopup() {
-  dom.historyPopup.setAttribute("aria-hidden", "true");
-  dom.historyToggle.setAttribute("aria-expanded", "false");
-  dom.historyBackdrop.classList.remove("is-open");
-}
-
-function handleThemeToggle() {
-  setTheme(state.theme === "dark" ? "light" : "dark", true);
-}
-
-function setTheme(theme, persist) {
-  state.theme = theme === "light" ? "light" : "dark";
-  document.documentElement.dataset.theme = state.theme;
-  if (persist) {
-    localStorage.setItem(STORAGE_KEYS.theme, state.theme);
-  }
-}
-
-function setSourceMode(mode) {
-  if (mode === "youtube") return; // YouTube is temporarily disabled
-  state.sourceMode = "upload";
-  persistUiState();
-  renderSourceMode();
-}
-
-function renderSourceMode() {
-  const isUpload = state.sourceMode === "upload";
-  dom.tabUpload.classList.toggle("is-active", isUpload);
-  dom.tabYoutube.classList.toggle("is-active", !isUpload);
-  dom.tabUpload.setAttribute("aria-selected", String(isUpload));
-  dom.tabYoutube.setAttribute("aria-selected", String(!isUpload));
-  dom.panelsTrack.classList.toggle("show-youtube", !isUpload);
-  console.log("[Onescriber] Source mode set to:", state.sourceMode);
-}
-
-async function handleFileSelection(event) {
-  const [file] = [...(event.target.files || [])];
-  await setSelectedFile(file || null);
-}
-
-async function setSelectedFile(file) {
-  state.selectedFile = null;
-  state.selectedFileInfo = null;
-
-  if (!file) {
-    renderFileMeta();
-    return;
-  }
-
-  console.log(
-    "[Onescriber] File selected:",
-    file.name,
-    "type:",
-    file.type,
-    "size:",
-    file.size,
-  );
-  const extension = getFileExtension(file.name);
-  if (!SUPPORTED_EXTENSIONS.has(extension)) {
-    showToast(
-      "Unsupported file type. Use mp3, mp4, mpeg, mpga, m4a, wav, or webm.",
-      true,
-    );
-    dom.fileInput.value = "";
-    renderFileMeta();
-    return;
-  }
-
-  try {
-    const durationSeconds = await loadMediaDuration(file);
-    state.selectedFile = file;
-    state.selectedFileInfo = {
-      name: file.name,
-      type: file.type || guessMimeTypeFromExtension(extension),
-      size: file.size,
-      extension,
-      durationSeconds,
-      isOverLimit: durationSeconds > MAX_CLIP_SECONDS,
-    };
-    renderFileMeta();
-    persistUiState();
-  } catch (error) {
-    const message = getErrorMessage(error, "Could not inspect this file.");
-    showToast(message, true);
-    renderFileMeta();
-  }
-}
-
-async function handleInspectYoutube() {
-  const url = dom.youtubeUrl.value.trim();
-  if (!url) {
-    showToast("Paste a YouTube link first.", true);
-    return;
-  }
-
-  try {
-    const youtubeInfo = await inspectYoutubeUrl(url);
-    state.youtubeInfo = youtubeInfo;
-    persistUiState();
-    renderYoutubeMeta();
-  } catch (error) {
-    const message = getErrorMessage(
-      error,
-      "Could not read YouTube metadata for that link.",
-    );
-    state.youtubeInfo = null;
-    renderYoutubeMeta();
-    showToast(message, true);
-  }
-}
-
-async function handleTranscribe() {
-  if (state.isBusy) {
-    return;
-  }
-
-  const source = await resolveCurrentSource();
-  if (!source) {
-    return;
-  }
-
-  console.log(
-    "[Onescriber] Transcribe triggered. Source kind:",
-    source.kind,
-    "label:",
-    source.label,
-  );
-
-  const clipRange = null;
-  if (source.durationSeconds > MAX_CLIP_SECONDS) {
-    showToast(
-      `"${source.label}" is over 5 minutes. Please trim it before uploading.`,
-      true,
-    );
-    return;
-  }
-
-  const entry = createHistoryEntry({ source, clipRange });
-  upsertHistoryEntry(entry);
-  state.activeEntryId = entry.id;
-  setBusyState(true);
-  persistHistory();
-  renderHistory();
-
-  // Define the steps for this job
-  const steps =
-    source.kind === "upload"
-      ? ["Uploading file", "Processing audio", "Transcribing"]
-      : ["Connecting to server", "Downloading audio", "Transcribing"];
-
-  showProgressCard({
-    phase: source.kind === "upload" ? "Uploading" : "Preparing",
-    source: source.label,
-    message:
-      source.kind === "upload"
-        ? clipRange
-          ? "Sending the file and clip range to the backend for trimming and transcription."
-          : "Sending the file for transcription."
-        : "Sending the YouTube link to the backend for processing.",
-    steps,
-    activeStep: 0,
-  });
-
-  try {
-    let transcriptText = "";
-
-    if (source.kind === "upload") {
-      updateProgressCard({
-        phase: "Uploading",
-        activeStep: 0,
-        message: "Sending the file to Pollinations for transcription.",
-      });
-      updateEntryStatus(entry.id, "transcribing");
-      renderHistory();
-      transcriptText = await transcribeUploadedFile(
-        source.file,
-        source,
-        clipRange,
-        (stepIndex, message) =>
-          updateProgressCard({
-            phase: "Transcribing",
-            activeStep: stepIndex,
-            message,
-          }),
-      );
-    } else {
-      updateProgressCard({
-        phase: "Connecting",
-        activeStep: 0,
-        message: "Sending the YouTube link to the backend for processing.",
-      });
-      updateEntryStatus(entry.id, "transcribing");
-      renderHistory();
-      console.log(
-        "[Onescriber] Starting YouTube transcription for:",
-        source.youtubeUrl,
-      );
-      transcriptText = await transcribeYoutubeSource(
-        source,
-        clipRange,
-        (stepIndex, message) =>
-          updateProgressCard({
-            phase: "Transcribing",
-            activeStep: stepIndex,
-            message,
-          }),
-      );
-    }
-
-    const completedEntry = updateEntry(entry.id, {
-      status: "completed",
-      transcript: transcriptText,
-      errorMessage: "",
-      completedAt: new Date().toISOString(),
-    });
-
-    clearActiveTask();
+function clearHistoryData() {
+  if (confirm("Are you sure you want to clear all history? This cannot be undone.")) {
+    state.history = [];
+    saveHistory();
     renderHistory();
-    renderActiveEntry();
-    // Dismiss the progress card with a spring bounce, then reveal transcript
-    await dismissProgressCard();
-    revealCard(dom.transcriptCard);
-    showToast(`Transcript ready for ${completedEntry.title}.`);
-  } catch (error) {
-    const baseMessage = getErrorMessage(
-      error,
-      "The transcription request failed.",
-    );
-    const youtubeHint =
-      source.kind === "youtube"
-        ? " The video may be too long or unavailable — try downloading it and uploading a local file instead."
-        : "";
-    const message = baseMessage + youtubeHint;
-    console.error("[Onescriber] Transcription error:", error);
-    updateEntry(entry.id, {
-      status: "error",
-      errorMessage: message,
-      completedAt: new Date().toISOString(),
-    });
-    clearActiveTask();
-    renderHistory();
-    // Show error state in progress card
-    updateProgressCard({ phase: "Error", message, isError: true });
-    showToast(message, true);
-  } finally {
-    setBusyState(false);
+    showToast("History cleared");
   }
 }
 
-async function resolveCurrentSource() {
-  if (state.sourceMode === "upload") {
-    if (!state.selectedFile || !state.selectedFileInfo) {
-      showToast("Choose a media file first.", true);
-      return null;
-    }
-
-    return {
-      kind: "upload",
-      label: state.selectedFileInfo.name,
-      title: state.selectedFileInfo.name,
-      durationSeconds: state.selectedFileInfo.durationSeconds,
-      file: state.selectedFile,
-      mimeType: state.selectedFileInfo.type,
-      extension: state.selectedFileInfo.extension,
-    };
-  }
-
-  const rawUrl = dom.youtubeUrl.value.trim();
-  if (!rawUrl) {
-    showToast("Paste a YouTube link first.", true);
-    console.log("[Onescriber] YouTube transcribe blocked: no URL.");
-    return null;
-  }
-
-  const videoId = parseYoutubeVideoId(rawUrl);
-  if (!videoId) {
-    showToast("That doesn't look like a valid YouTube URL.", true);
-    console.log(
-      "[Onescriber] YouTube transcribe blocked: could not parse video ID from:",
-      rawUrl,
-    );
-    return null;
-  }
-
-  console.log("[Onescriber] YouTube source resolved:", { rawUrl, videoId });
-  return {
-    kind: "youtube",
-    label: rawUrl,
-    title: `YouTube: ${videoId}`,
-    durationSeconds: 0, // unknown — server determines and may reject if too long
-    youtubeUrl: rawUrl,
-    videoId,
-  };
+function exportHistory() {
+  const dataStr = JSON.stringify(state.history, null, 2);
+  const dataBlob = new Blob([dataStr], { type: "application/json" });
+  const url = URL.createObjectURL(dataBlob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `onellm-history-${Date.now()}.json`;
+  link.click();
+  URL.revokeObjectURL(url);
+  showToast("History exported");
 }
 
-async function transcribeUploadedFile(file, source, _clipRange, onProgress) {
-  const TRANSCRIPTION_URL =
-    "https://gen.pollinations.ai/v1/audio/transcriptions";
-  const formData = new FormData();
-  formData.append("file", file, file.name);
-  formData.append("model", TRANSCRIPTION_MODEL);
+// =========================================================
+// Theme Functions
+// =========================================================
 
-  onProgress?.(0, "Uploading file to Pollinations…");
-  const progressTimers = _simulateProgress(onProgress, [
-    [1800, 1, "Processing audio…"],
-    [4000, 2, "Running Whisper transcription…"],
-  ]);
+function loadTheme() {
+  const saved = localStorage.getItem(STORAGE_KEYS.theme);
+  state.theme = saved || "dark";
+  document.documentElement.setAttribute("data-theme", state.theme);
+}
 
-  const headers = {
-    Authorization: `Bearer ${POLLINATIONS_API_KEY}`,
-  };
+function toggleTheme() {
+  state.theme = state.theme === "dark" ? "light" : "dark";
+  document.documentElement.setAttribute("data-theme", state.theme);
+  localStorage.setItem(STORAGE_KEYS.theme, state.theme);
+}
 
+// =========================================================
+// API Functions
+// =========================================================
+
+function getApiKey() {
+  if (state.authMode === "demo") {
+    return PUBLIC_API_KEY;
+  }
+  return state.apiKey || PUBLIC_API_KEY;
+}
+
+function getBaseUrl() {
+  if (state.authMode === "byok" && state.customUrl) {
+    return state.customUrl;
+  }
+  return POLLINATIONS_GEN_URL;
+}
+
+async function fetchAvailableModels() {
   try {
-    const response = await fetch(TRANSCRIPTION_URL, {
-      method: "POST",
-      headers,
-      body: formData,
-    });
+    const baseUrl = getBaseUrl();
+    const apiKey = getApiKey();
 
-    progressTimers.forEach(clearTimeout);
-    console.log(
-      "[Onescriber] Transcription response:",
-      response.status,
-      response.statusText,
-    );
-    const payload = await parseApiResponse(response, TRANSCRIPTION_URL);
-    console.log("[Onescriber] Transcription payload:", payload);
-    return extractTranscriptText(payload, source.label);
-  } catch (err) {
-    progressTimers.forEach(clearTimeout);
-    throw err;
-  }
-}
-
-async function transcribeYoutubeSource(source, clipRange, onProgress) {
-  const requestBody = {
-    youtubeUrl: source.youtubeUrl,
-    model: TRANSCRIPTION_MODEL,
-    tier: "free",
-    ...(clipRange
-      ? {
-          clipStartSeconds: clipRange.startSeconds,
-          clipEndSeconds: clipRange.endSeconds,
-        }
-      : {}),
-  };
-  console.log(
-    "[Onescriber] Sending YouTube transcription request to:",
-    API_CONFIG.transcribeYoutubeUrl,
-  );
-  console.log("[Onescriber] YouTube request body:", requestBody);
-
-  // Simulate progress steps while the YouTube download+transcription is in-flight
-  onProgress?.(0, "Connected — downloading audio from YouTube…");
-  const progressTimers = _simulateProgress(onProgress, [
-    [3500, 1, "Audio downloaded — running Whisper transcription…"],
-    [7000, 2, "Transcription in progress…"],
-  ]);
-
-  try {
-    const response = await fetch(API_CONFIG.transcribeYoutubeUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    progressTimers.forEach(clearTimeout);
-    console.log(
-      "[Onescriber] YouTube transcription response:",
-      response.status,
-      response.statusText,
-    );
-    const payload = await parseApiResponse(
-      response,
-      API_CONFIG.transcribeYoutubeUrl,
-    );
-    console.log("[Onescriber] YouTube transcription payload:", payload);
-    return extractTranscriptText(payload, source.label);
-  } catch (err) {
-    progressTimers.forEach(clearTimeout);
-    throw err;
-  }
-}
-
-// Helper: schedule progress step updates during a long-running fetch.
-// Returns an array of timer IDs so callers can cancel them on early return.
-function _simulateProgress(onProgress, schedule) {
-  if (!onProgress) return [];
-  return schedule.map(([delay, stepIndex, message]) =>
-    setTimeout(() => onProgress(stepIndex, message), delay),
-  );
-}
-
-async function handleSummarize(entryId = state.activeEntryId) {
-  const entry = getHistoryEntry(entryId);
-  if (!entry?.transcript) {
-    showToast("Choose a completed transcript first.", true);
-    return;
-  }
-
-  const quota = getSummaryQuota();
-  if (quota.count >= MAX_SUMMARIES_PER_DAY) {
-    showToast("You have already used both free summaries for today.", true);
-    renderSummaryQuota();
-    return;
-  }
-
-  setBusyState(true);
-
-  // Show progress card for summarization
-  showProgressCard({
-    phase: "Summarizing",
-    source: entry.title,
-    message: "Sending the transcript to gemini-fast.",
-    steps: ["Sending transcript", "Generating summary"],
-    activeStep: 0,
-  });
-
-  try {
-    updateProgressCard({
-      phase: "Generating",
-      activeStep: 1,
-      message: "AI is writing the summary.",
-    });
-    const summary = await summarizeTranscript(entry.transcript);
-    incrementSummaryQuota();
-    updateEntry(entry.id, {
-      summary,
-      summaryUpdatedAt: new Date().toISOString(),
-    });
-    renderSummaryQuota();
-    renderHistory();
-    renderActiveEntry();
-    await dismissProgressCard();
-    revealCard(dom.summaryCard);
-    showToast("Summary generated.");
-  } catch (error) {
-    const message = getErrorMessage(error, "Summary generation failed.");
-    updateProgressCard({ phase: "Error", message, isError: true });
-    showToast(message, true);
-  } finally {
-    setBusyState(false);
-  }
-}
-
-async function summarizeTranscript(transcript) {
-  const SUMMARY_URL = "https://gen.pollinations.ai/v1/chat/completions";
-  const prompt = [
-    "Summarize the transcript below.",
-    "Return plain text with three short sections:",
-    "Summary:",
-    "Key points:",
-    "Action items:",
-    "Keep it concise and grounded in the transcript.",
-    "Transcript:",
-    transcript,
-  ].join("\n\n");
-
-  const headers = {
-    "Content-Type": "application/json",
-    Accept: "application/json",
-    Authorization: `Bearer ${POLLINATIONS_API_KEY}`,
-  };
-
-  const response = await fetch(SUMMARY_URL, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      model: SUMMARY_MODEL,
-      messages: [
-        { role: "system", content: "You are a helpful assistant." },
-        { role: "user", content: prompt },
-      ],
-    }),
-  });
-
-  const payload = await parseApiResponse(response, SUMMARY_URL);
-  return extractSummaryText(payload);
-}
-
-function handleDownloadTranscript() {
-  const entry = getActiveEntry();
-  if (!entry?.transcript) {
-    return;
-  }
-
-  const content = [
-    `Title: ${entry.title}`,
-    `Created: ${formatDateTime(entry.createdAt)}`,
-    `Source: ${entry.sourceMode}`,
-    `Duration: ${formatDuration(entry.durationSeconds)}`,
-    entry.clipStartSeconds != null && entry.clipEndSeconds != null
-      ? `Clip: ${formatDuration(entry.clipStartSeconds)} - ${formatDuration(entry.clipEndSeconds)}`
-      : null,
-    "",
-    entry.transcript,
-  ]
-    .filter(Boolean)
-    .join("\n");
-
-  downloadTextFile(`${safeSlug(entry.title)}-transcript.txt`, content);
-}
-
-function handleHistoryAction(event) {
-  const button = event.target.closest("[data-action]");
-  if (!button) {
-    return;
-  }
-
-  const entryId = button.dataset.entryId;
-  const action = button.dataset.action;
-  if (!entryId || !action) {
-    return;
-  }
-
-  if (action === "activate") {
-    state.activeEntryId = entryId;
-    renderHistory();
-    renderActiveEntry();
-    return;
-  }
-
-  if (action === "download") {
-    state.activeEntryId = entryId;
-    renderHistory();
-    renderActiveEntry();
-    handleDownloadTranscript();
-    return;
-  }
-
-  if (action === "summarize") {
-    state.activeEntryId = entryId;
-    renderHistory();
-    renderActiveEntry();
-    handleSummarize(entryId);
-  }
-}
-
-function createHistoryEntry({ source, clipRange }) {
-  return normalizeHistoryEntry({
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
-    completedAt: null,
-    title: source.title,
-    sourceMode: source.kind,
-    sourceLabel: source.label,
-    durationSeconds: source.durationSeconds,
-    clipStartSeconds: clipRange?.startSeconds ?? null,
-    clipEndSeconds: clipRange?.endSeconds ?? null,
-    status: "preparing",
-    transcript: "",
-    summary: "",
-    errorMessage: "",
-  });
-}
-
-function normalizeHistoryEntry(entry) {
-  return {
-    id: entry.id || crypto.randomUUID(),
-    createdAt: entry.createdAt || new Date().toISOString(),
-    completedAt: entry.completedAt || null,
-    title: entry.title || entry.sourceLabel || "Untitled transcript",
-    sourceMode: entry.sourceMode === "youtube" ? "youtube" : "upload",
-    sourceLabel: entry.sourceLabel || entry.title || "Source",
-    durationSeconds: Number(entry.durationSeconds) || 0,
-    clipStartSeconds:
-      entry.clipStartSeconds == null ? null : Number(entry.clipStartSeconds),
-    clipEndSeconds:
-      entry.clipEndSeconds == null ? null : Number(entry.clipEndSeconds),
-    status: entry.status || "completed",
-    transcript: entry.transcript || "",
-    summary: entry.summary || "",
-    summaryUpdatedAt: entry.summaryUpdatedAt || null,
-    errorMessage: entry.errorMessage || "",
-  };
-}
-
-function upsertHistoryEntry(entry) {
-  const filtered = state.history.filter((item) => item.id !== entry.id);
-  state.history = [entry, ...filtered].slice(0, MAX_HISTORY_ITEMS);
-  persistHistory();
-}
-
-function updateEntry(entryId, patch) {
-  let updatedEntry = null;
-  state.history = state.history.map((entry) => {
-    if (entry.id !== entryId) {
-      return entry;
-    }
-
-    updatedEntry = normalizeHistoryEntry({ ...entry, ...patch });
-    return updatedEntry;
-  });
-  persistHistory();
-  return updatedEntry;
-}
-
-function updateEntryStatus(entryId, status) {
-  updateEntry(entryId, { status });
-}
-
-function getHistoryEntry(entryId) {
-  return state.history.find((entry) => entry.id === entryId) || null;
-}
-
-function getActiveEntry() {
-  return getHistoryEntry(state.activeEntryId) || state.history[0] || null;
-}
-
-function persistHistory() {
-  localStorage.setItem(
-    STORAGE_KEYS.history,
-    JSON.stringify(state.history.slice(0, MAX_HISTORY_ITEMS)),
-  );
-}
-
-function persistUiState() {
-  sessionStorage.setItem(
-    STORAGE_KEYS.uiState,
-    JSON.stringify({
-      sourceMode: state.sourceMode,
-      youtubeUrl: dom.youtubeUrl.value.trim(),
-    }),
-  );
-}
-
-function setBusyState(isBusy) {
-  state.isBusy = isBusy;
-  dom.transcribeButton.disabled = isBusy;
-  const hasTranscript = Boolean(getActiveEntry()?.transcript);
-  dom.summarizeButton.disabled = isBusy || !hasTranscript;
-  dom.downloadTranscript.disabled = !hasTranscript;
-}
-
-function updateTask(entryId, task) {
-  state.activeTask = {
-    entryId,
-    updatedAt: new Date().toISOString(),
-    ...task,
-  };
-  sessionStorage.setItem(
-    STORAGE_KEYS.activeTask,
-    JSON.stringify(state.activeTask),
-  );
-}
-
-function clearActiveTask() {
-  state.activeTask = null;
-  sessionStorage.removeItem(STORAGE_KEYS.activeTask);
-}
-
-/* --- Progress Card helpers --- */
-
-let _progressSteps = [];
-
-function showProgressCard({
-  phase,
-  source,
-  message,
-  steps = [],
-  activeStep = 0,
-}) {
-  _progressSteps = steps;
-  dom.progressCard.hidden = false;
-  dom.progressCard.classList.remove("is-dismissing");
-  dom.progressPhase.textContent = phase;
-  dom.progressSource.textContent = source || "";
-  dom.progressMessage.textContent = message || "";
-  dom.progressBar.classList.add("is-indeterminate");
-  dom.progressBar.style.width = "0%";
-  _renderProgressTimeline(activeStep, false);
-}
-
-function updateProgressCard({ phase, activeStep, message, isError = false }) {
-  if (phase) dom.progressPhase.textContent = phase;
-  if (message !== undefined) dom.progressMessage.textContent = message;
-  if (activeStep !== undefined) {
-    _renderProgressTimeline(activeStep, isError);
-    // Approximate deterministic fill: (step+1)/total * 90%, cap at 90 until done
-    const pct = Math.min(
-      90,
-      Math.round(((activeStep + 1) / Math.max(1, _progressSteps.length)) * 90),
-    );
-    if (!isError) {
-      dom.progressBar.classList.remove("is-indeterminate");
-      dom.progressBar.style.width = `${pct}%`;
-    }
-  }
-  if (isError) {
-    dom.progressBar.classList.remove("is-indeterminate");
-    dom.progressBar.style.width = "0%";
-    _renderProgressTimeline(-1, true);
-  }
-}
-
-function _renderProgressTimeline(activeStep, isError) {
-  dom.progressTimeline.innerHTML = _progressSteps
-    .map((label, i) => {
-      let cls = "progress-step";
-      if (isError && i === activeStep) cls += " is-error";
-      else if (i < activeStep) cls += " is-done";
-      else if (i === activeStep) cls += " is-active";
-      return `<li class="${cls}"><span class="progress-step-dot"></span>${escapeHtml(label)}</li>`;
-    })
-    .join("");
-}
-
-function dismissProgressCard() {
-  return new Promise((resolve) => {
-    // Snap bar to 100% then dismiss
-    dom.progressBar.classList.remove("is-indeterminate");
-    dom.progressBar.style.width = "100%";
-    setTimeout(() => {
-      dom.progressCard.classList.add("is-dismissing");
-      dom.progressCard.addEventListener(
-        "animationend",
-        () => {
-          dom.progressCard.hidden = true;
-          dom.progressCard.classList.remove("is-dismissing");
-          dom.progressBar.style.width = "0%";
-          resolve();
+    // For Pollinations, try to fetch models
+    if (baseUrl.includes("pollinations.ai")) {
+      const response = await fetch(`${baseUrl}/v1/models`, {
+        headers: {
+          Authorization: `Bearer ${apiKey}`,
         },
-        { once: true },
-      );
-    }, 300);
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        state.availableModels = data.data || [];
+        return state.availableModels;
+      }
+    }
+
+    // Fallback to default models
+    return getDefaultModels();
+  } catch (err) {
+    console.error("Failed to fetch models:", err);
+    return getDefaultModels();
+  }
+}
+
+function getDefaultModels() {
+  return {
+    image: ["flux", "flux-realism", "flux-cablyai", "flux-anime", "flux-3d", "turbo"],
+    text: ["openai", "gemini-fast", "claude-sonnet", "llama-v3p1-405b"],
+    audio: ["parler-tts"],
+    music: ["music"],
+    video: ["video"],
+    transcription: ["whisper-large-v3"],
+  };
+}
+
+async function validateByopKey(apiKey) {
+  try {
+    const response = await fetch(`${POLLINATIONS_GEN_URL}/v1/models`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    });
+    return response.ok;
+  } catch (err) {
+    return false;
+  }
+}
+
+async function validateByokEndpoint(url, apiKey) {
+  try {
+    const response = await fetch(`${url}/models`, {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+      },
+    });
+    return response.ok;
+  } catch (err) {
+    return false;
+  }
+}
+
+// =========================================================
+// Generation API Functions
+// =========================================================
+
+async function generateImage(prompt, model = "flux") {
+  const baseUrl = getBaseUrl();
+  const apiKey = getApiKey();
+
+  // Pollinations direct image generation
+  const imageUrl = `${POLLINATIONS_BASE_URL}/p/${encodeURIComponent(prompt)}?model=${model}&width=1024&height=1024&seed=${Math.floor(Math.random() * 1000000)}&nologo=true`;
+
+  return {
+    type: "image",
+    url: imageUrl,
+    prompt,
+    model,
+    timestamp: Date.now(),
+  };
+}
+
+async function generateText(prompt, model = "openai", systemPrompt = "") {
+  const baseUrl = getBaseUrl();
+  const apiKey = getApiKey();
+
+  const messages = [];
+  if (systemPrompt) {
+    messages.push({ role: "system", content: systemPrompt });
+  }
+  messages.push({ role: "user", content: prompt });
+
+  const response = await fetch(`${baseUrl}/v1/chat/completions`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      messages,
+      stream: false,
+    }),
   });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+  const text = data.choices?.[0]?.message?.content || "";
+
+  return {
+    type: "text",
+    text,
+    prompt,
+    model,
+    timestamp: Date.now(),
+  };
 }
 
-function revealCard(cardEl) {
-  if (!cardEl) return;
-  cardEl.hidden = false;
-  // Force reflow so the animation triggers
-  void cardEl.offsetWidth;
-  cardEl.classList.add("is-revealed");
+async function generateAudio(text, model = "parler-tts", voice = "default") {
+  const baseUrl = getBaseUrl();
+  const apiKey = getApiKey();
+
+  const response = await fetch(`${baseUrl}/v1/audio/speech`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: JSON.stringify({
+      model,
+      input: text,
+      voice,
+    }),
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+
+  const blob = await response.blob();
+  const audioUrl = URL.createObjectURL(blob);
+
+  return {
+    type: "audio",
+    url: audioUrl,
+    text,
+    model,
+    timestamp: Date.now(),
+  };
 }
 
-function renderFileMeta() {
-  if (!state.selectedFileInfo) {
-    dom.fileMeta.innerHTML = "No file selected yet.";
+async function generateMusic(prompt, duration = 30) {
+  const baseUrl = POLLINATIONS_BASE_URL;
+
+  // Pollinations music generation endpoint
+  const musicUrl = `${baseUrl}/audio/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}`;
+
+  return {
+    type: "music",
+    url: musicUrl,
+    prompt,
+    duration,
+    timestamp: Date.now(),
+  };
+}
+
+async function generateVideo(prompt, duration = 5) {
+  const baseUrl = POLLINATIONS_BASE_URL;
+
+  // Pollinations video generation endpoint
+  const videoUrl = `${baseUrl}/video/${encodeURIComponent(prompt)}?duration=${duration}&seed=${Math.floor(Math.random() * 1000000)}`;
+
+  return {
+    type: "video",
+    url: videoUrl,
+    prompt,
+    duration,
+    timestamp: Date.now(),
+  };
+}
+
+async function transcribeAudio(file) {
+  const baseUrl = getBaseUrl();
+  const apiKey = getApiKey();
+
+  const formData = new FormData();
+  formData.append("file", file);
+  formData.append("model", "whisper-large-v3");
+
+  const response = await fetch(`${baseUrl}/v1/audio/transcriptions`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+    },
+    body: formData,
+  });
+
+  if (!response.ok) {
+    throw new Error(`API error: ${response.statusText}`);
+  }
+
+  const data = await response.json();
+
+  return {
+    type: "transcription",
+    text: data.text || "",
+    filename: file.name,
+    timestamp: Date.now(),
+  };
+}
+
+// =========================================================
+// Page Navigation
+// =========================================================
+
+function showLoginPage() {
+  dom.loginPage.hidden = false;
+  dom.playgroundPage.hidden = true;
+}
+
+function showPlaygroundPage() {
+  dom.loginPage.hidden = true;
+  dom.playgroundPage.hidden = false;
+
+  // Update UI based on auth mode
+  if (state.authMode === "demo") {
+    dom.modeBadge.textContent = "Demo Mode";
+  } else if (state.authMode === "byop") {
+    dom.modeBadge.textContent = "BYOP";
+  } else if (state.authMode === "byok") {
+    dom.modeBadge.textContent = "BYOK";
+  }
+
+  updateQuotaDisplay();
+}
+
+// =========================================================
+// Auth Mode Handlers
+// =========================================================
+
+async function handleDemoMode() {
+  state.authMode = "demo";
+  state.apiKey = PUBLIC_API_KEY;
+  resetDemoQuotaIfNeeded();
+  saveAuthMode();
+
+  showToast("Demo mode activated");
+  await fetchAvailableModels();
+  showPlaygroundPage();
+}
+
+async function handleByopMode() {
+  dom.byopDialog.showModal();
+}
+
+async function handleByokMode() {
+  showToast("BYOK mode coming soon");
+}
+
+async function submitByop() {
+  const apiKey = dom.byopKeyInput.value.trim();
+
+  if (!apiKey) {
+    dom.byopError.textContent = "Please enter an API key";
+    dom.byopError.hidden = false;
     return;
   }
 
-  const info = state.selectedFileInfo;
-  const clipMessage = info.isOverLimit
-    ? "Over 5 minutes — please trim the file before uploading."
-    : "Fits inside the 5-minute limit.";
+  // Validate the key
+  showToast("Validating API key...");
+  const isValid = await validateByopKey(apiKey);
 
-  dom.fileMeta.innerHTML = `
-    <div class="meta-grid">
-      <article class="meta-chip">
-        <span class="meta-label">File</span>
-        <div class="meta-value">${escapeHtml(info.name)}</div>
-      </article>
-      <article class="meta-chip">
-        <span class="meta-label">Duration</span>
-        <div class="meta-value">${escapeHtml(formatDuration(info.durationSeconds))}</div>
-      </article>
-      <article class="meta-chip">
-        <span class="meta-label">Size</span>
-        <div class="meta-value">${escapeHtml(formatFileSize(info.size))}</div>
-      </article>
+  if (!isValid) {
+    dom.byopError.textContent = "Invalid API key. Please check and try again.";
+    dom.byopError.hidden = false;
+    return;
+  }
+
+  state.authMode = "byop";
+  state.apiKey = apiKey;
+  saveAuthMode();
+
+  dom.byopDialog.close();
+  dom.byopKeyInput.value = "";
+  dom.byopError.hidden = true;
+
+  showToast("BYOP mode activated");
+  await fetchAvailableModels();
+  showPlaygroundPage();
+}
+
+function cancelByop() {
+  dom.byopDialog.close();
+  dom.byopKeyInput.value = "";
+  dom.byopError.hidden = true;
+}
+
+function handleLogout() {
+  if (confirm("Are you sure you want to logout?")) {
+    clearAuthMode();
+    showLoginPage();
+    showToast("Logged out");
+  }
+}
+
+// =========================================================
+// Generation Mode Panels
+// =========================================================
+
+function createImagePanel() {
+  return `
+    <div class="gen-panel card" data-panel="image">
+      <h2 class="gen-panel-title">Image Generation</h2>
+      <div class="gen-form">
+        <label class="gen-field">
+          <span class="gen-label">Prompt</span>
+          <textarea
+            id="image-prompt"
+            class="gen-textarea"
+            placeholder="Describe the image you want to generate..."
+            rows="4"></textarea>
+        </label>
+
+        <label class="gen-field">
+          <span class="gen-label">Model</span>
+          <select id="image-model" class="gen-select">
+            <option value="flux">Flux</option>
+            <option value="flux-realism">Flux Realism</option>
+            <option value="flux-cablyai">Flux Cably</option>
+            <option value="flux-anime">Flux Anime</option>
+            <option value="flux-3d">Flux 3D</option>
+            <option value="turbo">Turbo</option>
+          </select>
+        </label>
+
+        <button id="generate-image" class="cta-btn">Generate Image</button>
+      </div>
+
+      <div id="image-result" class="gen-result" hidden>
+        <div class="gen-result-head">
+          <h3 class="gen-result-title">Generated Image</h3>
+          <button class="ghost-btn" id="download-image">Download</button>
+        </div>
+        <img id="image-output" class="gen-image" alt="Generated image" />
+      </div>
     </div>
-    <p class="history-copy">${escapeHtml(clipMessage)}</p>
   `;
 }
 
-function renderYoutubeMeta() {
-  // YouTube meta panel has been removed from UI — inspect flow replaced by direct server transcription
+function createTextPanel() {
+  return `
+    <div class="gen-panel card" data-panel="text">
+      <h2 class="gen-panel-title">Text Completion</h2>
+      <div class="gen-form">
+        <label class="gen-field">
+          <span class="gen-label">System Prompt (Optional)</span>
+          <textarea
+            id="text-system"
+            class="gen-textarea"
+            placeholder="You are a helpful assistant..."
+            rows="2"></textarea>
+        </label>
+
+        <label class="gen-field">
+          <span class="gen-label">User Prompt</span>
+          <textarea
+            id="text-prompt"
+            class="gen-textarea"
+            placeholder="Ask anything..."
+            rows="4"></textarea>
+        </label>
+
+        <label class="gen-field">
+          <span class="gen-label">Model</span>
+          <select id="text-model" class="gen-select">
+            <option value="openai">OpenAI</option>
+            <option value="gemini-fast">Gemini Fast</option>
+            <option value="claude-sonnet">Claude Sonnet</option>
+            <option value="llama-v3p1-405b">Llama 3.1 405B</option>
+          </select>
+        </label>
+
+        <button id="generate-text" class="cta-btn">Generate Text</button>
+      </div>
+
+      <div id="text-result" class="gen-result" hidden>
+        <div class="gen-result-head">
+          <h3 class="gen-result-title">Generated Text</h3>
+          <button class="ghost-btn" id="copy-text">Copy</button>
+        </div>
+        <div id="text-output" class="gen-text"></div>
+      </div>
+    </div>
+  `;
 }
+
+function createAudioPanel() {
+  return `
+    <div class="gen-panel card" data-panel="audio">
+      <h2 class="gen-panel-title">Audio Generation (Text-to-Speech)</h2>
+      <div class="gen-form">
+        <label class="gen-field">
+          <span class="gen-label">Text</span>
+          <textarea
+            id="audio-text"
+            class="gen-textarea"
+            placeholder="Enter text to convert to speech..."
+            rows="4"></textarea>
+        </label>
+
+        <label class="gen-field">
+          <span class="gen-label">Voice</span>
+          <select id="audio-voice" class="gen-select">
+            <option value="default">Default</option>
+            <option value="male">Male</option>
+            <option value="female">Female</option>
+          </select>
+        </label>
+
+        <button id="generate-audio" class="cta-btn">Generate Audio</button>
+      </div>
+
+      <div id="audio-result" class="gen-result" hidden>
+        <div class="gen-result-head">
+          <h3 class="gen-result-title">Generated Audio</h3>
+          <button class="ghost-btn" id="download-audio">Download</button>
+        </div>
+        <audio id="audio-output" class="gen-audio" controls></audio>
+      </div>
+    </div>
+  `;
+}
+
+function createMusicPanel() {
+  return `
+    <div class="gen-panel card" data-panel="music">
+      <h2 class="gen-panel-title">Music Generation</h2>
+      <div class="gen-form">
+        <label class="gen-field">
+          <span class="gen-label">Prompt</span>
+          <textarea
+            id="music-prompt"
+            class="gen-textarea"
+            placeholder="Describe the music you want to generate..."
+            rows="4"></textarea>
+        </label>
+
+        <label class="gen-field">
+          <span class="gen-label">Duration (seconds)</span>
+          <input
+            id="music-duration"
+            type="number"
+            class="gen-input"
+            value="30"
+            min="5"
+            max="120" />
+        </label>
+
+        <button id="generate-music" class="cta-btn">Generate Music</button>
+      </div>
+
+      <div id="music-result" class="gen-result" hidden>
+        <div class="gen-result-head">
+          <h3 class="gen-result-title">Generated Music</h3>
+          <button class="ghost-btn" id="download-music">Download</button>
+        </div>
+        <audio id="music-output" class="gen-audio" controls></audio>
+      </div>
+    </div>
+  `;
+}
+
+function createVideoPanel() {
+  return `
+    <div class="gen-panel card" data-panel="video">
+      <h2 class="gen-panel-title">Video Generation</h2>
+      <div class="gen-form">
+        <label class="gen-field">
+          <span class="gen-label">Prompt</span>
+          <textarea
+            id="video-prompt"
+            class="gen-textarea"
+            placeholder="Describe the video you want to generate..."
+            rows="4"></textarea>
+        </label>
+
+        <label class="gen-field">
+          <span class="gen-label">Duration (seconds)</span>
+          <input
+            id="video-duration"
+            type="number"
+            class="gen-input"
+            value="5"
+            min="3"
+            max="10" />
+        </label>
+
+        <button id="generate-video" class="cta-btn">Generate Video</button>
+      </div>
+
+      <div id="video-result" class="gen-result" hidden>
+        <div class="gen-result-head">
+          <h3 class="gen-result-title">Generated Video</h3>
+          <button class="ghost-btn" id="download-video">Download</button>
+        </div>
+        <video id="video-output" class="gen-video" controls></video>
+      </div>
+    </div>
+  `;
+}
+
+function createTranscriptionPanel() {
+  return `
+    <div class="gen-panel card" data-panel="transcription">
+      <h2 class="gen-panel-title">Audio/Video Transcription</h2>
+      <div class="gen-form">
+        <label class="gen-field">
+          <span class="gen-label">Upload Audio/Video File</span>
+          <input
+            id="transcription-file"
+            type="file"
+            class="gen-file-input"
+            accept="audio/*,video/*,.mp3,.mp4,.mpeg,.mpga,.m4a,.wav,.webm" />
+        </label>
+
+        <button id="generate-transcription" class="cta-btn" disabled>Transcribe</button>
+      </div>
+
+      <div id="transcription-result" class="gen-result" hidden>
+        <div class="gen-result-head">
+          <h3 class="gen-result-title">Transcription Result</h3>
+          <button class="ghost-btn" id="copy-transcription">Copy</button>
+        </div>
+        <div id="transcription-output" class="gen-text"></div>
+      </div>
+    </div>
+  `;
+}
+
+function renderGenerationPanel(mode) {
+  let panelHtml = "";
+
+  switch (mode) {
+    case "image":
+      panelHtml = createImagePanel();
+      break;
+    case "text":
+      panelHtml = createTextPanel();
+      break;
+    case "audio":
+      panelHtml = createAudioPanel();
+      break;
+    case "music":
+      panelHtml = createMusicPanel();
+      break;
+    case "video":
+      panelHtml = createVideoPanel();
+      break;
+    case "transcription":
+      panelHtml = createTranscriptionPanel();
+      break;
+    default:
+      panelHtml = "<p>Select a generation mode to get started</p>";
+  }
+
+  dom.generationContainer.innerHTML = panelHtml;
+  bindGenerationEvents(mode);
+}
+
+// =========================================================
+// Generation Event Handlers
+// =========================================================
+
+function bindGenerationEvents(mode) {
+  switch (mode) {
+    case "image":
+      document.getElementById("generate-image")?.addEventListener("click", handleImageGeneration);
+      document.getElementById("download-image")?.addEventListener("click", downloadImage);
+      break;
+    case "text":
+      document.getElementById("generate-text")?.addEventListener("click", handleTextGeneration);
+      document.getElementById("copy-text")?.addEventListener("click", copyText);
+      break;
+    case "audio":
+      document.getElementById("generate-audio")?.addEventListener("click", handleAudioGeneration);
+      document.getElementById("download-audio")?.addEventListener("click", downloadAudio);
+      break;
+    case "music":
+      document.getElementById("generate-music")?.addEventListener("click", handleMusicGeneration);
+      document.getElementById("download-music")?.addEventListener("click", downloadMusic);
+      break;
+    case "video":
+      document.getElementById("generate-video")?.addEventListener("click", handleVideoGeneration);
+      document.getElementById("download-video")?.addEventListener("click", downloadVideo);
+      break;
+    case "transcription":
+      document.getElementById("transcription-file")?.addEventListener("change", handleTranscriptionFileSelect);
+      document.getElementById("generate-transcription")?.addEventListener("click", handleTranscriptionGeneration);
+      document.getElementById("copy-transcription")?.addEventListener("click", copyTranscription);
+      break;
+  }
+}
+
+async function handleImageGeneration() {
+  if (state.authMode === "demo" && state.demoQuota <= 0) {
+    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
+    return;
+  }
+
+  const prompt = document.getElementById("image-prompt").value.trim();
+  const model = document.getElementById("image-model").value;
+
+  if (!prompt) {
+    showToast("Please enter a prompt");
+    return;
+  }
+
+  try {
+    state.isBusy = true;
+    showToast("Generating image...");
+
+    const result = await generateImage(prompt, model);
+
+    document.getElementById("image-output").src = result.url;
+    document.getElementById("image-result").hidden = false;
+
+    decrementDemoQuota();
+    addToHistory({ ...result, id: generateId() });
+
+    showToast("Image generated successfully");
+  } catch (err) {
+    console.error("Image generation error:", err);
+    showToast("Failed to generate image: " + err.message);
+  } finally {
+    state.isBusy = false;
+  }
+}
+
+async function handleTextGeneration() {
+  if (state.authMode === "demo" && state.demoQuota <= 0) {
+    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
+    return;
+  }
+
+  const prompt = document.getElementById("text-prompt").value.trim();
+  const systemPrompt = document.getElementById("text-system").value.trim();
+  const model = document.getElementById("text-model").value;
+
+  if (!prompt) {
+    showToast("Please enter a prompt");
+    return;
+  }
+
+  try {
+    state.isBusy = true;
+    showToast("Generating text...");
+
+    const result = await generateText(prompt, model, systemPrompt);
+
+    document.getElementById("text-output").textContent = result.text;
+    document.getElementById("text-result").hidden = false;
+
+    decrementDemoQuota();
+    addToHistory({ ...result, id: generateId() });
+
+    showToast("Text generated successfully");
+  } catch (err) {
+    console.error("Text generation error:", err);
+    showToast("Failed to generate text: " + err.message);
+  } finally {
+    state.isBusy = false;
+  }
+}
+
+async function handleAudioGeneration() {
+  if (state.authMode === "demo" && state.demoQuota <= 0) {
+    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
+    return;
+  }
+
+  const text = document.getElementById("audio-text").value.trim();
+  const voice = document.getElementById("audio-voice").value;
+
+  if (!text) {
+    showToast("Please enter text");
+    return;
+  }
+
+  try {
+    state.isBusy = true;
+    showToast("Generating audio...");
+
+    const result = await generateAudio(text, "parler-tts", voice);
+
+    document.getElementById("audio-output").src = result.url;
+    document.getElementById("audio-result").hidden = false;
+
+    decrementDemoQuota();
+    addToHistory({ ...result, id: generateId() });
+
+    showToast("Audio generated successfully");
+  } catch (err) {
+    console.error("Audio generation error:", err);
+    showToast("Failed to generate audio: " + err.message);
+  } finally {
+    state.isBusy = false;
+  }
+}
+
+async function handleMusicGeneration() {
+  if (state.authMode === "demo" && state.demoQuota <= 0) {
+    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
+    return;
+  }
+
+  const prompt = document.getElementById("music-prompt").value.trim();
+  const duration = parseInt(document.getElementById("music-duration").value, 10);
+
+  if (!prompt) {
+    showToast("Please enter a prompt");
+    return;
+  }
+
+  try {
+    state.isBusy = true;
+    showToast("Generating music...");
+
+    const result = await generateMusic(prompt, duration);
+
+    document.getElementById("music-output").src = result.url;
+    document.getElementById("music-result").hidden = false;
+
+    decrementDemoQuota();
+    addToHistory({ ...result, id: generateId() });
+
+    showToast("Music generated successfully");
+  } catch (err) {
+    console.error("Music generation error:", err);
+    showToast("Failed to generate music: " + err.message);
+  } finally {
+    state.isBusy = false;
+  }
+}
+
+async function handleVideoGeneration() {
+  if (state.authMode === "demo" && state.demoQuota <= 0) {
+    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
+    return;
+  }
+
+  const prompt = document.getElementById("video-prompt").value.trim();
+  const duration = parseInt(document.getElementById("video-duration").value, 10);
+
+  if (!prompt) {
+    showToast("Please enter a prompt");
+    return;
+  }
+
+  try {
+    state.isBusy = true;
+    showToast("Generating video...");
+
+    const result = await generateVideo(prompt, duration);
+
+    document.getElementById("video-output").src = result.url;
+    document.getElementById("video-result").hidden = false;
+
+    decrementDemoQuota();
+    addToHistory({ ...result, id: generateId() });
+
+    showToast("Video generated successfully");
+  } catch (err) {
+    console.error("Video generation error:", err);
+    showToast("Failed to generate video: " + err.message);
+  } finally {
+    state.isBusy = false;
+  }
+}
+
+function handleTranscriptionFileSelect(e) {
+  const file = e.target.files?.[0];
+  const btn = document.getElementById("generate-transcription");
+  if (file) {
+    btn.disabled = false;
+  } else {
+    btn.disabled = true;
+  }
+}
+
+async function handleTranscriptionGeneration() {
+  if (state.authMode === "demo" && state.demoQuota <= 0) {
+    showToast("Demo quota exceeded. Please come back tomorrow or use BYOP mode.");
+    return;
+  }
+
+  const fileInput = document.getElementById("transcription-file");
+  const file = fileInput.files?.[0];
+
+  if (!file) {
+    showToast("Please select a file");
+    return;
+  }
+
+  try {
+    state.isBusy = true;
+    showToast("Transcribing...");
+
+    const result = await transcribeAudio(file);
+
+    document.getElementById("transcription-output").textContent = result.text;
+    document.getElementById("transcription-result").hidden = false;
+
+    decrementDemoQuota();
+    addToHistory({ ...result, id: generateId() });
+
+    showToast("Transcription completed");
+  } catch (err) {
+    console.error("Transcription error:", err);
+    showToast("Failed to transcribe: " + err.message);
+  } finally {
+    state.isBusy = false;
+  }
+}
+
+// Download handlers
+function downloadImage() {
+  const img = document.getElementById("image-output");
+  const link = document.createElement("a");
+  link.href = img.src;
+  link.download = `onellm-image-${Date.now()}.png`;
+  link.click();
+}
+
+function downloadAudio() {
+  const audio = document.getElementById("audio-output");
+  const link = document.createElement("a");
+  link.href = audio.src;
+  link.download = `onellm-audio-${Date.now()}.mp3`;
+  link.click();
+}
+
+function downloadMusic() {
+  const audio = document.getElementById("music-output");
+  const link = document.createElement("a");
+  link.href = audio.src;
+  link.download = `onellm-music-${Date.now()}.mp3`;
+  link.click();
+}
+
+function downloadVideo() {
+  const video = document.getElementById("video-output");
+  const link = document.createElement("a");
+  link.href = video.src;
+  link.download = `onellm-video-${Date.now()}.mp4`;
+  link.click();
+}
+
+// Copy handlers
+function copyText() {
+  const text = document.getElementById("text-output").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Text copied to clipboard");
+  });
+}
+
+function copyTranscription() {
+  const text = document.getElementById("transcription-output").textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showToast("Transcription copied to clipboard");
+  });
+}
+
+// =========================================================
+// History Functions
+// =========================================================
 
 function renderHistory() {
   if (state.history.length === 0) {
-    dom.historyList.innerHTML = `
-      <div class="empty-state-card">
-        Your completed transcripts will appear here.
+    dom.historyList.innerHTML = '<p class="history-empty">Your generations will appear here.</p>';
+    return;
+  }
+
+  const html = state.history.map((entry) => {
+    const typeLabel = entry.type.charAt(0).toUpperCase() + entry.type.slice(1);
+    const preview = getHistoryPreview(entry);
+
+    return `
+      <div class="history-item" data-id="${entry.id}">
+        <div class="history-item-head">
+          <span class="history-item-type">${typeLabel}</span>
+          <span class="history-item-date">${formatDate(entry.timestamp)}</span>
+        </div>
+        <div class="history-item-preview">${preview}</div>
       </div>
     `;
-    return;
-  }
+  }).join("");
 
-  dom.historyList.innerHTML = state.history
-    .map((entry) => {
-      const isActive = entry.id === getActiveEntry()?.id;
-      const summaryButtonDisabled =
-        !entry.transcript ||
-        state.isBusy ||
-        getSummaryQuota().count >= MAX_SUMMARIES_PER_DAY;
-      return `
-        <article class="history-item">
-          <div class="history-head">
-            <div>
-              <p class="history-title">${escapeHtml(entry.title)}</p>
-              <p class="history-copy">${escapeHtml(formatStatus(entry.status))} · ${escapeHtml(formatDateTime(entry.createdAt))}</p>
-            </div>
-            <span class="status-badge">${escapeHtml(entry.sourceMode)}</span>
-          </div>
-
-          <div class="meta-grid">
-            <article class="meta-chip">
-              <span class="meta-label">Length</span>
-              <div class="meta-value">${escapeHtml(formatDuration(entry.durationSeconds))}</div>
-            </article>
-            <article class="meta-chip">
-              <span class="meta-label">Clip</span>
-              <div class="meta-value">${escapeHtml(formatClipWindow(entry))}</div>
-            </article>
-          </div>
-
-          ${entry.errorMessage ? `<p class="history-transcript error-copy">${escapeHtml(entry.errorMessage)}</p>` : ""}
-          ${entry.transcript ? `<p class="history-transcript">${escapeHtml(entry.transcript.slice(0, 180))}${entry.transcript.length > 180 ? "…" : ""}</p>` : ""}
-
-          <div class="history-actions">
-            <button class="ghost-button" type="button" data-action="activate" data-entry-id="${escapeHtml(entry.id)}">${isActive ? "Viewing" : "Open"}</button>
-            <button class="ghost-button" type="button" data-action="download" data-entry-id="${escapeHtml(entry.id)}" ${entry.transcript ? "" : "disabled"}>Download</button>
-            <button class="ghost-button" type="button" data-action="summarize" data-entry-id="${escapeHtml(entry.id)}" ${summaryButtonDisabled ? "disabled" : ""}>Summarize</button>
-          </div>
-        </article>
-      `;
-    })
-    .join("");
+  dom.historyList.innerHTML = html;
 }
 
-function renderActiveEntry() {
-  const entry = getActiveEntry();
-  const hasTranscript = Boolean(entry?.transcript);
-  dom.downloadTranscript.disabled = !hasTranscript;
-  dom.summarizeButton.disabled =
-    state.isBusy ||
-    !hasTranscript ||
-    getSummaryQuota().count >= MAX_SUMMARIES_PER_DAY;
-
-  if (!entry) {
-    dom.resultMeta.innerHTML = "Completed transcripts will show metadata here.";
-    dom.transcriptOutput.value = "";
-    dom.summaryOutput.textContent =
-      "Hit Summarize after a transcript completes.";
-    return;
+function getHistoryPreview(entry) {
+  switch (entry.type) {
+    case "image":
+      return entry.prompt || "Image generation";
+    case "text":
+      return entry.prompt || "Text completion";
+    case "audio":
+      return entry.text?.slice(0, 50) + "..." || "Audio generation";
+    case "music":
+      return entry.prompt || "Music generation";
+    case "video":
+      return entry.prompt || "Video generation";
+    case "transcription":
+      return entry.text?.slice(0, 50) + "..." || "Transcription";
+    default:
+      return "Unknown";
   }
-
-  // Show transcript card if we have a transcript
-  if (hasTranscript && dom.transcriptCard.hidden) {
-    revealCard(dom.transcriptCard);
-  }
-
-  // Show summary card if we have a summary
-  if (entry.summary && dom.summaryCard.hidden) {
-    revealCard(dom.summaryCard);
-  }
-
-  dom.resultMeta.innerHTML = `
-    <div class="meta-grid">
-      <article class="meta-chip">
-        <span class="meta-label">Source</span>
-        <div class="meta-value">${escapeHtml(entry.sourceMode)}</div>
-      </article>
-      <article class="meta-chip">
-        <span class="meta-label">Recorded</span>
-        <div class="meta-value">${escapeHtml(formatDateTime(entry.createdAt))}</div>
-      </article>
-      <article class="meta-chip">
-        <span class="meta-label">Window</span>
-        <div class="meta-value">${escapeHtml(formatClipWindow(entry))}</div>
-      </article>
-    </div>
-  `;
-  dom.transcriptOutput.value = entry.transcript || "";
-  dom.summaryOutput.textContent =
-    entry.summary || "Hit Summarize after a transcript completes.";
 }
 
-function renderSummaryQuota() {
-  const quota = getSummaryQuota();
-  dom.summaryQuota.textContent = String(
-    Math.max(0, MAX_SUMMARIES_PER_DAY - quota.count),
-  );
+function toggleHistory() {
+  const isOpen = dom.historyPopup.getAttribute("aria-hidden") === "false";
+
+  if (isOpen) {
+    dom.historyPopup.setAttribute("aria-hidden", "true");
+    dom.historyBackdrop.setAttribute("aria-hidden", "true");
+    dom.historyToggle.setAttribute("aria-expanded", "false");
+  } else {
+    dom.historyPopup.setAttribute("aria-hidden", "false");
+    dom.historyBackdrop.setAttribute("aria-hidden", "false");
+    dom.historyToggle.setAttribute("aria-expanded", "true");
+  }
 }
 
-function getSummaryQuota() {
-  const stored = readJson(
-    localStorage.getItem(STORAGE_KEYS.summaryQuota),
-    null,
-  );
-  const dateKey = getLocalDateKey();
+// =========================================================
+// Event Bindings
+// =========================================================
 
-  if (!stored || stored.date !== dateKey) {
-    return { date: dateKey, count: 0 };
-  }
-
-  return {
-    date: dateKey,
-    count: Number.isFinite(Number(stored.count)) ? Number(stored.count) : 0,
-  };
-}
-
-function incrementSummaryQuota() {
-  const quota = getSummaryQuota();
-  const nextQuota = { date: quota.date, count: quota.count + 1 };
-  localStorage.setItem(STORAGE_KEYS.summaryQuota, JSON.stringify(nextQuota));
-}
-
-function useDirectPollinations() {
-  return Boolean(API_CONFIG.directApiKey);
-}
-
-function getSummaryUrl() {
-  return useDirectPollinations()
-    ? API_CONFIG.directSummaryUrl
-    : API_CONFIG.summarizeProxyUrl;
-}
-
-function buildSummaryHeaders() {
-  if (!useDirectPollinations()) {
-    return {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    };
-  }
-
-  return {
-    Authorization: `Bearer ${API_CONFIG.directApiKey}`,
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
-}
-
-async function parseApiResponse(response, url) {
-  const rawText = await response.text();
-  const payload = tryParseJson(rawText);
-  console.log(
-    "[Onescriber] parseApiResponse — url:",
-    url,
-    "status:",
-    response.status,
-    "raw (first 400 chars):",
-    rawText.slice(0, 400),
-  );
-
-  if (!response.ok) {
-    throw new Error(buildApiErrorMessage(response, url, payload, rawText));
-  }
-
-  return payload ?? rawText;
-}
-
-function extractTranscriptText(payload, label) {
-  if (typeof payload === "string" && payload.trim()) {
-    return payload.trim();
-  }
-
-  const text =
-    payload?.text ||
-    payload?.transcript ||
-    payload?.data?.text ||
-    payload?.data?.transcript ||
-    payload?.result?.text ||
-    payload?.result?.transcript;
-
-  if (typeof text === "string" && text.trim()) {
-    return text.trim();
-  }
-
-  throw new Error(`No transcript text was returned for ${label}.`);
-}
-
-function extractSummaryText(payload) {
-  if (typeof payload === "string" && payload.trim()) {
-    return payload.trim();
-  }
-
-  const direct = payload?.summary || payload?.text || payload?.data?.summary;
-  if (typeof direct === "string" && direct.trim()) {
-    return direct.trim();
-  }
-
-  const content = payload?.choices?.[0]?.message?.content;
-  if (typeof content === "string" && content.trim()) {
-    return content.trim();
-  }
-
-  if (Array.isArray(content)) {
-    const parts = content
-      .map((item) => (typeof item?.text === "string" ? item.text : ""))
-      .filter(Boolean);
-    if (parts.length > 0) {
-      return parts.join("\n").trim();
-    }
-  }
-
-  throw new Error("No summary text was returned by the API.");
-}
-
-function buildApiErrorMessage(response, url, payload, rawText) {
-  const message =
-    payload?.error?.message ||
-    payload?.error ||
-    payload?.message ||
-    rawText ||
-    `Request failed with status ${response.status}.`;
-
-  if (response.status === 404) {
-    return `${message} Configure the Railway backend endpoint at ${url}. Set window.ONESCRIBER_CONFIG.backendBaseUrl or serve this frontend from the same Railway domain so /transcribe and /summarize resolve correctly.`;
-  }
-
-  return String(message).trim();
-}
-
-async function inspectYoutubeUrl(url) {
-  const videoId = parseYoutubeVideoId(url);
-  if (!videoId) {
-    throw new Error("That does not look like a valid YouTube URL.");
-  }
-
-  const player = await ensureYoutubePlayer();
-  player.cueVideoById(videoId);
-
-  const durationSeconds = await waitForYoutubeDuration(player, videoId);
-  const title = player.getVideoData?.().title || (await fetchYoutubeTitle(url));
-  return {
-    url,
-    videoId,
-    title: title || `YouTube video ${videoId}`,
-    durationSeconds,
-  };
-}
-
-async function ensureYoutubePlayer() {
-  if (!state.youtubePlayerPromise) {
-    state.youtubePlayerPromise = (async () => {
-      const YT = await loadYoutubeApi();
-      return new Promise((resolve) => {
-        const player = new YT.Player(dom.youtubeProbe, {
-          height: "1",
-          width: "1",
-          playerVars: {
-            autoplay: 0,
-            controls: 0,
-            rel: 0,
-          },
-          events: {
-            onReady: () => resolve(player),
-          },
-        });
-      });
-    })();
-  }
-
-  return state.youtubePlayerPromise;
-}
-
-function loadYoutubeApi() {
-  if (window.YT?.Player) {
-    return Promise.resolve(window.YT);
-  }
-
-  if (!state.youtubeApiPromise) {
-    state.youtubeApiPromise = new Promise((resolve, reject) => {
-      const script = document.createElement("script");
-      script.src = "https://www.youtube.com/iframe_api";
-      script.async = true;
-      script.onerror = () =>
-        reject(new Error("The YouTube IFrame API could not be loaded."));
-      window.onYouTubeIframeAPIReady = () => resolve(window.YT);
-      document.head.append(script);
+function bindEvents() {
+  // Login page - mode selection
+  dom.modeCards.forEach((card) => {
+    card.addEventListener("click", async () => {
+      const mode = card.dataset.mode;
+      if (mode === "demo") {
+        await handleDemoMode();
+      } else if (mode === "byop") {
+        await handleByopMode();
+      } else if (mode === "byok") {
+        await handleByokMode();
+      }
     });
-  }
+  });
 
-  return state.youtubeApiPromise;
-}
-
-async function waitForYoutubeDuration(player, videoId) {
-  const start = Date.now();
-
-  while (Date.now() - start < 12000) {
-    const duration = Number(player.getDuration?.());
-    const currentId = player.getVideoData?.().video_id;
-    if (currentId === videoId && duration > 0) {
-      return duration;
+  // BYOP dialog
+  dom.byopSubmit.addEventListener("click", submitByop);
+  dom.byopCancel.addEventListener("click", cancelByop);
+  dom.byopKeyInput.addEventListener("keypress", (e) => {
+    if (e.key === "Enter") {
+      submitByop();
     }
-    await wait(250);
-  }
+  });
 
-  throw new Error(
-    "Could not read the YouTube duration in the browser. A server-side metadata helper may be required for this link.",
-  );
-}
+  // Theme toggle
+  dom.themeToggle?.addEventListener("click", toggleTheme);
 
-async function fetchYoutubeTitle(url) {
-  try {
-    const response = await fetch(
-      `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
-    );
-    if (!response.ok) {
-      return "";
-    }
-    const payload = await response.json();
-    return payload?.title || "";
-  } catch (error) {
-    return "";
-  }
-}
+  // History
+  dom.historyToggle?.addEventListener("click", toggleHistory);
+  dom.historyClose?.addEventListener("click", toggleHistory);
+  dom.historyBackdrop?.addEventListener("click", toggleHistory);
+  dom.clearHistory?.addEventListener("click", clearHistoryData);
 
-function parseYoutubeVideoId(value) {
-  try {
-    const url = new URL(value);
-    const host = url.hostname.replace(/^www\./, "");
-    if (host === "youtu.be") {
-      return url.pathname.slice(1) || null;
-    }
-    if (host === "youtube.com" || host === "m.youtube.com") {
-      if (url.pathname === "/watch") {
-        return url.searchParams.get("v");
-      }
-      if (url.pathname.startsWith("/shorts/")) {
-        return url.pathname.split("/")[2] || null;
-      }
-      if (url.pathname.startsWith("/embed/")) {
-        return url.pathname.split("/")[2] || null;
-      }
-    }
-  } catch (error) {
-    return null;
-  }
+  // Export
+  dom.exportBtn?.addEventListener("click", exportHistory);
 
-  return null;
-}
+  // Logout
+  dom.logoutBtn?.addEventListener("click", handleLogout);
 
-async function loadMediaDuration(file) {
-  const objectUrl = URL.createObjectURL(file);
-  const isVideo =
-    file.type.startsWith("video/") || getFileExtension(file.name) === ".mp4";
-  const element = document.createElement(isVideo ? "video" : "audio");
+  // Generation mode buttons
+  dom.genModeButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const mode = btn.dataset.genMode;
+      state.currentGenMode = mode;
 
-  return new Promise((resolve, reject) => {
-    element.preload = "metadata";
-    element.src = objectUrl;
+      // Update active state
+      dom.genModeButtons.forEach((b) => b.classList.remove("is-active"));
+      btn.classList.add("is-active");
 
-    element.onloadedmetadata = () => {
-      const duration = Number(element.duration);
-      URL.revokeObjectURL(objectUrl);
-      if (!Number.isFinite(duration) || duration <= 0) {
-        reject(
-          new Error("This media file does not expose a readable duration."),
-        );
-        return;
-      }
-      resolve(duration);
-    };
-
-    element.onerror = () => {
-      URL.revokeObjectURL(objectUrl);
-      reject(new Error("This file could not be read in the browser."));
-    };
+      // Render panel
+      renderGenerationPanel(mode);
+    });
   });
 }
 
-function openTrimDialog({ label, durationSeconds }) {
-  return new Promise((resolve) => {
-    dom.trimDescription.textContent = `${label} is ${formatDuration(durationSeconds)} long. Choose a start and end time at or below 5:00.`;
-    dom.trimStart.value = "0:00";
-    dom.trimEnd.value = formatDuration(
-      Math.min(durationSeconds, MAX_CLIP_SECONDS),
-    );
-    dom.trimDialog.dataset.durationSeconds = String(durationSeconds);
-    dom.trimDialog.dataset.resolveId = crypto.randomUUID();
-    dom.trimDialog._resolver = resolve;
-    validateTrimDialog();
-    dom.trimDialog.showModal();
-  });
-}
+// =========================================================
+// Initialization
+// =========================================================
 
-function validateTrimDialog() {
-  const durationSeconds = Number(dom.trimDialog.dataset.durationSeconds || 0);
-  const startSeconds = parseTimestamp(dom.trimStart.value);
-  const endSeconds = parseTimestamp(dom.trimEnd.value);
+async function init() {
+  // Load theme
+  loadTheme();
 
-  let error = "";
-  if (!Number.isFinite(startSeconds) || !Number.isFinite(endSeconds)) {
-    error = "Use mm:ss or hh:mm:ss format.";
-  } else if (startSeconds < 0 || endSeconds < 0) {
-    error = "Times cannot be negative.";
-  } else if (endSeconds <= startSeconds) {
-    error = "End time must be greater than start time.";
-  } else if (endSeconds > durationSeconds) {
-    error = "End time is past the media duration.";
-  } else if (endSeconds - startSeconds > MAX_CLIP_SECONDS) {
-    error = "Clips must stay at or below 5:00.";
+  // Load history
+  loadHistory();
+
+  // Check if already authenticated
+  const hasAuth = loadAuthMode();
+
+  if (hasAuth) {
+    // User is already authenticated, go to playground
+    resetDemoQuotaIfNeeded();
+    await fetchAvailableModels();
+    showPlaygroundPage();
+    renderHistory();
+  } else {
+    // Show login page
+    showLoginPage();
   }
 
-  dom.trimApply.disabled = Boolean(error);
-  dom.trimFeedback.textContent = error
-    ? error
-    : `Clip length: ${formatDuration(endSeconds - startSeconds)}`;
-  dom.trimFeedback.classList.toggle("is-error", Boolean(error));
+  // Bind all events
+  bindEvents();
 }
 
-function handleTrimDialogClose() {
-  const resolver = dom.trimDialog._resolver;
-  if (!resolver) {
-    return;
-  }
-
-  const returnValue = dom.trimDialog.returnValue;
-  dom.trimDialog._resolver = null;
-
-  if (returnValue !== "apply") {
-    resolver(null);
-    return;
-  }
-
-  resolver({
-    startSeconds: parseTimestamp(dom.trimStart.value),
-    endSeconds: parseTimestamp(dom.trimEnd.value),
-  });
-}
-
-function getLocalDateKey() {
-  const date = new Date();
-  const month = String(date.getMonth() + 1).padStart(2, "0");
-  const day = String(date.getDate()).padStart(2, "0");
-  return `${date.getFullYear()}-${month}-${day}`;
-}
-
-function formatStatus(status) {
-  switch (status) {
-    case "preparing":
-      return "Preparing";
-    case "transcribing":
-      return "Transcribing";
-    case "completed":
-      return "Completed";
-    case "error":
-      return "Error";
-    case "interrupted":
-      return "Interrupted";
-    default:
-      return "Queued";
-  }
-}
-
-function formatClipWindow(entry) {
-  if (entry.clipStartSeconds == null || entry.clipEndSeconds == null) {
-    return entry.durationSeconds
-      ? `0:00 - ${formatDuration(entry.durationSeconds)}`
-      : "Full length";
-  }
-
-  return `${formatDuration(entry.clipStartSeconds)} - ${formatDuration(entry.clipEndSeconds)}`;
-}
-
-function formatDuration(totalSeconds) {
-  const seconds = Math.max(0, Math.floor(totalSeconds || 0));
-  const hours = Math.floor(seconds / 3600);
-  const minutes = Math.floor((seconds % 3600) / 60);
-  const remainder = seconds % 60;
-
-  if (hours > 0) {
-    return `${hours}:${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
-  }
-
-  return `${minutes}:${String(remainder).padStart(2, "0")}`;
-}
-
-function formatDateTime(value) {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) {
-    return "Unknown";
-  }
-
-  return date.toLocaleString([], {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
-
-function formatFileSize(size) {
-  if (!Number.isFinite(size)) {
-    return "Unknown";
-  }
-
-  const units = ["B", "KB", "MB", "GB"];
-  let value = size;
-  let index = 0;
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024;
-    index += 1;
-  }
-  return `${value.toFixed(value >= 10 || index === 0 ? 0 : 1)} ${units[index]}`;
-}
-
-function parseTimestamp(value) {
-  const input = String(value || "").trim();
-  if (!input) {
-    return Number.NaN;
-  }
-
-  if (/^\d+$/.test(input)) {
-    return Number(input);
-  }
-
-  const parts = input.split(":").map((part) => Number(part));
-  if (parts.some((part) => !Number.isFinite(part))) {
-    return Number.NaN;
-  }
-
-  if (parts.length === 2) {
-    return parts[0] * 60 + parts[1];
-  }
-
-  if (parts.length === 3) {
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
-  }
-
-  return Number.NaN;
-}
-
-function readJson(raw, fallback) {
-  if (!raw) {
-    return fallback;
-  }
-
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    return fallback;
-  }
-}
-
-function tryParseJson(raw) {
-  try {
-    return JSON.parse(raw);
-  } catch (error) {
-    return null;
-  }
-}
-
-function normalizeBaseUrl(value) {
-  return String(value || "")
-    .trim()
-    .replace(/\/$/, "");
-}
-
-function joinUrl(base, path) {
-  const normalizedBase = normalizeBaseUrl(base);
-  if (!normalizedBase) {
-    return "";
-  }
-  return `${normalizedBase}${path.startsWith("/") ? path : `/${path}`}`;
-}
-
-function getFileExtension(fileName) {
-  const normalized = String(fileName || "").toLowerCase();
-  const index = normalized.lastIndexOf(".");
-  return index === -1 ? "" : normalized.slice(index);
-}
-
-function guessMimeTypeFromExtension(extension) {
-  switch (extension) {
-    case ".mp3":
-    case ".mpeg":
-    case ".mpga":
-      return "audio/mpeg";
-    case ".m4a":
-      return "audio/mp4";
-    case ".wav":
-      return "audio/wav";
-    case ".webm":
-      return "video/webm";
-    case ".mp4":
-      return "video/mp4";
-    default:
-      return "application/octet-stream";
-  }
-}
-
-function stripExtension(fileName) {
-  const index = fileName.lastIndexOf(".");
-  return index === -1 ? fileName : fileName.slice(0, index);
-}
-
-function downloadTextFile(fileName, content) {
-  const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-  const objectUrl = URL.createObjectURL(blob);
-  const anchor = document.createElement("a");
-  anchor.href = objectUrl;
-  anchor.download = fileName;
-  anchor.click();
-  setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
-}
-
-function safeSlug(value) {
-  return String(value || "onescriber")
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "-")
-    .replace(/^-+|-+$/g, "")
-    .slice(0, 48);
-}
-
-function showToast(message, isError = false) {
-  dom.toast.textContent = message;
-  dom.toast.classList.add("is-visible");
-  dom.toast.style.borderColor = isError
-    ? "rgba(255, 109, 98, 0.45)"
-    : "var(--border-strong)";
-  clearTimeout(state.toastTimerId);
-  state.toastTimerId = window.setTimeout(() => {
-    dom.toast.classList.remove("is-visible");
-  }, 3200);
-}
-
-function wait(milliseconds) {
-  return new Promise((resolve) => window.setTimeout(resolve, milliseconds));
-}
-
-function getErrorMessage(error, fallback = "Something went wrong.") {
-  if (error instanceof Error && error.message) {
-    return error.message;
-  }
-  return fallback;
-}
-
-function escapeHtml(value) {
-  return String(value ?? "")
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#39;");
-}
+// Start the app
+init();
