@@ -6,8 +6,7 @@ const CATS = [
   { id:'text', label:'Text', icon:'chat', badge:'cb-text' },
   { id:'image', label:'Image', icon:'image', badge:'cb-image' },
   { id:'video', label:'Video', icon:'videocam', badge:'cb-video' },
-  { id:'audio-out', label:'Audio Out', icon:'volume_up', badge:'cb-audio' },
-  { id:'audio-in', label:'Audio In', icon:'mic', badge:'cb-audio' },
+  { id:'audio', label:'Audio', icon:'volume_up', badge:'cb-audio' },
   { id:'transcription', label:'Transcribe', icon:'mic_external_on', badge:'cb-transcription' },
 ];
 
@@ -16,43 +15,11 @@ const DEMO_API_KEY = 'pk_BU8jPqG7RBj8yOxh';
 const DEFAULT_BYOP_KEY = 'pk_dfgOjlw1zrrhB5eZ';
 
 const MODELS = {
-  text: [
-    { id:'openai', name:'openai', desc:'GPT-5 Mini — fast and balanced', caps:['tools'] },
-    { id:'openai-fast', name:'openai-fast', desc:'GPT-5 Nano — ultra fast', caps:['tools'] },
-    { id:'openai-large', name:'openai-large', desc:'GPT-5.2 — strongest general model', caps:['tools','reasoning'] },
-    { id:'qwen-coder', name:'qwen-coder', desc:'Qwen3 Coder 30B', caps:['code','tools'] },
-    { id:'mistral', name:'mistral', desc:'Mistral Small 3.2 24B', caps:['tools'] },
-    { id:'gemini', name:'gemini', desc:'Gemini 3 Flash', caps:['search','reasoning','code'] },
-    { id:'deepseek', name:'deepseek', desc:'DeepSeek V3.2', caps:['reasoning','tools'] },
-    { id:'claude-fast', name:'claude-fast', desc:'Claude Haiku 4.5', caps:['tools'] },
-    { id:'claude', name:'claude', desc:'Claude Sonnet 4.6', caps:['tools'] },
-  ],
-  image: [
-    { id:'flux', name:'flux', desc:'Flux Schnell image generation', caps:['vision'] },
-    { id:'zimage', name:'zimage', desc:'Z-Image Turbo', caps:['vision'] },
-    { id:'gptimage', name:'gptimage', desc:'GPT Image 1 Mini', caps:['vision'] },
-    { id:'gptimage-large', name:'gptimage-large', desc:'GPT Image 1.5', caps:['vision'] },
-    { id:'kontext', name:'kontext', desc:'FLUX.1 Kontext in-context editing', caps:['vision'] },
-  ],
-  video: [
-    { id:'veo', name:'veo', desc:'Veo 3.1 Fast', caps:['vision'] },
-    { id:'seedance', name:'seedance', desc:'Seedance Lite video generation', caps:['vision'] },
-    { id:'wan', name:'wan', desc:'Wan 2.6 video with audio', caps:['vision','audio-out'] },
-    { id:'ltx-2', name:'ltx-2', desc:'LTX-2 text-to-video', caps:['vision','audio-out'] },
-  ],
-  'audio-out': [
-    { id:'elevenlabs', name:'elevenlabs', desc:'ElevenLabs v3 TTS', caps:['audio-out'] },
-    { id:'elevenmusic', name:'elevenmusic', desc:'ElevenLabs music generation', caps:['audio-out'] },
-    { id:'qwen3-tts', name:'qwen3-tts', desc:'Qwen3 TTS', caps:['audio-out'] },
-  ],
-  'audio-in': [
-    { id:'whisper', name:'whisper', desc:'Whisper Large V3 transcription', caps:['audio-in'] },
-    { id:'scribe', name:'scribe', desc:'ElevenLabs Scribe v2', caps:['audio-in'] },
-  ],
-  transcription: [
-    { id:'whisper-large-v3', name:'whisper-large-v3', desc:'Whisper Large V3', caps:['audio-in'] },
-    { id:'scribe', name:'scribe', desc:'Scribe transcription', caps:['audio-in'] },
-  ],
+  text: [],
+  image: [],
+  video: [],
+  audio: [],
+  transcription: [],
 };
 
 const CAPS_META = {
@@ -61,19 +28,12 @@ const CAPS_META = {
   tools:     { label:'Tools',     icon:'build' },
   search:    { label:'Search',    icon:'search' },
   code:      { label:'Code',      icon:'code' },
+  'code-exec': { label:'Code Exec', icon:'terminal' },
+  caching:   { label:'Caching',   icon:'memory' },
   'audio-in':  { label:'Audio In',  icon:'mic' },
   'audio-out': { label:'Audio Out', icon:'volume_up' },
 };
-
-const TEXT_MODEL_IDS = MODELS.text.map(m => m.id);
 const SIDEBAR_BREAKPOINT = 1100;
-const TEMP_MODEL_PRESETS = [
-  { id: 'balanced', label: 'Balanced' },
-  { id: 'creative', label: 'Creative' },
-  { id: 'precise', label: 'Precise' },
-  { id: 'coder', label: 'Coder' },
-  { id: 'vision', label: 'Vision+' },
-];
 
 /* ══════════════════════════════════════════════
    STATE
@@ -82,23 +42,26 @@ let S = {
   theme: 'light',
   sideOpen: true,
   isMobile: window.innerWidth <= SIDEBAR_BREAKPOINT,
-  demoMode: false,
+  demoMode: true,
   demoCount: 0,  // used today
   demoUiMode: false,
   apiMode: 'demo',
-  byopKey: DEFAULT_BYOP_KEY,
+  byopKey: '',
   systemPrompt: '',
   enhanceModel: 'openai',
   selectedCat: 'text',
-  selectedModel: MODELS.text[0],
+  selectedModel: { id: 'openai', name: 'openai', desc: 'Default model', caps: ['tools'], pro: false, caching: false },
   currentChatId: null,
   isTempChat: false,
-  tempModelPreset: 'balanced',
+  composerExpanded: false,
   chats: {},       // { [id]: {id,title,messages,createdAt} }
   attachments: [], // [{name,type,size,data,icon}]
   enhancedPrompt: null,
   demoSnapshot: null,
+  pwaNudgeDismissed: false,
 };
+
+let deferredInstallPrompt = null;
 
 /* ══════════════════════════════════════════════
    LOCAL STORAGE
@@ -109,13 +72,14 @@ function loadState() {
     if (raw) {
       const saved = JSON.parse(raw);
       S.theme = saved.theme || 'light';
-      S.demoMode = saved.demoMode || false;
+      S.demoMode = typeof saved.demoMode === 'boolean' ? saved.demoMode : true;
       S.demoCount = saved.demoCount || 0;
       S.systemPrompt = saved.systemPrompt || '';
       S.enhanceModel = saved.enhanceModel || 'openai';
       S.apiMode = saved.apiMode || 'demo';
-      S.byopKey = saved.byopKey || DEFAULT_BYOP_KEY;
+      S.byopKey = saved.byopKey || '';
       S.demoUiMode = saved.demoUiMode || false;
+      S.pwaNudgeDismissed = saved.pwaNudgeDismissed || false;
       S.chats = saved.chats || {};
       // Reset daily demo count if new day
       if (saved.demoDate !== new Date().toDateString()) {
@@ -136,6 +100,7 @@ function saveState() {
       apiMode: S.apiMode,
       byopKey: S.byopKey,
       demoUiMode: S.demoUiMode,
+      pwaNudgeDismissed: S.pwaNudgeDismissed,
       chats: S.chats,
     }));
   } catch(e) {}
@@ -168,7 +133,10 @@ function isTextCat(catId) { return catId==='text'; }
 function demoRemaining() { return Math.max(0, 20 - S.demoCount); }
 
 function getActiveApiKey() {
-  return S.apiMode === 'byop' ? (S.byopKey || '').trim() : DEMO_API_KEY;
+  if (S.apiMode === 'byop') {
+    return (S.byopKey || DEFAULT_BYOP_KEY).trim();
+  }
+  return DEMO_API_KEY;
 }
 
 function getAuthHeaders() {
@@ -184,64 +152,29 @@ function getImageUrl(prompt, modelId, extras = {}) {
   return `${POLL_BASE}/image/${encoded}?${params.toString()}`;
 }
 
-async function bootstrapPollinationsModels() {
+async function loadLocalModelCatalog() {
   try {
-    const [textRes, imageRes] = await Promise.all([
-      fetch(`${POLL_BASE}/v1/models`),
-      fetch(`${POLL_BASE}/image/models`),
-    ]);
+    const res = await fetch('./models.json', { cache: 'no-cache' });
+    if (!res.ok) throw new Error('Unable to read models catalog');
+    const payload = await res.json();
+    const categories = payload?.categories || {};
 
-    if (textRes.ok) {
-      const textPayload = await textRes.json();
-      const textModels = Array.isArray(textPayload?.data)
-        ? textPayload.data
-        : Array.isArray(textPayload) ? textPayload : [];
+    const normalize = (entry) => ({
+      id: entry.id,
+      name: entry.name || entry.id,
+      desc: entry.desc || 'Model',
+      context: entry.context || '-',
+      caps: Array.isArray(entry.capabilities) ? entry.capabilities : [],
+      pro: Boolean(entry.pro),
+      caching: Boolean(entry.caching),
+      disabled: Boolean(entry.disabled),
+    });
 
-      if (textModels.length) {
-        MODELS.text = textModels
-          .filter((m) => m && m.id)
-          .map((m) => ({
-            id: m.id,
-            name: m.id,
-            desc: m.description || 'Pollinations text model',
-            caps: Array.isArray(m.capabilities) ? m.capabilities : ['tools'],
-          }));
-      }
-    }
-
-    if (imageRes.ok) {
-      const imagePayload = await imageRes.json();
-      const imageModels = Array.isArray(imagePayload?.data)
-        ? imagePayload.data
-        : Array.isArray(imagePayload) ? imagePayload : [];
-
-      if (imageModels.length) {
-        const imageBucket = [];
-        const videoBucket = [];
-
-        imageModels.forEach((m) => {
-          if (!m || !m.id) return;
-          const model = {
-            id: m.id,
-            name: m.id,
-            desc: m.description || 'Pollinations image model',
-            caps: ['vision'],
-          };
-
-          const type = String(m.type || '').toLowerCase();
-          const isVideo = type.includes('video') || /veo|seedance|wan|ltx|video/i.test(m.id);
-          if (isVideo) {
-            model.caps = ['vision', 'audio-out'];
-            videoBucket.push(model);
-          } else {
-            imageBucket.push(model);
-          }
-        });
-
-        if (imageBucket.length) MODELS.image = imageBucket;
-        if (videoBucket.length) MODELS.video = videoBucket;
-      }
-    }
+    Object.keys(MODELS).forEach((category) => {
+      MODELS[category] = Array.isArray(categories[category])
+        ? categories[category].filter((entry) => entry?.id).map(normalize)
+        : [];
+    });
 
     const keepModel = (MODELS[S.selectedCat] || []).some((m) => m.id === S.selectedModel.id);
     if (!keepModel) {
@@ -250,8 +183,8 @@ async function bootstrapPollinationsModels() {
     }
 
     selectModel(S.selectedCat, S.selectedModel.id, { silent: true });
-  } catch {
-    // Keep fallback model catalog if network/catalog bootstrap fails.
+  } catch (error) {
+    toast(`Model catalog load failed: ${error.message}`, 'error');
   }
 }
 
@@ -261,9 +194,6 @@ async function bootstrapPollinationsModels() {
 function applyTheme(t) {
   S.theme = t;
   document.documentElement.setAttribute('data-theme', t);
-  const icon = t==='dark' ? 'dark_mode' : 'light_mode';
-  document.getElementById('theme-icon').textContent = icon;
-  document.getElementById('topbar-theme-icon').textContent = icon;
   const tog = document.getElementById('s-dark-tog');
   if (tog) tog.classList.toggle('on', t==='dark');
   saveState();
@@ -293,25 +223,7 @@ function toggleTemp() {
   S.isTempChat = !S.isTempChat;
   document.getElementById('temp-btn').classList.toggle('active', S.isTempChat);
   document.getElementById('temp-pill').classList.toggle('show', S.isTempChat);
-  document.getElementById('temp-model-row').classList.toggle('show', S.isTempChat);
-  document.getElementById('temp-model-row').setAttribute('aria-hidden', String(!S.isTempChat));
-  renderTempModelPresets();
   toast(S.isTempChat ? 'Temporary chat on — won\'t be saved' : 'Temporary chat off', 'schedule');
-}
-
-function renderTempModelPresets() {
-  const list = document.getElementById('temp-model-list');
-  list.innerHTML = TEMP_MODEL_PRESETS.map((preset) => {
-    const active = preset.id === S.tempModelPreset ? 'active' : '';
-    return `<button type="button" class="temp-model-chip ${active}" onclick="selectTempModelPreset('${preset.id}')">${preset.label}</button>`;
-  }).join('');
-}
-
-function selectTempModelPreset(id) {
-  S.tempModelPreset = id;
-  renderTempModelPresets();
-  const label = TEMP_MODEL_PRESETS.find((preset) => preset.id === id)?.label || 'Preset';
-  toast(`Temporary preset: ${label}`, 'tune');
 }
 
 function showComingSoon(label) {
@@ -527,16 +439,24 @@ function renderModelList(filter='') {
   }
   list.innerHTML = models.map(m => {
     const sel = S.selectedModel.id === m.id ? 'sel' : '';
-    const caps = m.caps.map(c => {
+    const isProBlocked = S.demoMode && m.pro;
+    const caps = (m.caps || []).map(c => {
       const cm = CAPS_META[c]; if (!cm) return '';
       return `<span class="cap-chip"><span class="ms">${cm.icon}</span>${cm.label}</span>`;
     }).join('');
-    const disabled = m.disabled ? 'style="opacity:.5;pointer-events:none"' : '';
+    const metaParts = [];
+    if (m.context) metaParts.push(`<span class="cap-chip"><span class="ms">data_object</span>${escHtml(String(m.context))}</span>`);
+    if (m.caching) metaParts.push(`<span class="cap-chip"><span class="ms">memory</span>Caching</span>`);
+    const meta = metaParts.join('');
+    const disabled = (m.disabled || isProBlocked) ? 'style="opacity:.45;pointer-events:none;filter:grayscale(0.25)"' : '';
+    const lockLine = isProBlocked ? `<div class="mi-desc" style="color:var(--t)">Pro model unavailable in Demo Mode</div>` : '';
     return `
       <div class="model-item ${sel}" onclick="selectModel('${S.selectedCat}','${m.id}')" ${disabled}>
         <div class="mi-info">
           <div class="mi-name">${escHtml(m.name)}</div>
           <div class="mi-desc">${escHtml(m.desc)}</div>
+          ${lockLine}
+          ${meta ? `<div class="mi-caps">${meta}</div>` : ''}
           ${caps ? `<div class="mi-caps">${caps}</div>` : ''}
         </div>
       </div>`;
@@ -547,6 +467,7 @@ function selectModel(catId, modelId, options = {}) {
   const models = MODELS[catId] || [];
   const model = models.find(m => m.id === modelId);
   if (!model || model.disabled) return;
+  if (S.demoMode && model.pro) return;
   const { silent = false } = options;
   S.selectedCat = catId;
   S.selectedModel = model;
@@ -557,8 +478,33 @@ function selectModel(catId, modelId, options = {}) {
   document.getElementById('model-name-display').textContent = model.name;
   // Show/hide enhance
   document.getElementById('enhance-wrap').classList.toggle('show', !isTextCat(catId));
+  updateInputModeUI();
   closeDropup();
   if (!silent) toast(`Model: ${model.name}`, 'check_circle');
+}
+
+function updateInputModeUI() {
+  const isTranscription = S.selectedCat === 'transcription';
+  const input = document.getElementById('msg-input');
+  const attachBtn = document.getElementById('attach-btn');
+  const expandBtn = document.getElementById('composer-expand-btn');
+
+  document.body.classList.toggle('transcription-mode', isTranscription);
+  input.disabled = isTranscription;
+  input.placeholder = isTranscription ? 'Upload audio for transcription.' : 'Message OneLLM.';
+
+  if (isTranscription) {
+    input.value = '';
+    autoResize(input);
+    attachBtn.title = 'Upload audio for transcription';
+    if (S.composerExpanded) toggleComposerExpanded(false);
+    expandBtn.disabled = true;
+  } else {
+    attachBtn.title = 'Attach file';
+    expandBtn.disabled = false;
+  }
+
+  updateSendBtn();
 }
 
 document.getElementById('model-search').addEventListener('input', e => {
@@ -615,14 +561,13 @@ async function sendMessage() {
       await callImageAPI(chatId, text);
     } else if (S.selectedCat === 'video') {
       await callVideoAPI(chatId, text);
-    } else if (S.selectedCat === 'audio-out') {
+    } else if (S.selectedCat === 'audio') {
       await callAudioOutAPI(chatId, text);
-    } else if (S.selectedCat === 'audio-in' || S.selectedCat === 'transcription') {
-      await callTranscriptionAPI(chatId);
+    } else if (S.selectedCat === 'transcription') {
+      await callTranscriptionAPI(chatId, userMsg.attachments || []);
     } else if (isTextCat(S.selectedCat)) {
       if (S.isTempChat) {
-        const presetLabel = TEMP_MODEL_PRESETS.find((preset) => preset.id === S.tempModelPreset)?.label || 'Balanced';
-        await simulateResponse(chatId, `[Temp ${presetLabel}] Preview response for temporary chat mode. Use this to evaluate UI state before backend wiring.`);
+        await simulateResponse(chatId, 'Temporary chat mode is active. This conversation is not saved to history.');
       } else {
         await callTextAPI(chatId, text, userMsg);
       }
@@ -723,8 +668,8 @@ async function callAudioOutAPI(chatId, text) {
   addMsgToView(aiMsg);
 }
 
-async function callTranscriptionAPI(chatId) {
-  const audioAttachment = S.attachments.find((a) => a.type?.startsWith('audio/'));
+async function callTranscriptionAPI(chatId, attachments) {
+  const audioAttachment = (attachments || []).find((a) => a.type?.startsWith('audio/'));
   if (!audioAttachment || !audioAttachment.data) {
     removeTyping();
     throw new Error('Attach an audio file for transcription.');
@@ -848,6 +793,9 @@ function handleFiles(files) {
       });
       renderAttachPreview();
       updateSendBtn();
+      if (S.selectedCat === 'transcription' && file.type.startsWith('audio/')) {
+        sendMessage();
+      }
     };
     reader.readAsDataURL(file);
   });
@@ -880,12 +828,11 @@ function clearAttachPreview() {
 function openSettings() {
   document.getElementById('sys-prompt').value = S.systemPrompt;
   document.getElementById('s-dark-tog').classList.toggle('on', S.theme==='dark');
-  document.getElementById('s-demo-tog').classList.toggle('on', S.demoMode);
   document.getElementById('s-demo-ui-tog').classList.toggle('on', S.demoUiMode);
   document.getElementById('demo-ui-note').style.display = S.demoUiMode ? '' : 'none';
   document.getElementById('byop-key-input').value = S.byopKey;
-  document.getElementById('s-key-mode-tog').classList.toggle('on', S.apiMode === 'byop');
   syncApiModeUI();
+  syncSettingsSectionNav();
   renderEnhanceModelList('s-eml', S.enhanceModel);
   openDlg('settings-dlg');
 }
@@ -900,13 +847,78 @@ function saveSettings() {
 function syncApiModeUI() {
   const chip = document.getElementById('active-key-chip');
   const byopInput = document.getElementById('byop-key-input');
+  const cards = document.querySelectorAll('.mode-card[data-mode-card]');
+  const radios = document.querySelectorAll('input[name="api-mode"]');
+
+  cards.forEach((card) => {
+    const active = card.dataset.modeCard === S.apiMode;
+    card.classList.toggle('active', active);
+    card.setAttribute('aria-pressed', String(active));
+  });
+
+  radios.forEach((radio) => {
+    radio.checked = radio.value === S.apiMode;
+  });
+
   if (S.apiMode === 'byop') {
-    chip.textContent = 'BYOP Key Active';
+    if (chip) chip.textContent = 'BYOP Mode Active';
     byopInput.disabled = false;
+    S.demoMode = false;
   } else {
-    chip.textContent = 'Demo Key Active';
+    if (chip) chip.textContent = 'Demo Mode Active';
     byopInput.disabled = true;
+    S.demoMode = true;
   }
+
+  updateDemoBanner();
+}
+
+function setApiMode(mode, options = {}) {
+  const { silent = false } = options;
+  S.apiMode = mode === 'byop' ? 'byop' : 'demo';
+  syncApiModeUI();
+  saveState();
+  if (!silent) {
+    toast(S.apiMode === 'byop' ? 'BYOP mode enabled' : 'Demo mode enabled', 'vpn_key');
+  }
+}
+
+function syncSettingsSectionNav(section = 'general') {
+  const navItems = document.querySelectorAll('.settings-nav-item');
+  const sections = document.querySelectorAll('.settings-section');
+  navItems.forEach((item) => item.classList.toggle('active', item.dataset.section === section));
+  sections.forEach((panel) => panel.classList.toggle('active', panel.dataset.section === section));
+}
+
+function dismissPwaNudge() {
+  S.pwaNudgeDismissed = true;
+  const nudge = document.getElementById('pwa-nudge');
+  nudge.style.display = 'none';
+  saveState();
+}
+
+function maybeShowPwaNudge() {
+  const nudge = document.getElementById('pwa-nudge');
+  if (S.pwaNudgeDismissed) {
+    nudge.style.display = 'none';
+    return;
+  }
+  nudge.style.display = 'flex';
+}
+
+async function triggerInstallPrompt() {
+  if (!deferredInstallPrompt) {
+    toast('Install prompt unavailable. Use your browser menu: Add to Home Screen.', 'download');
+    return;
+  }
+
+  deferredInstallPrompt.prompt();
+  const choice = await deferredInstallPrompt.userChoice;
+  if (choice.outcome === 'accepted') {
+    toast('App install started', 'download_done');
+  }
+  deferredInstallPrompt = null;
+  dismissPwaNudge();
 }
 
 function exportHistory() {
@@ -1047,8 +1059,9 @@ function toast(msg, icon='info') {
    INPUT UTILITIES
 ══════════════════════════════════════════════ */
 function autoResize(el) {
+  const maxHeight = S.composerExpanded ? Math.floor(window.innerHeight * 0.52) : 96;
   el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, 180) + 'px';
+  el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
 }
 function updateSendBtn() {
   const input = document.getElementById('msg-input');
@@ -1065,6 +1078,18 @@ function setInputVal(val) {
   document.getElementById('msg-input').focus();
 }
 
+function toggleComposerExpanded(forceState) {
+  const next = typeof forceState === 'boolean' ? forceState : !S.composerExpanded;
+  S.composerExpanded = next;
+  document.body.classList.toggle('composer-expanded', next);
+  document.querySelector('.input-row')?.classList.toggle('expanded', next);
+  const icon = document.getElementById('composer-expand-icon');
+  const btn = document.getElementById('composer-expand-btn');
+  if (icon) icon.textContent = next ? 'close_fullscreen' : 'open_in_full';
+  if (btn) btn.title = next ? 'Collapse composer' : 'Expand composer';
+  autoResize(document.getElementById('msg-input'));
+}
+
 /* ══════════════════════════════════════════════
    EVENT BINDINGS
 ══════════════════════════════════════════════ */
@@ -1075,9 +1100,6 @@ document.getElementById('side-ov').addEventListener('click', () => setSidebar(fa
 document.getElementById('new-chat-btn').addEventListener('click', newChat);
 // Temp chat
 document.getElementById('temp-btn').addEventListener('click', toggleTemp);
-// Theme
-document.getElementById('theme-btn').addEventListener('click', toggleTheme);
-document.getElementById('topbar-theme-btn').addEventListener('click', toggleTheme);
 // Settings
 document.getElementById('settings-btn').addEventListener('click', openSettings);
 document.getElementById('settings-close').addEventListener('click', () => {
@@ -1087,17 +1109,26 @@ document.getElementById('s-dark-tog').addEventListener('click', e => {
   const on = e.target.classList.toggle('on');
   applyTheme(on ? 'dark' : 'light');
 });
-document.getElementById('s-demo-tog').addEventListener('click', e => {
-  S.demoMode = e.target.classList.toggle('on');
-  updateDemoBanner(); saveState();
-  toast(S.demoMode ? 'Demo mode on (20 RPD)' : 'Demo mode off', 'bolt');
+document.querySelectorAll('.mode-card[data-mode-card]').forEach((card) => {
+  card.addEventListener('click', (event) => {
+    const mode = card.dataset.modeCard;
+    if (mode) setApiMode(mode);
+    if (event.target instanceof HTMLInputElement) return;
+    const radio = card.querySelector('input[name="api-mode"]');
+    if (radio) radio.checked = true;
+  });
+  card.addEventListener('keydown', (event) => {
+    if (event.key === 'Enter' || event.key === ' ') {
+      event.preventDefault();
+      const mode = card.dataset.modeCard;
+      if (mode) setApiMode(mode);
+    }
+  });
 });
-document.getElementById('s-key-mode-tog').addEventListener('click', e => {
-  const on = e.target.classList.toggle('on');
-  S.apiMode = on ? 'byop' : 'demo';
-  syncApiModeUI();
-  saveState();
-  toast(on ? 'BYOP key mode enabled' : 'Demo key mode enabled', 'vpn_key');
+document.querySelectorAll('input[name="api-mode"]').forEach((radio) => {
+  radio.addEventListener('change', () => {
+    if (radio.checked) setApiMode(radio.value);
+  });
 });
 document.getElementById('byop-link-btn').addEventListener('click', () => {
   window.open('https://enter.pollinations.ai', '_blank', 'noopener,noreferrer');
@@ -1115,6 +1146,9 @@ document.getElementById('clear-btn').addEventListener('click', clearHistory);
 document.querySelector('#settings-dlg .dlg-bg').addEventListener('click', () => {
   saveSettings(); closeDlg('settings-dlg');
 });
+document.querySelectorAll('.settings-nav-item').forEach((item) => {
+  item.addEventListener('click', () => syncSettingsSectionNav(item.dataset.section));
+});
 // Input
 document.getElementById('msg-input').addEventListener('input', e => {
   autoResize(e.target); updateSendBtn();
@@ -1123,6 +1157,7 @@ document.getElementById('msg-input').addEventListener('keydown', e => {
   if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 document.getElementById('send-btn').addEventListener('click', sendMessage);
+document.getElementById('composer-expand-btn').addEventListener('click', () => toggleComposerExpanded());
 // Attach
 document.getElementById('attach-btn').addEventListener('click', () => document.getElementById('file-input').click());
 document.getElementById('file-input').addEventListener('change', e => handleFiles(e.target.files));
@@ -1141,6 +1176,21 @@ document.getElementById('enhance-close').addEventListener('click', () => closeDl
 document.querySelector('#enhance-dlg .dlg-bg').addEventListener('click', () => closeDlg('enhance-dlg'));
 document.getElementById('do-enhance-btn').addEventListener('click', doEnhance);
 document.getElementById('use-enhanced-btn').addEventListener('click', useEnhanced);
+document.getElementById('pwa-dismiss-btn').addEventListener('click', dismissPwaNudge);
+document.getElementById('pwa-open-settings-btn').addEventListener('click', () => {
+  openSettings();
+  syncSettingsSectionNav('install');
+});
+document.getElementById('install-app-btn').addEventListener('click', triggerInstallPrompt);
+document.getElementById('install-help-btn').addEventListener('click', () => {
+  toast('Open browser menu and choose Install App or Add to Home Screen.', 'help');
+});
+
+window.addEventListener('beforeinstallprompt', (event) => {
+  event.preventDefault();
+  deferredInstallPrompt = event;
+  maybeShowPwaNudge();
+});
 // Keyboard shortcuts
 document.addEventListener('keydown', e => {
   if (e.key==='Escape') {
@@ -1168,10 +1218,8 @@ function checkMobile() {
     S.isMobile = mobile;
     if (mobile) {
       if (S.sideOpen) setSidebar(false);
-      document.getElementById('topbar-theme-btn').style.display = '';
     } else {
       setSidebar(true);
-      document.getElementById('topbar-theme-btn').style.display = 'none';
     }
   }
 }
@@ -1180,7 +1228,7 @@ window.addEventListener('resize', checkMobile);
 /* ══════════════════════════════════════════════
    INIT
 ══════════════════════════════════════════════ */
-function init() {
+async function init() {
   loadState();
   applyTheme(S.theme);
 
@@ -1189,20 +1237,21 @@ function init() {
   else setSidebar(false);
 
   renderHistory();
+  setApiMode(S.apiMode, { silent: true });
   updateDemoBanner();
-  renderTempModelPresets();
-  document.getElementById('temp-model-row').classList.toggle('show', S.isTempChat);
-  document.getElementById('temp-model-row').setAttribute('aria-hidden', String(!S.isTempChat));
   syncApiModeUI();
+
+  await loadLocalModelCatalog();
 
   // Ensure the starting model chip is synced in UI.
   selectModel(S.selectedCat, S.selectedModel.id, { silent: true });
-  bootstrapPollinationsModels();
 
   if (S.demoUiMode) {
     document.getElementById('s-demo-ui-tog').classList.add('on');
     applyDemoUiMode(true);
   }
+
+  maybeShowPwaNudge();
 
   // System prompt sync
   document.getElementById('sys-prompt').addEventListener('input', e => {

@@ -58,7 +58,8 @@
         <span class="qn-text">Explore Apps</span>
         <span class="qn-badge soon">Soon</span>
       </div>
-      <div class="qn-item" onclick="showComingSoon('Prompt Library')">
+      <!-- Literally just character ai or any other role playing models crap stuff.-->
+      <div class="qn-item" onclick="showComingSoon('Personality Library')">
         <span class="ms sm">auto_stories</span>
         <span class="qn-text">Personality Library</span>
         <span class="qn-badge soon">Soon</span>
@@ -68,15 +69,16 @@
         <span class="qn-text">Usage Dashboard</span>
         <span class="qn-badge soon">Soon</span>
       </div>
+    </div>
 
     <div class="side-foot">
+      <div class="user-mini" title="User profile">
+        <span class="ms sm">person</span>
+      </div>
       <button class="ib" id="settings-btn" title="Settings">
         <span class="ms">settings</span>
       </button>
       <span class="pow">Powered by <a href="https://pollinations.ai" target="_blank">pollinations.ai</a></span>
-      <button class="ib" id="theme-btn" title="Toggle theme">
-        <span class="ms" id="theme-icon">light_mode</span>
-      </button>
     </div>
   </aside>
 
@@ -93,6 +95,23 @@
       <div class="demo-pill" id="demo-counter">20 left</div>
     </div>
 
+    <div id="pwa-nudge" class="pwa-nudge" style="display:none">
+      <div class="pwa-nudge-copy">
+        <strong>Install OneLLM App</strong>
+        <span>Open Settings > Install as App to continue.</span>
+      </div>
+      <div class="pwa-nudge-actions">
+        <button class="btn btn-sec" id="pwa-dismiss-btn" type="button">
+          <span class="ms">close</span>
+          Dismiss
+        </button>
+        <button class="btn btn-pri" id="pwa-open-settings-btn" type="button">
+          <span class="ms">settings</span>
+          Open Menu
+        </button>
+      </div>
+    </div>
+
     <!-- Topbar -->
     <header id="topbar">
       <button class="ib" id="sidebar-toggle">
@@ -103,9 +122,6 @@
         <span class="ms sm">schedule</span>
         Temporary
       </div>
-      <button class="ib" id="topbar-theme-btn" title="Toggle theme" style="display:none">
-        <span class="ms" id="topbar-theme-icon">light_mode</span>
-      </button>
     </header>
 
     <!-- Chat -->
@@ -117,6 +133,7 @@
           <div class="w-heading">OneLLM Playground</div>
           <div class="w-sub">One screen. Every model. Chat with text models, generate images, transcribe audio, and more — all powered by Pollinations.ai.</div>
           <div class="w-chips">
+            <!-- Temp, Will use AI to make this more personal-->
             <div class="w-chip" onclick="setInputVal('Tell me something fascinating about the universe')">✨ Fascinating fact</div>
             <div class="w-chip" onclick="setInputVal('Write a short poem about the ocean at night')">🌊 Write a poem</div>
             <div class="w-chip" onclick="setInputVal('Explain quantum entanglement simply')">🔬 Explain science</div>
@@ -132,17 +149,15 @@
 
         <!-- Input row — FIRST (top) -->
         <div class="input-row">
-          <textarea id="msg-input" placeholder="Message OneLLM…" rows="1"></textarea>
+          <textarea id="msg-input" placeholder="Message OneLLM." rows="1"></textarea>
           <div class="input-acts">
+            <button id="composer-expand-btn" class="iab" type="button" title="Expand composer">
+              <span class="ms" id="composer-expand-icon">open_in_full</span>
+            </button>
             <button id="send-btn" disabled title="Send">
               <span class="ms fill">arrow_upward</span>
             </button>
           </div>
-        </div>
-
-        <div class="temp-model-row" id="temp-model-row" aria-hidden="true">
-          <div class="temp-model-label">Temporary Model Preview</div>
-          <div class="temp-model-list" id="temp-model-list"></div>
         </div>
 
         <!-- Attachment previews (now directly below input) -->
@@ -207,116 +222,172 @@
       </button>
     </div>
     <div class="dlg-body">
-      <!-- Appearance -->
-      <div>
-        <div class="sec-title">Appearance</div>
-        <div class="srow">
-          <span class="ms fill">dark_mode</span>
-          <div class="srow-info">
-            <div class="srow-label">Dark mode</div>
-            <div class="srow-desc">Toggle light / dark theme</div>
-          </div>
-          <button class="tog" id="s-dark-tog"></button>
-        </div>
-      </div>
-      <!-- AI Config -->
-      <div>
-        <div class="sec-title">AI Configuration</div>
-        <div class="srow srow-col">
-          <div class="srow-head">
-            <span class="ms fill">vpn_key</span>
-            <div class="srow-info">
-              <div class="srow-label">Pollinations API Mode</div>
-              <div class="srow-desc">Switch between built-in demo key and BYOP key</div>
+      <div class="settings-shell">
+        <nav class="settings-nav" id="settings-nav">
+          <button class="settings-nav-item active" data-section="general" type="button"><span class="ms sm">tune</span>General</button>
+          <button class="settings-nav-item" data-section="api" type="button"><span class="ms sm">vpn_key</span>API</button>
+          <button class="settings-nav-item" data-section="history" type="button"><span class="ms sm">history</span>History</button>
+          <button class="settings-nav-item" data-section="install" type="button"><span class="ms sm">download</span>Install as App</button>
+          <button class="settings-nav-item" data-section="about" type="button"><span class="ms sm">info</span>About</button>
+        </nav>
+
+        <div class="settings-content">
+          <section class="settings-section active" data-section="general">
+            <div class="sec-title">General</div>
+            <div class="srow">
+              <span class="ms fill">dark_mode</span>
+              <div class="srow-info">
+                <div class="srow-label">Dark mode</div>
+                <div class="srow-desc">Toggle light / dark theme</div>
+              </div>
+              <button class="tog" id="s-dark-tog"></button>
             </div>
-            <button class="tog" id="s-key-mode-tog" title="Toggle BYOP key"></button>
-          </div>
-          <div class="key-mode-row">
-            <span class="key-chip" id="active-key-chip">Demo Key Active</span>
-            <button class="btn btn-sec" id="byop-link-btn" type="button">
-              <span class="ms">link</span>
-              Link BYOP
-            </button>
-          </div>
-          <input class="s-input" id="byop-key-input" type="text" placeholder="pk_... (publishable key)">
-        </div>
-        <div style="height:8px"></div>
-        <div class="srow srow-col">
-          <div class="srow-head">
-            <span class="ms fill">psychology</span>
-            <div class="srow-info">
-              <div class="srow-label">System Prompt</div>
-              <div class="srow-desc">Default instruction for text models</div>
+            <div style="height:8px"></div>
+            <div class="srow srow-col">
+              <div class="srow-head">
+                <span class="ms fill">psychology</span>
+                <div class="srow-info">
+                  <div class="srow-label">System Prompt</div>
+                  <div class="srow-desc">Default instruction for text models</div>
+                </div>
+              </div>
+              <textarea class="stxt" id="sys-prompt" placeholder="You are a helpful AI assistant…"></textarea>
             </div>
-          </div>
-          <textarea class="stxt" id="sys-prompt" placeholder="You are a helpful AI assistant…"></textarea>
-        </div>
-        <div style="height:8px"></div>
-        <div class="srow">
-          <span class="ms fill" style="color:var(--t)">bolt</span>
-          <div class="srow-info">
-            <div class="srow-label">Demo Mode</div>
-            <div class="srow-desc">Limit to 20 requests per day</div>
-          </div>
-          <button class="tog" id="s-demo-tog"></button>
-        </div>
-        <div style="height:8px"></div>
-        <div class="srow srow-col">
-          <div class="srow-head">
-            <span class="ms fill">auto_fix_high</span>
-            <div class="srow-info">
-              <div class="srow-label">Enhance Model</div>
-              <div class="srow-desc">Text model used to enhance prompts</div>
+            <div style="height:8px"></div>
+            <div class="sec-title" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+              Demonstration Mode
+              <span class="demo-ui-badge"><span class="ms" style="font-size:12px">play_circle</span> UI Preview</span>
             </div>
-          </div>
-          <div class="eml" id="s-eml"><!-- JS --></div>
-        </div>
-      </div>
-      <!-- Demonstration Mode -->
-      <div>
-        <div class="sec-title" style="display:flex;align-items:center;gap:6px">
-          Demonstration Mode
-          <span class="demo-ui-badge"><span class="ms" style="font-size:12px">play_circle</span> UI Preview</span>
-        </div>
-        <div class="srow" style="margin-bottom:8px">
-          <span class="ms fill" style="color:var(--p)">theaters</span>
-          <div class="srow-info">
-            <div class="srow-label">Fill UI with demo data</div>
-            <div class="srow-desc">Populates messages, history & model states to preview the full UI without making real API calls</div>
-          </div>
-          <button class="tog" id="s-demo-ui-tog"></button>
-        </div>
-        <div id="demo-ui-note" style="display:none;padding:10px 14px;background:var(--surf-lo);border-radius:var(--r-md);border:1.5px solid color-mix(in srgb,var(--p) 30%,transparent);font-size:13px;color:var(--on-surf-v);line-height:1.5">
-          <strong style="color:var(--p)">Demo mode active</strong> — The app is showing sample chats, messages, and model states. No real API calls are made. Toggle off to return to normal.
-        </div>
-      </div>
-      <!-- History -->
-      <div>
-        <div class="sec-title">Chat History</div>
-        <div class="btn-row">
-          <button class="btn btn-sec" id="export-btn">
-            <span class="ms">download</span> Export
-          </button>
-          <label class="btn btn-sec" for="import-file">
-            <span class="ms">upload</span> Import
-          </label>
-          <input type="file" id="import-file" accept=".json" style="display:none">
-          <button class="btn btn-err" id="clear-btn">
-            <span class="ms">delete_sweep</span> Clear all
-          </button>
-        </div>
-      </div>
-      <!-- About -->
-      <div>
-        <div class="sec-title">About</div>
-        <div class="srow">
-          <span class="ms fill">info</span>
-          <div class="srow-info">
-            <div class="srow-label">OneLLM Playground</div>
-            <div class="srow-desc">
-              Powered by <a href="https://pollinations.ai" target="_blank">pollinations.ai</a> &mdash;
+            <div class="srow" style="margin-bottom:8px">
+              <span class="ms fill" style="color:var(--p)">theaters</span>
+              <div class="srow-info">
+                <div class="srow-label">Fill UI with demo data</div>
+                <div class="srow-desc">Populates messages, history & model states to preview the full UI without real generation calls</div>
+              </div>
+              <button class="tog" id="s-demo-ui-tog"></button>
             </div>
-          </div>
+            <div id="demo-ui-note" style="display:none;padding:10px 14px;background:var(--surf-lo);border-radius:var(--r-md);border:1.5px solid color-mix(in srgb,var(--p) 30%,transparent);font-size:13px;color:var(--on-surf-v);line-height:1.5">
+              <strong style="color:var(--p)">Demo preview active</strong> — The app is showing sample chats, messages, and model states.
+            </div>
+            <div style="height:8px"></div>
+            <div class="srow srow-col">
+              <div class="srow-head">
+                <span class="ms fill">auto_fix_high</span>
+                <div class="srow-info">
+                  <div class="srow-label">Enhance Model</div>
+                  <div class="srow-desc">Text model used to enhance prompts</div>
+                </div>
+              </div>
+              <div class="eml" id="s-eml"><!-- JS --></div>
+            </div>
+          </section>
+
+          <section class="settings-section" data-section="api">
+            <div class="sec-title">API Mode</div>
+            <div class="srow srow-col">
+              <div class="srow-head">
+                <span class="ms fill">swap_horiz</span>
+                <div class="srow-info">
+                  <div class="srow-label">Mode</div>
+                  <div class="srow-desc">Pick one mode. Selected card expands with detailed controls.</div>
+                </div>
+              </div>
+              <div class="mode-cards" id="api-mode-cards">
+                <article class="mode-card active" data-mode-card="demo" tabindex="0" role="button" aria-pressed="true">
+                  <div class="mode-card-head">
+                    <div class="mode-card-title">Demo Mode</div>
+                    <label class="mode-radio" aria-label="Select demo mode">
+                      <input type="radio" name="api-mode" value="demo" checked>
+                      <span>On</span>
+                    </label>
+                  </div>
+                  <div class="mode-card-short">Use shared demo key with daily limits.</div>
+                  <div class="mode-card-expanded">
+                    <p>Best for testing and quick previews. Demo Mode uses the shared Pollinations key with a daily request cap.</p>
+                  </div>
+                </article>
+
+                <article class="mode-card" data-mode-card="byop" tabindex="0" role="button" aria-pressed="false">
+                  <div class="mode-card-head">
+                    <div class="mode-card-title">BYOP</div>
+                    <label class="mode-radio" aria-label="Select BYOP mode">
+                      <input type="radio" name="api-mode" value="byop">
+                      <span>On</span>
+                    </label>
+                  </div>
+                  <div class="mode-card-short">Bring your own Pollinations key.</div>
+                  <div class="mode-card-expanded">
+                    <p>Use your own API key for personal usage and fewer demo restrictions. The key is stored locally in your browser.</p>
+                    <input class="s-input" id="byop-key-input" type="password" placeholder="Enter your BYOP key">
+                    <div class="btn-row">
+                      <button class="btn btn-sec" id="byop-link-btn" type="button">
+                        <span class="ms">link</span>
+                        Get Key
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              </div>
+            </div>
+            <div style="height:8px"></div>
+            <div class="srow">
+              <span class="ms fill" style="color:var(--t)">bolt</span>
+              <div class="srow-info">
+                <div class="srow-label">Mode Behavior</div>
+                <div class="srow-desc">Demo Mode enables demo limits. BYOP uses your own key.</div>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" data-section="history">
+            <div class="sec-title">Chat History</div>
+            <div class="btn-row">
+              <button class="btn btn-sec" id="export-btn">
+                <span class="ms">download</span> Export
+              </button>
+              <label class="btn btn-sec" for="import-file">
+                <span class="ms">upload</span> Import
+              </label>
+              <input type="file" id="import-file" accept=".json" style="display:none">
+              <button class="btn btn-err" id="clear-btn">
+                <span class="ms">delete_sweep</span> Clear all
+              </button>
+            </div>
+          </section>
+
+          <section class="settings-section" data-section="install">
+            <div class="sec-title">Install as App</div>
+            <div class="srow srow-col">
+              <div class="srow-head">
+                <span class="ms fill">download</span>
+                <div class="srow-info">
+                  <div class="srow-label">Progressive App Install</div>
+                  <div class="srow-desc">Install OneLLM for a native-style experience with quick launch from your device.</div>
+                </div>
+              </div>
+              <div class="btn-row">
+                <button class="btn btn-pri" id="install-app-btn" type="button">
+                  <span class="ms">download</span>
+                  Install Now
+                </button>
+                <button class="btn btn-sec" id="install-help-btn" type="button">
+                  <span class="ms">help</span>
+                  Browser Instructions
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section class="settings-section" data-section="about">
+            <div class="sec-title">About</div>
+            <div class="srow">
+              <span class="ms fill">info</span>
+              <div class="srow-info">
+                <div class="srow-label">OneLLM Playground</div>
+                <div class="srow-desc">Powered by <a href="https://pollinations.ai" target="_blank">pollinations.ai</a></div>
+              </div>
+            </div>
+          </section>
         </div>
       </div>
     </div>
