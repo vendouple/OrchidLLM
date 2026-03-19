@@ -119,7 +119,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  transition: opacity 0.4s var(--ease-standard);
+  transition: opacity var(--duration-medium-4) var(--ease-emphasized);
+  animation: overlayFadeIn var(--duration-long-1) var(--ease-standard);
+}
+
+@keyframes overlayFadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
 
 .login-overlay[hidden] {
@@ -135,6 +145,18 @@
   display: flex;
   flex-direction: column;
   gap: 2rem;
+  animation: cardSlideUp var(--duration-long-2) var(--ease-emphasized-decelerate);
+}
+
+@keyframes cardSlideUp {
+  from {
+    opacity: 0;
+    transform: translateY(60px) scale(0.9);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
 }
 
 .login-options {

@@ -240,24 +240,25 @@ async function handleSend() {
       responseData = { role: 'assistant', type: 'text', content: resText };
     } 
     else if (mode === "image") {
-      const url = await generateImage(state.currentModel?.name || state.currentModel, content);
+      const modelName = typeof state.currentModel === 'object' ? state.currentModel.name : state.currentModel;
+      const url = await generateImage(content, modelName);
       responseData = { role: 'assistant', type: 'image', url };
     }
     else if (mode === "audio") {
-      const url = await generateAudio(state.currentModel?.name || state.currentModel, content);
+      const url = await generateAudio(content, "nova");
       responseData = { role: 'assistant', type: 'audio', url };
     }
     else if (mode === "music") {
-      const url = await generateMusic(state.currentModel?.name || state.currentModel, content);
+      const url = await generateMusic(content, 30);
       responseData = { role: 'assistant', type: 'music', url };
     }
     else if (mode === "video") {
-      const url = await generateVideo(state.currentModel || "deforum", content);
+      const url = await generateVideo(content, 3);
       responseData = { role: 'assistant', type: 'video', url };
     }
     else if (mode === "transcription") {
       if (!fileRef) throw new Error("File required for transcription.");
-      const text = await transcribeMedia(state.currentModel || "whisper-large-v3", fileRef);
+      const text = await transcribeMedia(fileRef);
       responseData = { role: 'assistant', type: 'transcription', content: text };
     }
 

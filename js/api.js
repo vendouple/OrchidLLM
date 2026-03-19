@@ -10,12 +10,13 @@ export function getApiKey() {
 export async function fetchModels() {
   try {
     const [textRes, imageRes] = await Promise.all([
-      fetch("https://text.pollinations.ai/models"),
-      fetch("https://image.pollinations.ai/models")
+      fetch("https://gen.pollinations.ai/v1/models"),
+      fetch("https://gen.pollinations.ai/image/models")
     ]);
-    
+
     if (textRes.ok) {
-      state.availableModels.text = await textRes.json();
+      const textData = await textRes.json();
+      state.availableModels.text = textData.data || textData;
     }
     if (imageRes.ok) {
       const imgData = await imageRes.json();
@@ -25,7 +26,7 @@ export async function fetchModels() {
   } catch(e) {
     console.error("Fetch models failed", e);
     // fallback
-    state.availableModels.text = [{name: "openai", tools: true, reasoning: false}];
+    state.availableModels.text = [{id: "openai", name: "openai"}];
     state.availableModels.image = [{name: "flux"}];
     return false;
   }
@@ -33,7 +34,7 @@ export async function fetchModels() {
 
 export async function validatePollenKey(key) {
   try {
-    const res = await fetch("https://gen.pollinations.ai/models", {
+    const res = await fetch("https://gen.pollinations.ai/v1/models", {
       headers: { Authorization: `Bearer ${key}` }
     });
     return res.ok;
@@ -46,7 +47,7 @@ export async function generateText(prompt, model, systemPrompt, chatHistory = []
   const apiKey = getApiKey();
   const messages = [];
   if (systemPrompt) messages.push({ role: "system", content: systemPrompt });
-  
+
   // Format history for context
   for (const msg of chatHistory) {
       if (msg.type === "text") {
@@ -55,7 +56,7 @@ export async function generateText(prompt, model, systemPrompt, chatHistory = []
   }
   messages.push({ role: "user", content: prompt });
 
-  const res = await fetch("https://text.pollinations.ai/v1/chat/completions", {
+  const res = await fetch("https://gen.pollinations.ai/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
     body: JSON.stringify({ model, messages })
@@ -69,42 +70,42 @@ export async function generateText(prompt, model, systemPrompt, chatHistory = []
 export async function generateImage(prompt, model) {
   const apiKey = getApiKey();
   const seed = Math.floor(Math.random() * 1000000);
-  const url = `https://image.pollinations.ai/prompt/${encodeURIComponent(prompt)}?model=${encodeURIComponent(model)}&seed=${seed}&nologo=true&private=true&key=${encodeURIComponent(apiKey)}`;
-  
+  const url = `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=${encodeURIComponent(model)}&seed=${seed}&nologo=true&enhance=false&key=${encodeURIComponent(apiKey)}`;
+
   // preload check
-  await fetch(url, { method: 'GET' }); 
+  await fetch(url, { method: 'GET' });
   return url;
 }
 
-export async function generateAudio(text) {
+export async function generateAudio(text, voice = "nova") {
   const apiKey = getApiKey();
   const res = await fetch("https://gen.pollinations.ai/v1/audio/speech", {
     method: "POST",
     headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-    body: JSON.stringify({ model: "parler-tts", input: text })
+    body: JSON.stringify({ model: "elevenlabs", input: text, voice })
   });
   if (!res.ok) throw new Error(res.statusText);
   const blob = await res.blob();
   return URL.createObjectURL(blob);
 }
 
-export async function generateMusic(prompt) {
+export async function generateMusic(prompt, duration = 30) {
   const apiKey = getApiKey();
   const seed = Math.floor(Math.random() * 1000000);
-  return `https://gen.pollinations.ai/audio/${encodeURIComponent(prompt)}?duration=30&seed=${seed}&key=${encodeURIComponent(apiKey)}`;
+  return `https://gen.pollinations.ai/audio/${encodeURIComponent(prompt)}?model=elevenmusic&duration=${duration}&seed=${seed}&key=${encodeURIComponent(apiKey)}`;
 }
 
-export async function generateVideo(prompt) {
+export async function generateVideo(prompt, duration = 3) {
   const apiKey = getApiKey();
   const seed = Math.floor(Math.random() * 1000000);
-  return `https://gen.pollinations.ai/video/${encodeURIComponent(prompt)}?duration=3&seed=${seed}&key=${encodeURIComponent(apiKey)}`;
+  return `https://gen.pollinations.ai/image/${encodeURIComponent(prompt)}?model=wan&duration=${duration}&seed=${seed}&key=${encodeURIComponent(apiKey)}`;
 }
 
 export async function transcribeMedia(file) {
   const apiKey = getApiKey();
   const formData = new FormData();
   formData.append("file", file);
-  formData.append("model", "whisper-large-v3");
+  formData.append("model", "scribe");
 
   const res = await fetch("https://gen.pollinations.ai/v1/audio/transcriptions", {
     method: "POST",
