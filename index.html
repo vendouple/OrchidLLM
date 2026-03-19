@@ -1,1 +1,167 @@
-<!doctype html><html lang="en" data-theme="dark"><head><meta charset="UTF-8" /><meta name="viewport" content="width=device-width, initial-scale=1.0" /><title>OneLLM Playground - M3 </title><link rel="preconnect" href="https://fonts.googleapis.com" /><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin /><link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&display=swap" rel="stylesheet" /><link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet"><link rel="stylesheet" href="./css/theme.css" /><link rel="stylesheet" href="./css/layout.css" /><link rel="stylesheet" href="./css/components.css" /><link rel="stylesheet" href="./css/chat.css" /></head><body><div id="login-overlay" class="login-overlay"><div class="login-card material-card container-elevation-highest"><h1 class="display-sm">Welcome to OneLLM</h1><p class="body-md text-variant">An expressive AI playground powered by Pollinations.ai.</p><div class="login-options"><button class="btn btn-primary btn-large" data-mode="demo"><span class="material-symbols-rounded">rocket_launch</span> Demo Mode (15/day)</button><button class="btn btn-secondary btn-large" data-mode="byop"><span class="material-symbols-rounded">key</span> BYOP (Bring Your Own Pollen)</button></div></div></div><dialog id="byop-dialog" class="material-dialog"><h2 class="title-lg">Enter your Pollen API Key</h2><p class="body-md">Get unlimited access with your publishable key from enter.pollinations.ai</p><div class="input-field"><input type="password" id="byop-key-input" placeholder="pk_..." /><p id="byop-error" class="error-text body-sm" hidden></p></div><div class="dialog-actions"><button class="btn btn-text" id="byop-cancel">Cancel</button><button class="btn btn-primary" id="byop-submit">Continue</button></div></dialog><div class="app-layout"><aside class="sidebar container-elevation-low"><div class="sidebar-header"><button id="new-chat-btn" class="btn btn-fab btn-primary-container extend-fab"><span class="material-symbols-rounded">add</span> New Chat</button><button id="temp-chat-btn" class="btn btn-text btn-icon-start"><span class="material-symbols-rounded">history_toggle_off</span> Temporary Chat</button></div><div class="sidebar-content" id="chat-history-list"></div><div class="sidebar-footer"><div class="auth-status"><span id="quota-display" class="badge badge-primary">Demo: 15 left</span><span id="mode-badge" class="body-sm text-variant">Demo Mode</span></div><div class="footer-actions"><button id="import-btn" class="btn btn-icon btn-tonal tooltip" aria-label="Import History"><span class="material-symbols-rounded">upload</span></button><input type="file" id="import-file-input" accept=".json" hidden /><button id="export-btn" class="btn btn-icon btn-tonal tooltip" aria-label="Export History"><span class="material-symbols-rounded">download</span></button><button id="theme-toggle" class="btn btn-icon btn-tonal tooltip" aria-label="Toggle Theme"><span class="material-symbols-rounded dark-icon">light_mode</span><span class="material-symbols-rounded light-icon">dark_mode</span></button><button id="logout-btn" class="btn btn-icon btn-tonal tooltip" aria-label="Logout"><span class="material-symbols-rounded">logout</span></button></div></div></aside><main class="chat-main container-elevation-base"><header class="chat-header"><div class="chat-title-group"><h2 id="current-chat-title" class="title-lg">New Chat</h2><span id="current-mode-indicator" class="badge badge-secondary">Text Mode</span></div></header><div id="chat-messages" class="chat-messages"><div class="welcome-placeholder"><span class="material-symbols-rounded display-icon text-primary">forum</span><h3 class="headline-sm">What would you like to create?</h3><p class="body-lg text-variant">Switch modes below to generate Text, Images, Audio, or Video.</p></div></div><div class="chat-input-area container-elevation-low"><div class="chat-input-toolbar"><div class="dropdown-wrapper" id="mode-dropdown-wrapper"><button id="mode-selector-btn" class="btn-chip" aria-haspopup="listbox"><span id="mode-icon" class="material-symbols-rounded">edit_document</span><span id="mode-label">Text</span><span class="material-symbols-rounded">arrow_drop_up</span></button><ul id="mode-dropdown-list" class="dropdown-menu bottom-up" role="listbox" hidden><li role="option" data-value="text" class="selected"><span class="material-symbols-rounded">edit_document</span> Text</li><li role="option" data-value="image"><span class="material-symbols-rounded">image</span> Image</li><li role="option" data-value="audio"><span class="material-symbols-rounded">record_voice_over</span> Audio (TTS)</li><li role="option" data-value="music"><span class="material-symbols-rounded">music_note</span> Music</li><li role="option" data-value="video"><span class="material-symbols-rounded">movie</span> Video</li><li role="option" data-value="transcription"><span class="material-symbols-rounded">transcribe</span> Transcription</li></ul></div><div class="dropdown-wrapper" id="model-dropdown-wrapper"><button id="model-selector-btn" class="btn-chip" aria-haspopup="listbox"><span id="model-label" class="model-name-text">Loading models...</span><span class="material-symbols-rounded">arrow_drop_up</span></button><ul id="model-dropdown-list" class="dropdown-menu bottom-up" role="listbox" hidden></ul></div><div id="model-tags-container" class="model-tags"></div></div><div class="input-box-wrapper"><button id="attachment-btn" class="btn btn-icon btn-text" aria-label="Attach file" hidden><span class="material-symbols-rounded">attach_file</span></button><input type="file" id="attachment-input" hidden /><div class="input-field grow"><textarea id="chat-input" rows="1" placeholder="Send a message..." autofocus></textarea></div><button id="send-btn" class="btn btn-icon btn-primary"><span class="material-symbols-rounded">send</span></button></div><div id="attachment-preview" class="attachment-preview" hidden><span class="material-symbols-rounded">description</span><span id="attachment-name">filename.txt</span><button id="remove-attachment" class="btn btn-icon btn-text small"><span class="material-symbols-rounded">close</span></button></div></div></main></div><div id="toast-container" class="toast-container"></div><dialog id="mode-switch-dialog" class="material-dialog"><h2 class="title-lg">Start new chat?</h2><p class="body-md">Switching modes requires starting a new chat.</p><div class="dialog-actions"><button class="btn btn-text" id="mode-switch-cancel">Cancel</button><button class="btn btn-primary" id="mode-switch-confirm">New Chat</button></div></dialog><script type="module" src="./js/app.js"></script></body></html>"
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OneLLM Playground - M3</title>
+  <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Crect width='100' height='100' rx='24' fill='%23284777'/%3E%3Ctext x='50' y='62' font-family='Arial,sans-serif' font-size='56' text-anchor='middle' fill='%23ffffff'%3E1%3C/text%3E%3C/svg%3E" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/icon?family=Material+Symbols+Rounded" rel="stylesheet" />
+  <link rel="stylesheet" href="./css/theme.css" />
+  <link rel="stylesheet" href="./css/layout.css" />
+  <link rel="stylesheet" href="./css/components.css" />
+  <link rel="stylesheet" href="./css/chat.css" />
+</head>
+<body>
+  <div id="login-overlay" class="login-overlay">
+    <div class="login-card material-card container-elevation-highest">
+      <h1 class="display-sm">Welcome to OneLLM</h1>
+      <p class="body-md text-variant">An expressive AI playground powered by Pollinations.ai.</p>
+      <div class="login-options">
+        <button class="btn btn-primary btn-large" data-mode="demo">
+          <span class="material-symbols-rounded">rocket_launch</span>
+          Demo Mode (15/day)
+        </button>
+        <button class="btn btn-secondary btn-large" data-mode="byop">
+          <span class="material-symbols-rounded">key</span>
+          BYOP (Bring Your Own Pollen)
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <dialog id="byop-dialog" class="material-dialog">
+    <h2 class="title-lg">Enter your Pollen API Key</h2>
+    <p class="body-md">Get unlimited access with your key from enter.pollinations.ai</p>
+    <div class="input-field">
+      <input type="password" id="byop-key-input" placeholder="pk_..." />
+      <p id="byop-error" class="error-text body-sm" hidden></p>
+    </div>
+    <div class="dialog-actions">
+      <button class="btn btn-text" id="byop-cancel">Cancel</button>
+      <button class="btn btn-primary" id="byop-submit">Continue</button>
+    </div>
+  </dialog>
+
+  <div class="app-layout">
+    <aside class="sidebar container-elevation-low">
+      <div class="sidebar-header">
+        <button id="new-chat-btn" class="btn btn-fab btn-primary-container extend-fab">
+          <span class="material-symbols-rounded">add</span>
+          New Chat
+        </button>
+        <button id="temp-chat-btn" class="btn btn-text btn-icon-start">
+          <span class="material-symbols-rounded">history_toggle_off</span>
+          Temporary Chat
+        </button>
+      </div>
+
+      <div class="sidebar-content" id="chat-history-list"></div>
+
+      <div class="sidebar-footer">
+        <div class="auth-status">
+          <span id="quota-display" class="badge badge-primary">Demo: 15 left</span>
+          <span id="mode-badge" class="body-sm text-variant">Demo Mode</span>
+        </div>
+        <div class="footer-actions">
+          <button id="import-btn" class="btn btn-icon btn-tonal tooltip" aria-label="Import History">
+            <span class="material-symbols-rounded">upload</span>
+          </button>
+          <input type="file" id="import-file-input" accept=".json" hidden />
+          <button id="export-btn" class="btn btn-icon btn-tonal tooltip" aria-label="Export History">
+            <span class="material-symbols-rounded">download</span>
+          </button>
+          <button id="theme-toggle" class="btn btn-icon btn-tonal tooltip" aria-label="Toggle Theme">
+            <span class="material-symbols-rounded dark-icon">light_mode</span>
+            <span class="material-symbols-rounded light-icon">dark_mode</span>
+          </button>
+          <button id="logout-btn" class="btn btn-icon btn-tonal tooltip" aria-label="Logout">
+            <span class="material-symbols-rounded">logout</span>
+          </button>
+        </div>
+      </div>
+    </aside>
+
+    <main class="chat-main container-elevation-base">
+      <header class="chat-header">
+        <div class="chat-title-group">
+          <h2 id="current-chat-title" class="title-lg">New Chat</h2>
+          <span id="current-mode-indicator" class="badge badge-secondary">Text Mode</span>
+        </div>
+      </header>
+
+      <div id="chat-messages" class="chat-messages">
+        <div class="welcome-placeholder">
+          <span class="material-symbols-rounded display-icon text-primary">forum</span>
+          <h3 class="headline-sm">What would you like to create?</h3>
+          <p class="body-lg text-variant">Switch modes below to generate text, images, audio, music, or video.</p>
+        </div>
+      </div>
+
+      <div class="chat-input-area container-elevation-low">
+        <div class="chat-input-toolbar">
+          <div class="selector-wrapper" id="mode-model-selector">
+            <button id="model-browser-btn" class="btn-chip selector-trigger" aria-haspopup="listbox" aria-expanded="false">
+              <span class="material-symbols-rounded">tune</span>
+              <span id="selected-mode-label">Text</span>
+              <span class="separator-dot">•</span>
+              <span id="selected-model-label" class="model-name-text">openai</span>
+              <span class="material-symbols-rounded">arrow_drop_up</span>
+            </button>
+
+            <div id="model-browser-panel" class="mode-model-panel" hidden>
+              <div class="mode-model-grid">
+                <aside id="model-type-list" class="model-type-list" role="listbox"></aside>
+                <section class="model-list-panel">
+                  <div id="model-list" class="model-list" role="listbox"></div>
+                  <div id="model-tags-container" class="model-tags"></div>
+                </section>
+              </div>
+            </div>
+          </div>
+
+          <div id="generation-controls" class="generation-controls"></div>
+        </div>
+
+        <div class="input-box-wrapper">
+          <button id="attachment-btn" class="btn btn-icon btn-text" aria-label="Attach file" hidden>
+            <span class="material-symbols-rounded">attach_file</span>
+          </button>
+          <input type="file" id="attachment-input" hidden />
+
+          <div class="input-field grow">
+            <textarea id="chat-input" rows="1" placeholder="Send a message..." autofocus></textarea>
+          </div>
+
+          <button id="send-btn" class="btn btn-icon btn-primary">
+            <span class="material-symbols-rounded">send</span>
+          </button>
+        </div>
+
+        <div id="attachment-preview" class="attachment-preview" hidden>
+          <span class="material-symbols-rounded">description</span>
+          <span id="attachment-name">filename.txt</span>
+          <button id="remove-attachment" class="btn btn-icon btn-text small">
+            <span class="material-symbols-rounded">close</span>
+          </button>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <div id="toast-container" class="toast-container"></div>
+
+  <dialog id="mode-switch-dialog" class="material-dialog">
+    <h2 class="title-lg">Start new chat?</h2>
+    <p class="body-md">Switching modes requires starting a new chat.</p>
+    <div class="dialog-actions">
+      <button class="btn btn-text" id="mode-switch-cancel">Cancel</button>
+      <button class="btn btn-primary" id="mode-switch-confirm">New Chat</button>
+    </div>
+  </dialog>
+
+  <script type="module" src="./js/app.js"></script>
+</body>
+</html>

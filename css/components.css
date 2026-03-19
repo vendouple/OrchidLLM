@@ -251,6 +251,12 @@
   animation: toastFadeIn 0.3s var(--ease-standard);
 }
 
+.toast.toast-leave {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity 0.28s var(--ease-standard), transform 0.28s var(--ease-standard);
+}
+
 @keyframes toastFadeIn {
   from { opacity: 0; transform: translateY(20px); }
   to { opacity: 1; transform: translateY(0); }

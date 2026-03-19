@@ -4,7 +4,7 @@
 // =========================================================
 
 // Constants
-const PUBLIC_API_KEY = "pk_BU8jPqG7RBj8yOxh";
+const PUBLIC_API_KEY = "";
 const MAX_DEMO_REQUESTS_PER_DAY = 15;
 const POLLINATIONS_BASE_URL = "https://pollinations.ai";
 const POLLINATIONS_GEN_URL = "https://gen.pollinations.ai";
@@ -239,9 +239,9 @@ function toggleTheme() {
 
 function getApiKey() {
   if (state.authMode === "demo") {
-    return PUBLIC_API_KEY;
+    return "";
   }
-  return state.apiKey || PUBLIC_API_KEY;
+  return state.apiKey || "";
 }
 
 function getBaseUrl() {
@@ -534,7 +534,7 @@ function showPlaygroundPage() {
 
 async function handleDemoMode() {
   state.authMode = "demo";
-  state.apiKey = PUBLIC_API_KEY;
+  state.apiKey = "";
   resetDemoQuotaIfNeeded();
   saveAuthMode();
 
