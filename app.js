@@ -728,7 +728,7 @@ async function doEnhance() {
   btn.disabled = true; btn.innerHTML = '<span class="ms">hourglass_empty</span> Enhancing…';
 
   try {
-    const res = await fetch('https://text.pollinations.ai/', {
+    const res = await fetch('https://gen.pollinations.ai/v1/chat/completions', {
       method:'POST',
       headers:{'Content-Type':'application/json'},
       body: JSON.stringify({
