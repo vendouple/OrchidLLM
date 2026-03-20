@@ -9,10 +9,13 @@
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
 <link rel="stylesheet" href="./styles.css">
+
+<!-- M3E unified ESM bundle via jsDelivr -->
+<script type="module" src="https://cdn.jsdelivr.net/npm/@m3e/web@2.0.5/dist/all.min.js/+esm"></script>
 </head>
 <body>
 
-<div id="app">
+<m3e-theme id="app" style="display: flex; height: 100%; width: 100%;">
 
   <!-- ═══════ SIDEBAR ═══════ -->
   <aside id="sidebar">
@@ -22,14 +25,13 @@
     </div>
 
     <div class="new-chat-row">
-      <button class="new-chat-btn" id="new-chat-btn">
-        <span class="ms sm fill" style="font-size:17px">add</span>
+      <m3e-button variant="filled" id="new-chat-btn" size="medium" style="flex:1">
+        <m3e-icon slot="icon" name="add"></m3e-icon>
         New chat
-      </button>
-      <button class="temp-btn" id="temp-btn" title="Toggle temporary chat (won't be saved)">
-        <span class="ms" style="font-size:18px">chat_bubble</span>
-        <span class="temp-dot-badge"></span>
-      </button>
+      </m3e-button>
+      <m3e-icon-button id="temp-btn" title="Toggle temporary chat (won't be saved)" variant="outlined">
+        <m3e-icon name="chat_bubble"></m3e-icon>
+      </m3e-icon-button>
     </div>
 
     <div class="hist-scroll" id="hist-scroll">
@@ -44,7 +46,6 @@
         <span class="qn-text">Explore Apps</span>
         <span class="qn-badge soon">Soon</span>
       </div>
-      <!-- Literally just character ai or any other role playing models crap stuff.-->
       <div class="qn-item" onclick="showComingSoon('Personality Library')">
         <span class="ms sm">auto_stories</span>
         <span class="qn-text">Personality Library</span>
@@ -61,9 +62,9 @@
       <div class="user-mini" title="User profile">
         <span class="ms sm">person</span>
       </div>
-      <button class="ib" id="settings-btn" title="Settings">
-        <span class="ms">settings</span>
-      </button>
+      <m3e-icon-button id="settings-btn" title="Settings">
+        <m3e-icon name="settings"></m3e-icon>
+      </m3e-icon-button>
       <span class="pow">Powered by <a href="https://pollinations.ai" target="_blank">pollinations.ai</a></span>
     </div>
   </aside>
@@ -81,28 +82,36 @@
       <div class="demo-pill" id="demo-counter">20 left</div>
     </div>
 
+    <div id="demo-data-banner">
+      <div class="demo-data-label">
+        <span class="ms sm">theaters</span>
+        Demo Data — Sample chats and model states loaded
+      </div>
+      <m3e-button variant="outlined" size="extra-small" id="demo-data-exit-btn" type="button">Exit Demo</m3e-button>
+    </div>
+
     <div id="pwa-nudge" class="pwa-nudge" style="display:none">
       <div class="pwa-nudge-copy">
         <strong>Install OneLLM App</strong>
         <span>Open Settings > Install as App to continue.</span>
       </div>
       <div class="pwa-nudge-actions">
-        <button class="btn btn-sec" id="pwa-dismiss-btn" type="button">
-          <span class="ms">close</span>
+        <m3e-button variant="outlined" id="pwa-dismiss-btn" type="button">
+          <m3e-icon slot="icon" name="close"></m3e-icon>
           Dismiss
-        </button>
-        <button class="btn btn-pri" id="pwa-open-settings-btn" type="button">
-          <span class="ms">settings</span>
+        </m3e-button>
+        <m3e-button variant="filled" id="pwa-open-settings-btn" type="button">
+          <m3e-icon slot="icon" name="settings"></m3e-icon>
           Open Menu
-        </button>
+        </m3e-button>
       </div>
     </div>
 
     <!-- Topbar -->
     <header id="topbar">
-      <button class="ib" id="sidebar-toggle">
-        <span class="ms">menu</span>
-      </button>
+      <m3e-icon-button id="sidebar-toggle">
+        <m3e-icon name="menu"></m3e-icon>
+      </m3e-icon-button>
       <div class="top-title" id="chat-title">New Conversation</div>
       <div class="temp-pill" id="temp-pill">
         <span class="ms sm">schedule</span>
@@ -118,13 +127,13 @@
           <div class="w-logo"><span class="ms xl fill">auto_awesome</span></div>
           <div class="w-heading">OneLLM Playground</div>
           <div class="w-sub">One screen. Every model. Chat with text models, generate images, transcribe audio, and more — all powered by Pollinations.ai.</div>
-          <div class="w-chips">
-            <!-- Temp, Will use AI to make this more personal-->
-            <div class="w-chip" onclick="setInputVal('Tell me something fascinating about the universe')">✨ Fascinating fact</div>
-            <div class="w-chip" onclick="setInputVal('Write a short poem about the ocean at night')">🌊 Write a poem</div>
-            <div class="w-chip" onclick="setInputVal('Explain quantum entanglement simply')">🔬 Explain science</div>
-            <div class="w-chip" onclick="setInputVal('What can you help me with today?')">💬 What can you do?</div>
-          </div>
+          <m3e-chip-set class="w-chips">
+            <!-- JS will populate with m3e-assist-chip -->
+            <m3e-assist-chip onclick="setInputVal('Tell me something fascinating about the universe')">✨ Fascinating fact</m3e-assist-chip>
+            <m3e-assist-chip onclick="setInputVal('Write a short poem about the ocean at night')">🌊 Write a poem</m3e-assist-chip>
+            <m3e-assist-chip onclick="setInputVal('Explain quantum entanglement simply')">🔬 Explain science</m3e-assist-chip>
+            <m3e-assist-chip onclick="setInputVal('What can you help me with today?')">💬 What can you do?</m3e-assist-chip>
+          </m3e-chip-set>
         </div>
       </div>
     </div>
@@ -137,12 +146,12 @@
         <div class="input-row">
           <textarea id="msg-input" placeholder="Message OneLLM." rows="1"></textarea>
           <div class="input-acts">
-            <button id="composer-expand-btn" class="iab" type="button" title="Expand composer">
-              <span class="ms" id="composer-expand-icon">open_in_full</span>
-            </button>
-            <button id="send-btn" disabled title="Send">
-              <span class="ms fill">arrow_upward</span>
-            </button>
+            <m3e-icon-button id="composer-expand-btn" type="button" title="Expand composer">
+              <m3e-icon name="open_in_full" id="composer-expand-icon"></m3e-icon>
+            </m3e-icon-button>
+            <m3e-icon-button id="send-btn" variant="filled" disabled title="Send">
+              <m3e-icon name="arrow_upward"></m3e-icon>
+            </m3e-icon-button>
           </div>
         </div>
 
@@ -158,19 +167,29 @@
               <span id="model-name-display">openai</span>
               <span class="ms sm">expand_less</span>
             </button>
-            <div class="enhance-wrap" id="enhance-wrap">
-              <button class="enhance-btn" id="enhance-btn">
-                <span class="ms sm">auto_fix_high</span>
-                Enhance
-              </button>
-            </div>
-            <div class="tools-wrap" id="tools-wrap">
-              <button class="enhance-btn" id="tools-btn" type="button" title="Model tools">
-                <span class="ms sm">handyman</span>
-                Tools
-              </button>
+            <div class="act-pillbar-wrap" style="position:relative">
+              <div class="act-pillbar">
+                <button type="button" class="act-pill-btn" id="enhance-btn" title="Enhance prompt">
+                  <span class="ms sm">auto_fix_high</span>
+                  <span>Enhance</span>
+                </button>
+                <div class="act-divider"></div>
+                <button type="button" class="act-pill-btn" id="tools-btn" title="Model tools">
+                  <span class="ms sm">handyman</span>
+                  <span>Tools</span>
+                </button>
+              </div>
+
+              <!-- Tools Popup anchored to pillbar -->
               <div class="tools-pop" id="tools-pop" aria-hidden="true">
-                <div class="tools-pop-title">Text Tools</div>
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <div class="tools-pop-title" style="margin-bottom:0;">Text Tools</div>
+                  <!-- Tools Model Selector -->
+                  <button type="button" id="tools-model-btn" class="cat-badge cb-text" style="display:flex;align-items:center;gap:4px;cursor:pointer;border:none;padding:4px 8px;">
+                    <span id="tools-model-display">openai</span>
+                    <span class="ms" style="font-size:14px">expand_more</span>
+                  </button>
+                </div>
                 <div class="tools-chip-grid">
                   <button class="tool-chip" type="button" data-tool="image">Image</button>
                   <button class="tool-chip" type="button" data-tool="video">Video</button>
@@ -196,16 +215,16 @@
           </div>
 
           <!-- Attach button -->
-          <button class="iab" id="attach-btn" title="Attach file" style="flex-shrink:0">
-            <span class="ms">attach_file</span>
-          </button>
+          <m3e-icon-button id="attach-btn" title="Attach file" style="flex-shrink:0">
+            <m3e-icon name="attach_file"></m3e-icon>
+          </m3e-icon-button>
         </div>
 
       </div>
     </div>
 
   </main>
-</div>
+</m3e-theme>
 
 <!-- ═══════ MODEL DROPUP ═══════ -->
 <div id="dropup-wrap">
@@ -222,226 +241,297 @@
   </div>
 </div>
 
-<!-- ═══════ SETTINGS DIALOG ═══════ -->
-<div class="dlg-wrap" id="settings-dlg">
-  <div class="dlg-bg"></div>
-  <div class="dlg">
-    <div class="dlg-head">
-      <span class="ms fill" style="color:var(--p)">settings</span>
-      <div class="dlg-title">Settings</div>
-      <button class="ib" id="settings-close">
-        <span class="ms">close</span>
-      </button>
-    </div>
-    <div class="dlg-body">
-      <div class="settings-shell">
-        <nav class="settings-nav" id="settings-nav">
-          <button class="settings-nav-item active" data-section="general" type="button"><span class="ms sm">tune</span>General</button>
-          <button class="settings-nav-item" data-section="api" type="button"><span class="ms sm">vpn_key</span>API</button>
-          <button class="settings-nav-item" data-section="history" type="button"><span class="ms sm">history</span>History</button>
-          <button class="settings-nav-item" data-section="install" type="button"><span class="ms sm">download</span>Install as App</button>
-          <button class="settings-nav-item" data-section="about" type="button"><span class="ms sm">info</span>About</button>
-        </nav>
+<!-- ═══════ SETTINGS DIALOG (M3E) ═══════ -->
+<m3e-dialog id="settings-dlg" dismissible style="--m3e-dialog-max-width:920px;--m3e-dialog-width:min(920px, calc(100vw - 24px))">
+  <span slot="header">
+    <m3e-icon name="settings" style="vertical-align:middle;margin-right:8px"></m3e-icon>
+    Settings
+  </span>
 
-        <div class="settings-content">
-          <section class="settings-section active" data-section="general">
-            <div class="sec-title">General</div>
-            <div class="srow">
-              <span class="ms fill">dark_mode</span>
-              <div class="srow-info">
-                <div class="srow-label">Dark mode</div>
-                <div class="srow-desc">Toggle light / dark theme</div>
-              </div>
-              <button class="tog" id="s-dark-tog"></button>
-            </div>
-            <div style="height:8px"></div>
-            <div class="srow srow-col">
-              <div class="srow-head">
-                <span class="ms fill">psychology</span>
-                <div class="srow-info">
-                  <div class="srow-label">System Prompt</div>
-                  <div class="srow-desc">Default instruction for text models</div>
-                </div>
-              </div>
-              <textarea class="stxt" id="sys-prompt" placeholder="You are a helpful AI assistant…"></textarea>
-            </div>
-            <div style="height:8px"></div>
-            <div class="sec-title" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
-              Demonstration Mode
-              <span class="demo-ui-badge"><span class="ms" style="font-size:12px">play_circle</span> UI Preview</span>
-            </div>
-            <div class="srow" style="margin-bottom:8px">
-              <span class="ms fill" style="color:var(--p)">theaters</span>
-              <div class="srow-info">
-                <div class="srow-label">Fill UI with demo data</div>
-                <div class="srow-desc">Populates messages, history & model states to preview the full UI without real generation calls</div>
-              </div>
-              <button class="tog" id="s-demo-ui-tog"></button>
-            </div>
-            <div id="demo-ui-note" style="display:none;padding:10px 14px;background:var(--surf-lo);border-radius:var(--r-md);border:1.5px solid color-mix(in srgb,var(--p) 30%,transparent);font-size:13px;color:var(--on-surf-v);line-height:1.5">
-              <strong style="color:var(--p)">Demo preview active</strong> — The app is showing sample chats, messages, and model states.
-            </div>
-            <div style="height:8px"></div>
-            <div class="srow srow-col">
-              <div class="srow-head">
-                <span class="ms fill">auto_fix_high</span>
-                <div class="srow-info">
-                  <div class="srow-label">Enhance Model</div>
-                  <div class="srow-desc">Text model used to enhance prompts</div>
-                </div>
-              </div>
-              <div class="eml" id="s-eml"><!-- JS --></div>
-            </div>
-          </section>
+  <m3e-tabs variant="secondary" id="settings-tabs">
+    <m3e-tab selected for="s-general"><m3e-icon slot="icon" name="tune"></m3e-icon>General</m3e-tab>
+    <m3e-tab for="s-api"><m3e-icon slot="icon" name="vpn_key"></m3e-icon>API</m3e-tab>
+    <m3e-tab for="s-history"><m3e-icon slot="icon" name="history"></m3e-icon>History</m3e-tab>
+    <m3e-tab for="s-install"><m3e-icon slot="icon" name="download"></m3e-icon>Install</m3e-tab>
+    <m3e-tab for="s-about"><m3e-icon slot="icon" name="info"></m3e-icon>About</m3e-tab>
 
-          <section class="settings-section" data-section="api">
-            <div class="sec-title">API Mode</div>
-            <div class="srow srow-col">
-              <div class="srow-head">
-                <span class="ms fill">swap_horiz</span>
-                <div class="srow-info">
-                  <div class="srow-label">Mode</div>
-                  <div class="srow-desc">Pick one mode. Selected card expands with detailed controls.</div>
-                </div>
-              </div>
-              <div class="mode-cards" id="api-mode-cards">
-                <article class="mode-card active" data-mode-card="demo" tabindex="0" role="button" aria-pressed="true">
-                  <div class="mode-card-head">
-                    <div class="mode-card-title">Demo Mode</div>
-                    <label class="mode-radio" aria-label="Select demo mode">
-                      <input type="radio" name="api-mode" value="demo" checked>
-                    </label>
-                  </div>
-                  <div class="mode-card-short">Use shared demo key with daily limits.</div>
-                  <div class="mode-card-expanded">
-                    <p>Best for testing and quick previews. Demo Mode uses the shared Pollinations key with a daily request cap.</p>
-                  </div>
-                </article>
-
-                <article class="mode-card" data-mode-card="byop" tabindex="0" role="button" aria-pressed="false">
-                  <div class="mode-card-head">
-                    <div class="mode-card-title">BYOP</div>
-                    <label class="mode-radio" aria-label="Select BYOP mode">
-                      <input type="radio" name="api-mode" value="byop">
-                    </label>
-                  </div>
-                  <div class="mode-card-short">Bring your own Pollinations key.</div>
-                  <div class="mode-card-expanded">
-                    <p>Use your own API key for personal usage and fewer demo restrictions. The key is stored locally in your browser.</p>
-                    <input class="s-input" id="byop-key-input" type="password" placeholder="Enter your BYOP key">
-                    <div class="btn-row">
-                      <button class="btn btn-sec" id="byop-link-btn" type="button">
-                        <span class="ms">link</span>
-                        Get Key
-                      </button>
-                    </div>
-                  </div>
-                </article>
-              </div>
+    <m3e-tab-panel id="s-general">
+      <div class="settings-panel-inner">
+        <div class="sec-title">General</div>
+        <div class="srow">
+          <span class="ms fill">dark_mode</span>
+          <div class="srow-info">
+            <div class="srow-label">Dark mode</div>
+            <div class="srow-desc">Toggle light / dark theme</div>
+          </div>
+          <m3e-switch id="s-dark-tog" icons="selected"></m3e-switch>
+        </div>
+        <div style="height:8px"></div>
+        <div class="srow srow-col">
+          <div class="srow-head">
+            <span class="ms fill">psychology</span>
+            <div class="srow-info">
+              <div class="srow-label">System Prompt</div>
+              <div class="srow-desc">Default instruction for text models</div>
             </div>
-            <div style="height:8px"></div>
-          </section>
-
-          <section class="settings-section" data-section="history">
-            <div class="sec-title">Chat History</div>
-            <div class="btn-row">
-              <button class="btn btn-sec" id="export-btn">
-                <span class="ms">download</span> Export
-              </button>
-              <label class="btn btn-sec" for="import-file">
-                <span class="ms">upload</span> Import
-              </label>
-              <input type="file" id="import-file" accept=".json" style="display:none">
-              <button class="btn btn-err" id="clear-btn">
-                <span class="ms">delete_sweep</span> Clear all
-              </button>
+          </div>
+          <textarea class="stxt" id="sys-prompt" placeholder="You are a helpful AI assistant…"></textarea>
+        </div>
+        <div style="height:8px"></div>
+        <div class="sec-title" style="display:flex;align-items:center;gap:6px;margin-bottom:8px">
+          Demonstration Mode
+          <span class="demo-ui-badge"><span class="ms" style="font-size:12px">play_circle</span> UI Preview</span>
+        </div>
+        <div class="srow" style="margin-bottom:8px">
+          <span class="ms fill" style="color:var(--p)">theaters</span>
+          <div class="srow-info">
+            <div class="srow-label">Fill UI with demo data</div>
+            <div class="srow-desc">Populates messages, history & model states to preview the full UI without real generation calls</div>
+          </div>
+          <m3e-switch id="s-demo-ui-tog" icons="selected"></m3e-switch>
+        </div>
+        <div id="demo-ui-note" style="display:none;padding:10px 14px;background:var(--surf-lo);border-radius:var(--r-md);border:1.5px solid color-mix(in srgb,var(--p) 30%,transparent);font-size:13px;color:var(--on-surf-v);line-height:1.5">
+          <strong style="color:var(--p)">Demo preview active</strong> — The app is showing sample chats, messages, and model states.
+        </div>
+        <div style="height:8px"></div>
+        <div class="srow" style="margin-bottom:8px">
+          <span class="ms fill" style="color:var(--p)">palette</span>
+          <div class="srow-info">
+            <div class="srow-label">Color Palette</div>
+            <div class="srow-desc">Randomize 3 harmonious accent colors</div>
+          </div>
+          <div class="palette-row">
+            <div class="palette-preview" id="palette-preview">
+              <div class="palette-dot" id="pal-dot-p" style="background:var(--p)"></div>
+              <div class="palette-dot" id="pal-dot-s" style="background:var(--s)"></div>
+              <div class="palette-dot" id="pal-dot-t" style="background:var(--t)"></div>
             </div>
-          </section>
-
-          <section class="settings-section" data-section="install">
-            <div class="sec-title">Install as App</div>
-            <div class="srow srow-col">
-              <div class="srow-head">
-                <span class="ms fill">download</span>
-                <div class="srow-info">
-                  <div class="srow-label">Progressive App Install</div>
-                  <div class="srow-desc">Install OneLLM for a native-style experience with quick launch from your device.</div>
-                </div>
-              </div>
-              <div class="btn-row">
-                <button class="btn btn-pri" id="install-app-btn" type="button">
-                  <span class="ms">download</span>
-                  Install Now
-                </button>
-                <button class="btn btn-sec" id="install-help-btn" type="button">
-                  <span class="ms">help</span>
-                  Browser Instructions
-                </button>
-              </div>
-            </div>
-          </section>
-
-          <section class="settings-section" data-section="about">
-            <div class="sec-title">About</div>
-            <div class="srow">
-              <span class="ms fill">info</span>
-              <div class="srow-info">
-                <div class="srow-label">OneLLM Playground</div>
-                <div class="srow-desc">Powered by <a href="https://pollinations.ai" target="_blank">pollinations.ai</a></div>
-              </div>
-            </div>
-          </section>
+            <m3e-button variant="outlined" size="extra-small" id="randomize-palette-btn" type="button">
+              <m3e-icon slot="icon" name="casino"></m3e-icon>
+              Randomize
+            </m3e-button>
+            <m3e-button variant="outlined" size="extra-small" id="reset-palette-btn" type="button">
+              <m3e-icon slot="icon" name="restart_alt"></m3e-icon>
+              Reset
+            </m3e-button>
+          </div>
         </div>
       </div>
+    </m3e-tab-panel>
+
+    <m3e-tab-panel id="s-api">
+      <div class="settings-panel-inner">
+        <div class="sec-title">API Mode</div>
+        <div class="srow srow-col">
+          <div class="srow-head">
+            <span class="ms fill">swap_horiz</span>
+            <div class="srow-info">
+              <div class="srow-label">Mode</div>
+              <div class="srow-desc">Pick one mode. Selected card expands with detailed controls.</div>
+            </div>
+          </div>
+          <div class="mode-cards" id="api-mode-cards">
+            <article class="mode-card active" data-mode-card="demo" tabindex="0" role="button" aria-pressed="true">
+              <div class="mode-card-head">
+                <div class="mode-card-title">Demo Mode</div>
+                <label class="mode-radio" aria-label="Select demo mode">
+                  <input type="radio" name="api-mode" value="demo" checked>
+                </label>
+              </div>
+              <div class="mode-card-short">Use shared demo key with daily limits.</div>
+              <div class="mode-card-expanded">
+                <p>Best for testing and quick previews. Demo Mode uses the shared Pollinations key with a daily request cap.</p>
+              </div>
+            </article>
+
+            <article class="mode-card" data-mode-card="byop" tabindex="0" role="button" aria-pressed="false">
+              <div class="mode-card-head">
+                <div class="mode-card-title">BYOP</div>
+                <label class="mode-radio" aria-label="Select BYOP mode">
+                  <input type="radio" name="api-mode" value="byop">
+                </label>
+              </div>
+              <div class="mode-card-short">Bring your own Pollinations key.</div>
+              <div class="mode-card-expanded">
+                <p>Use your own API key for personal usage and fewer demo restrictions. The key is stored locally in your browser.</p>
+                <input class="s-input" id="byop-key-input" type="password" placeholder="Enter your BYOP key">
+                <div class="btn-row">
+                  <m3e-button variant="outlined" id="byop-link-btn" type="button">
+                    <m3e-icon slot="icon" name="link"></m3e-icon>
+                    Get Key
+                  </m3e-button>
+                </div>
+              </div>
+            </article>
+          </div>
+        </div>
+        <div style="height:8px"></div>
+      </div>
+    </m3e-tab-panel>
+
+    <m3e-tab-panel id="s-history">
+      <div class="settings-panel-inner">
+        <div class="sec-title">Chat History</div>
+        <div class="btn-row">
+          <m3e-button variant="outlined" id="export-btn">
+            <m3e-icon slot="icon" name="download"></m3e-icon> Export
+          </m3e-button>
+          <label for="import-file" style="display:contents">
+            <m3e-button variant="outlined" id="import-btn-label" type="button">
+              <m3e-icon slot="icon" name="upload"></m3e-icon> Import
+            </m3e-button>
+          </label>
+          <input type="file" id="import-file" accept=".json" style="display:none">
+          <m3e-button variant="tonal" id="clear-btn" style="--m3e-button-container-color:var(--err-c);--m3e-button-label-color:var(--err)">
+            <m3e-icon slot="icon" name="delete_sweep"></m3e-icon> Clear all
+          </m3e-button>
+        </div>
+      </div>
+    </m3e-tab-panel>
+
+    <m3e-tab-panel id="s-install">
+      <div class="settings-panel-inner">
+        <div class="sec-title">Install as App</div>
+        <div class="srow srow-col">
+          <div class="srow-head">
+            <span class="ms fill">download</span>
+            <div class="srow-info">
+              <div class="srow-label">Progressive App Install</div>
+              <div class="srow-desc">Install OneLLM for a native-style experience with quick launch from your device.</div>
+            </div>
+          </div>
+        </div>
+        <div style="height:12px"></div>
+        <div class="sec-title">Browser Instructions</div>
+        <div class="install-guide">
+          <div class="install-browser">
+            <div class="install-browser-head">
+              <div class="install-browser-icon"><span class="ms fill">public</span></div>
+              <div class="install-browser-name">Google Chrome</div>
+            </div>
+            <div class="install-steps">
+              <div class="install-step">
+                <div class="install-step-num">1</div>
+                <span>Click the <strong>three-dot menu</strong> (⋮) in the top-right corner</span>
+              </div>
+              <div class="install-step">
+                <div class="install-step-num">2</div>
+                <span>Select <strong>"Install OneLLM…"</strong> or <strong>"Install app"</strong></span>
+              </div>
+              <div class="install-step">
+                <div class="install-step-num">3</div>
+                <span>Click <strong>Install</strong> in the confirmation dialog</span>
+              </div>
+            </div>
+          </div>
+          <div class="install-browser">
+            <div class="install-browser-head">
+              <div class="install-browser-icon"><span class="ms fill">local_fire_department</span></div>
+              <div class="install-browser-name">Mozilla Firefox</div>
+            </div>
+            <div class="install-steps">
+              <div class="install-step">
+                <div class="install-step-num">1</div>
+                <span>Look for the <strong>install icon</strong> in the address bar (desktop)</span>
+              </div>
+              <div class="install-step">
+                <div class="install-step-num">2</div>
+                <span>On Android: tap the <strong>three-dot menu</strong> → <strong>"Install"</strong></span>
+              </div>
+              <div class="install-step">
+                <div class="install-step-num">3</div>
+                <span>Confirm by tapping <strong>Add</strong></span>
+              </div>
+            </div>
+          </div>
+          <div class="install-browser">
+            <div class="install-browser-head">
+              <div class="install-browser-icon"><span class="ms fill">phone_iphone</span></div>
+              <div class="install-browser-name">Safari (iOS / macOS)</div>
+            </div>
+            <div class="install-steps">
+              <div class="install-step">
+                <div class="install-step-num">1</div>
+                <span>Tap the <strong>Share</strong> button (square with arrow)</span>
+              </div>
+              <div class="install-step">
+                <div class="install-step-num">2</div>
+                <span>Scroll down and tap <strong>"Add to Home Screen"</strong></span>
+              </div>
+              <div class="install-step">
+                <div class="install-step-num">3</div>
+                <span>Tap <strong>Add</strong> in the top-right corner</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </m3e-tab-panel>
+
+    <m3e-tab-panel id="s-about">
+      <div class="settings-panel-inner">
+        <div class="sec-title">About</div>
+        <div class="srow">
+          <span class="ms fill">info</span>
+          <div class="srow-info">
+            <div class="srow-label">OneLLM Playground</div>
+            <div class="srow-desc">Powered by <a href="https://pollinations.ai" target="_blank">pollinations.ai</a></div>
+          </div>
+        </div>
+      </div>
+    </m3e-tab-panel>
+  </m3e-tabs>
+</m3e-dialog>
+
+<!-- ═══════ ENHANCE DIALOG (M3E) ═══════ -->
+<m3e-dialog id="enhance-dlg" dismissible style="--m3e-dialog-max-width:480px">
+  <span slot="header">
+    <m3e-icon name="auto_fix_high" style="vertical-align:middle;margin-right:8px;color:var(--p)"></m3e-icon>
+    Enhance Prompt
+  </span>
+
+  <div>
+    <div class="sec-title">Enhancement Model</div>
+    <div class="eml" id="enh-eml"><!-- JS --></div>
+  </div>
+  <div>
+    <div class="sec-title">Original Prompt</div>
+    <div class="srow" style="align-items:flex-start">
+      <div id="orig-preview" style="font-size:14px;line-height:1.6;color:var(--on-surf);padding:2px 0"></div>
     </div>
   </div>
-</div>
-
-<!-- ═══════ ENHANCE DIALOG ═══════ -->
-<div class="dlg-wrap" id="enhance-dlg">
-  <div class="dlg-bg"></div>
-  <div class="dlg" style="max-width:480px">
-    <div class="dlg-head">
-      <span class="ms fill" style="color:var(--p)">auto_fix_high</span>
-      <div class="dlg-title">Enhance Prompt</div>
-      <button class="ib" id="enhance-close">
-        <span class="ms">close</span>
-      </button>
-    </div>
-    <div class="dlg-body">
-      <div>
-        <div class="sec-title">Enhancement Model</div>
-        <div class="eml" id="enh-eml"><!-- JS --></div>
-      </div>
-      <div>
-        <div class="sec-title">Original Prompt</div>
-        <div class="srow" style="align-items:flex-start">
-          <div id="orig-preview" style="font-size:14px;line-height:1.6;color:var(--on-surf);padding:2px 0"></div>
-        </div>
-      </div>
-      <div id="enhanced-sec" style="display:none">
-        <div class="sec-title" style="color:var(--t)">Enhanced Prompt ✨</div>
-        <div class="srow" style="align-items:flex-start">
-          <div id="enh-preview" style="font-size:14px;line-height:1.6;color:var(--on-surf);padding:2px 0"></div>
-        </div>
-      </div>
-      <div class="btn-row">
-        <button class="btn btn-pri" id="do-enhance-btn">
-          <span class="ms">auto_awesome</span> Enhance
-        </button>
-        <button class="btn btn-sec" id="use-enhanced-btn" style="display:none">
-          <span class="ms">check</span> Use this
-        </button>
-      </div>
+  <div id="enhanced-sec" style="display:none">
+    <div class="sec-title" style="color:var(--t)">Enhanced Prompt ✨</div>
+    <div class="srow" style="align-items:flex-start">
+      <div id="enh-preview" style="font-size:14px;line-height:1.6;color:var(--on-surf);padding:2px 0"></div>
     </div>
   </div>
-</div>
+  <div class="btn-row">
+    <m3e-button variant="filled" id="do-enhance-btn">
+      <m3e-icon slot="icon" name="auto_awesome"></m3e-icon> Enhance
+    </m3e-button>
+    <m3e-button variant="tonal" id="use-enhanced-btn" style="display:none">
+      <m3e-icon slot="icon" name="check"></m3e-icon> Use this
+    </m3e-button>
+  </div>
+</m3e-dialog>
+
+<!-- ═══════ CLEAR HISTORY CONFIRM (M3E) ═══════ -->
+<m3e-dialog id="clear-confirm-dlg" alert>
+  <span slot="header">Clear all history?</span>
+  <p style="font-size:14px;color:var(--on-surf-v);line-height:1.6">
+    This will permanently delete all your saved conversations. This action cannot be undone.
+  </p>
+  <div slot="actions" end style="display:flex;gap:8px">
+    <m3e-button><m3e-dialog-action return-value="cancel">Cancel</m3e-dialog-action></m3e-button>
+    <m3e-button variant="filled" style="--m3e-button-container-color:var(--err);--m3e-button-label-color:var(--on-t)">
+      <m3e-dialog-action return-value="clear">Clear all</m3e-dialog-action>
+    </m3e-button>
+  </div>
+</m3e-dialog>
 
 <!-- Hidden file input -->
 <input type="file" id="file-input" multiple accept="image/*,audio/*,video/*,.pdf,.txt,.json" style="display:none">
-
-<!-- Toast host -->
-<div id="toast-host"></div>
 
 <!-- Image Viewer -->
 <div id="img-viewer" class="img-viewer" aria-hidden="true">
@@ -450,13 +540,21 @@
     <div class="img-viewer-head">
       <div class="img-viewer-zoom" id="img-zoom-label">100%</div>
       <div class="img-viewer-actions">
-        <button class="ib" id="img-zoom-out" title="Zoom out"><span class="ms">remove</span></button>
-        <button class="ib" id="img-zoom-in" title="Zoom in"><span class="ms">add</span></button>
-        <a class="ib" id="img-download-btn" title="Download image" download="onellm-image.png"><span class="ms">download</span></a>
-        <button class="ib" id="img-close-btn" title="Close"><span class="ms">close</span></button>
+        <m3e-icon-button id="img-zoom-out" title="Zoom out">
+          <m3e-icon name="remove"></m3e-icon>
+        </m3e-icon-button>
+        <m3e-icon-button id="img-zoom-in" title="Zoom in">
+          <m3e-icon name="add"></m3e-icon>
+        </m3e-icon-button>
+        <m3e-icon-button id="img-download-btn" title="Download image">
+          <m3e-icon name="download"></m3e-icon>
+        </m3e-icon-button>
+        <m3e-icon-button id="img-close-btn" title="Close">
+          <m3e-icon name="close"></m3e-icon>
+        </m3e-icon-button>
       </div>
     </div>
-    <div class="img-viewer-stage">
+    <div class="img-viewer-stage" id="img-viewer-stage">
       <img id="img-viewer-img" alt="Expanded image">
     </div>
   </div>
