@@ -234,14 +234,14 @@ a:hover { text-decoration: underline; }
   --m3e-icon-button-container-color: var(--surf);
   --m3e-icon-button-hover-container-color: var(--surf-hi);
   --m3e-icon-button-focus-ring-color: color-mix(in srgb, var(--t) 40%, transparent);
-  --m3e-icon-button-selected-container-color: linear-gradient(140deg, #f43f5e, #be123c);
-  --m3e-icon-button-selected-icon-color: #fff;
-  --m3e-icon-button-selected-hover-container-color: linear-gradient(140deg, #f43f5e, #b91c1c);
+  --m3e-icon-button-selected-container-color: var(--tc);
+  --m3e-icon-button-selected-icon-color: var(--on-tc);
+  --m3e-icon-button-selected-hover-container-color: color-mix(in srgb, var(--tc) 90%, var(--t));
   width: 48px; height: 48px;
   border-radius: 50%;
   position: relative;
   box-shadow: var(--sh1);
-  background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--t) 24%, transparent), transparent 60%);
+  transition: all 0.2s var(--std);
 }
 [data-theme="dark"] .temp-btn.active,
 .temp-btn.active {
@@ -250,13 +250,6 @@ a:hover { text-decoration: underline; }
 [data-theme="dark"] .temp-btn {
   --m3e-icon-button-container-color: var(--surf-mid);
   --m3e-icon-button-hover-container-color: var(--surf-hi);
-  --m3e-icon-button-selected-container-color: linear-gradient(140deg, #f43f5e, #7f1d1d);
-  --m3e-icon-button-selected-icon-color: #ffe4e6;
-}
-#mobile-temp-btn[selected],
-#mobile-temp-btn.active {
-  --m3e-icon-button-selected-container-color: linear-gradient(145deg, #f43f5e, #be123c);
-  --m3e-icon-button-selected-icon-color: #fff;
 }
 .temp-dot-badge {
   position: absolute;
