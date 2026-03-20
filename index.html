@@ -122,15 +122,12 @@
       <m3e-icon-button id="sidebar-toggle">
         <m3e-icon name="menu"></m3e-icon>
       </m3e-icon-button>
-      
-      <!-- Quick mobile actions -->
-      <m3e-icon-button id="mobile-new-chat-btn" title="New Chat" variant="tonal">
-        <m3e-icon name="add"></m3e-icon>
-      </m3e-icon-button>
-      <m3e-icon-button id="mobile-temp-btn" title="Temporary Chat" variant="tonal" toggle>
-        <m3e-icon name="history_toggle_off"></m3e-icon>
-        <m3e-icon slot="selected" name="history"></m3e-icon>
-      </m3e-icon-button>
+
+      <!-- Mobile chat title -->
+      <div style="flex: 1; min-width: 0;">
+        <div class="chat-title-label" style="font-size: 10px; color: var(--out); text-transform: uppercase; letter-spacing: 0.05em;">Chat</div>
+        <div id="mobile-chat-title" style="font-size: 14px; font-weight: 700; color: var(--on-surf); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New Conversation</div>
+      </div>
 
       <div class="temp-pill" id="temp-pill" style="margin-left:auto">
         <span class="ms sm">schedule</span>

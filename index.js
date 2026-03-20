@@ -514,7 +514,10 @@ function newChat() {
   S.attachments = [];
   renderChat([]);
   renderHistory();
-  document.getElementById('chat-title').textContent = 'New Conversation';
+  const title = 'New Conversation';
+  document.getElementById('chat-title').textContent = title;
+  const mobileTitle = document.getElementById('mobile-chat-title');
+  if (mobileTitle) mobileTitle.textContent = title;
   document.getElementById('msg-input').value = '';
   updateSendBtn();
   clearAttachPreview();
@@ -527,7 +530,10 @@ function loadChat(id) {
   S.attachments = [];
   renderChat(chat.messages || []);
   renderHistory();
-  document.getElementById('chat-title').textContent = chat.title || 'Conversation';
+  const title = chat.title || 'Conversation';
+  document.getElementById('chat-title').textContent = title;
+  const mobileTitle = document.getElementById('mobile-chat-title');
+  if (mobileTitle) mobileTitle.textContent = title;
   clearAttachPreview();
   if (S.isMobile) setSidebar(false);
 }
@@ -576,9 +582,10 @@ function renderHistory() {
     html += `<div class="hist-label">${grp}</div>`;
     chats.forEach(c => {
       const active = c.id === S.currentChatId ? 'active' : '';
+      const icon = S.isTempChat && c.id === S.currentChatId ? 'tmp' : '';
       html += `
         <div class="hist-item ${active}" onclick="loadChat('${c.id}')">
-          <div class="hi-icon"><span class="ms sm">chat_bubble</span></div>
+          <div class="hi-icon ${icon}"><span class="ms sm">chat_bubble</span></div>
           <span class="hi-title">${escHtml(c.title||'Untitled')}</span>
           <button class="hi-del" onclick="deleteChat('${c.id}',event)" title="Delete">
             <span class="ms">close</span>
@@ -838,7 +845,10 @@ async function sendMessage() {
 
   // Update title
   if (!S.isTempChat && S.chats[chatId]) {
-    document.getElementById('chat-title').textContent = S.chats[chatId].title;
+    const title = S.chats[chatId].title;
+    document.getElementById('chat-title').textContent = title;
+    const mobileTitle = document.getElementById('mobile-chat-title');
+    if (mobileTitle) mobileTitle.textContent = title;
   }
 
   // Demo count
@@ -1603,10 +1613,10 @@ on('rail-menu-tog', 'click', toggleSidebar);
 on('side-ov', 'click', () => setSidebar(false));
 
 // New chat
-['new-chat-btn', 'mobile-new-chat-btn', 'rail-new-chat-btn'].forEach(id => on(id, 'click', newChat));
+['new-chat-btn', 'rail-new-chat-btn'].forEach(id => on(id, 'click', newChat));
 
 // Temp chat
-['temp-btn', 'mobile-temp-btn', 'rail-temp-btn'].forEach(id => on(id, 'click', toggleTemp));
+['temp-btn', 'rail-temp-btn'].forEach(id => on(id, 'click', toggleTemp));
 
 // Settings
 ['settings-btn', 'mobile-settings-btn', 'rail-settings-btn'].forEach(id => on(id, 'click', openSettings));
