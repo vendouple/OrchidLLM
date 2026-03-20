@@ -59,8 +59,10 @@ let S = {
     image: true,
     video: false,
     audio: false,
+    audio: false,
     web: false,
   },
+  toolsModel: 'openai',
   chats: {},       // { [id]: {id,title,messages,createdAt} }
   attachments: [], // [{name,type,size,data,icon}]
   enhancedPrompt: null,
@@ -98,8 +100,9 @@ function loadState() {
         image: typeof saved?.textTools?.image === 'boolean' ? saved.textTools.image : true,
         video: typeof saved?.textTools?.video === 'boolean' ? saved.textTools.video : false,
         audio: typeof saved?.textTools?.audio === 'boolean' ? saved.textTools.audio : false,
-        web: false,
+        web: typeof saved?.textTools?.web === 'boolean' ? saved.textTools.web : false,
       };
+      S.toolsModel = saved.toolsModel || 'openai';
       S.chats = saved.chats || {};
       S.palette = saved.palette || null;
       // Reset daily demo count if new day
@@ -124,6 +127,7 @@ function saveState() {
       pwaNudgeDismissed: S.pwaNudgeDismissed,
       quickMode: S.quickMode,
       textTools: S.textTools,
+      toolsModel: S.toolsModel,
       chats: S.chats,
       palette: S.palette,
     }));
@@ -216,13 +220,26 @@ async function loadLocalModelCatalog() {
 /* ══════════════════════════════════════════════
    THEME
 ══════════════════════════════════════════════ */
-function applyTheme(t) {
-  S.theme = t;
-  document.documentElement.setAttribute('data-theme', t);
+function applyTheme(theme) {
+  S.theme = theme;
+  document.documentElement.setAttribute('data-theme', theme);
+  document.documentElement.style.colorScheme = theme;
+  document.getElementById('app').setAttribute('color-scheme', theme);
   const tog = document.getElementById('s-dark-tog');
-  if (tog) tog.checked = (t === 'dark');
-  // Re-apply palette for light/dark HSL adjustments
-  if (S.palette) applyPalette(S.palette);
+  if (tog) tog.checked = (theme === 'dark');
+  
+  if (S.palette && S.palette.variantId) {
+    // We have a stored variant. Apply the dark or light version of it!
+    const palId = theme + S.palette.variantId;
+    // STATIC_PALETTES might be parsed later in file, so we safely resolve it
+    if (typeof STATIC_PALETTES !== 'undefined' && STATIC_PALETTES[palId]) {
+      const p = STATIC_PALETTES[palId];
+      S.palette = { hueP: p.hueP, hueS: p.hueS, hueT: p.hueT, variantId: S.palette.variantId };
+      applyPalette(S.palette);
+    }
+  } else if (S.palette) {
+    applyPalette(S.palette);
+  }
   saveState();
 }
 function toggleTheme() { applyTheme(S.theme==='dark'?'light':'dark'); }
@@ -234,11 +251,15 @@ function setSidebar(open) {
   S.sideOpen = open;
   const sb = document.getElementById('sidebar');
   const ov = document.getElementById('side-ov');
-  sb.classList.toggle('closed', !open);
+  
   if (S.isMobile) {
+    sb.classList.remove('desktop-collapsed');
+    sb.classList.toggle('closed', !open);
     ov.classList.toggle('show', open);
   } else {
     ov.classList.remove('show');
+    sb.classList.remove('closed');
+    sb.classList.toggle('desktop-collapsed', !open);
   }
 }
 function toggleSidebar() { setSidebar(!S.sideOpen); }
@@ -250,8 +271,7 @@ function toggleTemp() {
   S.isTempChat = !S.isTempChat;
   const tempBtn = document.getElementById('temp-btn');
   if (tempBtn) {
-    if (S.isTempChat) tempBtn.setAttribute('selected', '');
-    else tempBtn.removeAttribute('selected');
+    tempBtn.selected = S.isTempChat;
   }
   document.getElementById('temp-pill').classList.toggle('show', S.isTempChat);
   toast(S.isTempChat ? 'Temporary chat on — won\'t be saved' : 'Temporary chat off', 'schedule');
@@ -298,6 +318,25 @@ function openToolsPop() {
   if (!pop) return;
   pop.classList.add('open');
   pop.setAttribute('aria-hidden', 'false');
+  renderToolsModelMenu();
+}
+
+function renderToolsModelMenu() {
+  const menu = document.getElementById('tools-model-menu');
+  const display = document.getElementById('tools-model-display');
+  if (!menu || !display) return;
+  
+  const models = MODELS.text || [];
+  const validModels = models.filter(m => supportsToolCalling(m));
+  
+  menu.innerHTML = validModels.map(m => `
+    <m3e-menu-item data-id="${m.id}" ${S.toolsModel === m.id ? 'selected' : ''}>
+      <div slot="headline">${escHtml(m.name)}</div>
+    </m3e-menu-item>
+  `).join('');
+  
+  const current = validModels.find(m => m.id === S.toolsModel) || validModels[0];
+  if (current) display.textContent = current.name;
 }
 
 function toggleToolsPop() {
@@ -616,7 +655,7 @@ function updateInputModeUI() {
 
   document.body.classList.toggle('transcription-mode', isTranscription);
   input.disabled = isTranscription;
-  input.placeholder = isTranscription ? 'Upload audio for transcription.' : 'Message OneLLM.';
+  input.placeholder = isTranscription ? 'Upload audio for transcription.' : 'Message OrchidLLM.';
 
   if (isTranscription) {
     input.value = '';
@@ -697,6 +736,8 @@ async function sendMessage() {
 
   showTyping();
   try {
+    S.isGenerating = true;
+    updateSendBtn();
     if (S.selectedCat === 'image') {
       await callImageAPI(chatId, text);
     } else if (S.selectedCat === 'video') {
@@ -720,6 +761,9 @@ async function sendMessage() {
     const errMsg = { role:'assistant', content:`⚠️ Error: ${err.message}`, time: ts(), model: S.selectedModel.name };
     addMessage(chatId, errMsg);
     addMsgToView(errMsg);
+  } finally {
+    S.isGenerating = false;
+    updateSendBtn();
   }
 }
 
@@ -870,7 +914,7 @@ async function callAudioOutAPI(chatId, text) {
     body: JSON.stringify({
       model: S.selectedModel.id || 'elevenlabs',
       voice: 'nova',
-      input: text || 'Hello from OneLLM',
+      input: text || 'Hello from OrchidLLM',
     }),
   });
 
@@ -1162,14 +1206,14 @@ function hslToHex(h, s, l) {
   return `#${f(0)}${f(8)}${f(4)}`;
 }
 
-function generatePalette() {
-  // Golden-angle hue distribution for harmony
-  const baseHue = Math.floor(Math.random() * 360);
-  const hueP = baseHue;
-  const hueS = (baseHue + 137) % 360; // golden angle
-  const hueT = (baseHue + 60 + Math.floor(Math.random() * 60)) % 360;
-  return { hueP, hueS, hueT };
-}
+const STATIC_PALETTES = {
+  light1: { theme: 'light', hueP: 285, hueS: 320, hueT: 260 },
+  light2: { theme: 'light', hueP: 330, hueS: 350, hueT: 310 },
+  light3: { theme: 'light', hueP: 260, hueS: 280, hueT: 230 },
+  dark1: { theme: 'dark', hueP: 285, hueS: 320, hueT: 260 },
+  dark2: { theme: 'dark', hueP: 330, hueS: 350, hueT: 310 },
+  dark3: { theme: 'dark', hueP: 260, hueS: 280, hueT: 230 },
+};
 
 function applyPalette(palette) {
   if (!palette) return;
@@ -1193,14 +1237,16 @@ function applyPalette(palette) {
   root.style.setProperty('--on-t', isDark ? '#000' : '#fff');
   root.style.setProperty('--tc', hslToHex(palette.hueT, isDark ? 28 : 75, isDark ? 15 : 92));
   root.style.setProperty('--on-tc', hslToHex(palette.hueT, 55, isDark ? 85 : 20));
+}
 
-  // Update previews
-  const dp = document.getElementById('pal-dot-p');
-  const ds = document.getElementById('pal-dot-s');
-  const dt = document.getElementById('pal-dot-t');
-  if (dp) dp.style.background = getComputedStyle(root).getPropertyValue('--p');
-  if (ds) ds.style.background = getComputedStyle(root).getPropertyValue('--s');
-  if (dt) dt.style.background = getComputedStyle(root).getPropertyValue('--t');
+function applySeamlessVariant(id) {
+  const palId = S.theme + id; 
+  const p = STATIC_PALETTES[palId];
+  if (!p) return;
+  S.palette = { hueP: p.hueP, hueS: p.hueS, hueT: p.hueT, variantId: id };
+  applyPalette(S.palette);
+  saveState();
+  toast('Orchid variant ' + id + ' applied 🎨', 'palette');
 }
 
 function clearPalette() {
@@ -1209,22 +1255,7 @@ function clearPalette() {
     .forEach(v => root.style.removeProperty(v));
   S.palette = null;
   saveState();
-  // Reset dot previews to CSS defaults
-  const dp = document.getElementById('pal-dot-p');
-  const ds = document.getElementById('pal-dot-s');
-  const dt = document.getElementById('pal-dot-t');
-  if (dp) dp.style.background = 'var(--p)';
-  if (ds) ds.style.background = 'var(--s)';
-  if (dt) dt.style.background = 'var(--t)';
   toast('Colors reset to default', 'restart_alt');
-}
-
-function randomizePalette() {
-  const palette = generatePalette();
-  S.palette = palette;
-  applyPalette(palette);
-  saveState();
-  toast('New color palette applied 🎨', 'palette');
 }
 
 function exportHistory() {
@@ -1301,9 +1332,9 @@ function applyDemoUiMode(on) {
       demo1: {
         id: 'demo1',
         createdAt: now - 1000 * 60 * 15,
-        title: 'Launch plan for OneLLM',
+        title: 'Launch plan for OrchidLLM',
         messages: [
-          { role: 'user', content: 'Build a launch checklist for OneLLM', time: ts() },
+          { role: 'user', content: 'Build a launch checklist for OrchidLLM', time: ts() },
           { role: 'assistant', content: 'Here is a launch-ready checklist with milestones, owners, and quality gates.', time: ts(), model: 'openai' },
         ],
       },
@@ -1384,32 +1415,46 @@ function closeDlg(id) {
    TOAST
 ══════════════════════════════════════════════ */
 function toast(msg, icon='info') {
-  if (typeof M3eSnackbar !== 'undefined') {
-    M3eSnackbar.open(msg);
-  } else {
-    console.log(`[toast] ${msg}`);
+  const host = document.getElementById('toast-host');
+  if (!host) {
+    if (typeof M3eSnackbar !== 'undefined') M3eSnackbar.open(msg);
+    return;
   }
+  const el = document.createElement('div');
+  el.className = 'toast';
+  el.innerHTML = `<span class="ms">${icon}</span><span>${escHtml(msg)}</span>`;
+  host.appendChild(el);
+  setTimeout(() => {
+    el.classList.add('out');
+    setTimeout(() => el.remove(), 300);
+  }, 2500);
 }
 
 /* ══════════════════════════════════════════════
    INPUT UTILITIES
 ══════════════════════════════════════════════ */
 function autoResize(el) {
-  // 5 lines ≈ 115px normal, 15 lines ≈ 345px expanded
-  const maxHeight = S.composerExpanded ? 345 : 115;
-  el.style.height = 'auto';
-  el.style.height = Math.min(el.scrollHeight, maxHeight) + 'px';
+  const minHeight = 24;
+  const maxHeight = S.composerExpanded ? 340 : 120; // 5 lines ≈ 120px
+  el.style.height = minHeight + 'px';
+  const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
+  el.style.height = newHeight + 'px';
+  
   // Show expand button only when content exceeds ~5 lines
   const expandBtn = document.getElementById('composer-expand-btn');
   if (expandBtn) {
-    if (el.scrollHeight > 115) expandBtn.classList.add('show-expand');
+    if (el.scrollHeight > 120) expandBtn.classList.add('show-expand');
     else if (!S.composerExpanded) expandBtn.classList.remove('show-expand');
   }
 }
 function updateSendBtn() {
   const input = document.getElementById('msg-input');
   const btn = document.getElementById('send-btn');
-  btn.disabled = !input.value.trim() && !S.attachments.length;
+  if (S.isGenerating || S.demoBlock) {
+    btn.disabled = true;
+  } else {
+    btn.disabled = !input.value.trim() && !S.attachments.length;
+  }
 }
 function escHtml(s) {
   return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
@@ -1437,14 +1482,24 @@ function toggleComposerExpanded(forceState) {
    EVENT BINDINGS
 ══════════════════════════════════════════════ */
 // Sidebar
-document.getElementById('sidebar-toggle').addEventListener('click', toggleSidebar);
-document.getElementById('side-ov').addEventListener('click', () => setSidebar(false));
+document.getElementById('sidebar-toggle')?.addEventListener('click', toggleSidebar);
+document.getElementById('rail-menu-tog')?.addEventListener('click', toggleSidebar);
+document.getElementById('side-ov')?.addEventListener('click', () => setSidebar(false));
+
 // New chat
-document.getElementById('new-chat-btn').addEventListener('click', newChat);
+document.getElementById('new-chat-btn')?.addEventListener('click', newChat);
+document.getElementById('mobile-new-chat-btn')?.addEventListener('click', newChat);
+document.getElementById('rail-new-chat-btn')?.addEventListener('click', newChat);
+
 // Temp chat
-document.getElementById('temp-btn').addEventListener('click', toggleTemp);
+document.getElementById('temp-btn')?.addEventListener('click', toggleTemp);
+document.getElementById('mobile-temp-btn')?.addEventListener('click', toggleTemp);
+document.getElementById('rail-temp-btn')?.addEventListener('click', toggleTemp);
+
 // Settings
-document.getElementById('settings-btn').addEventListener('click', openSettings);
+document.getElementById('settings-btn')?.addEventListener('click', openSettings);
+document.getElementById('mobile-settings-btn')?.addEventListener('click', openSettings);
+document.getElementById('rail-settings-btn')?.addEventListener('click', openSettings);
 // M3E dialog handles its own close via dismissible attribute
 const settingsDlgEl = document.getElementById('settings-dlg');
 if (settingsDlgEl) settingsDlgEl.addEventListener('closed', () => saveSettings());
@@ -1505,12 +1560,34 @@ document.getElementById('chat-wrap').addEventListener('drop', e => {
   if (e.dataTransfer.files.length) handleFiles(e.dataTransfer.files);
 });
 // Model dropup
-document.getElementById('model-btn').addEventListener('click', openDropup);
+document.getElementById('model-split-btn').addEventListener('click', openDropup);
 document.getElementById('dropup-bg').addEventListener('click', closeDropup);
 document.getElementById('tools-btn').addEventListener('click', (event) => {
   event.stopPropagation();
   toggleToolsPop();
 });
+
+document.getElementById('tools-model-btn').addEventListener('click', (event) => {
+  event.stopPropagation();
+  const menu = document.getElementById('tools-model-menu');
+  if (menu) {
+    if (typeof menu.show === 'function') menu.show();
+    else menu.open = !menu.open;
+  }
+});
+
+document.getElementById('tools-model-menu').addEventListener('click', (e) => {
+  const item = e.target.closest('m3e-menu-item');
+  if (item && item.dataset.id) {
+    S.toolsModel = item.dataset.id;
+    saveState();
+    renderToolsModelMenu();
+    const menu = document.getElementById('tools-model-menu');
+    if (menu && typeof menu.close === 'function') menu.close();
+    else if (menu) menu.open = false;
+  }
+});
+
 document.querySelectorAll('[data-tool]').forEach((chip) => {
   chip.addEventListener('click', () => {
     toggleTextTool(chip.dataset.tool);
