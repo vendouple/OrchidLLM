@@ -290,19 +290,29 @@ function toggleSidebar() { setSidebar(!S.sideOpen); }
 ══════════════════════════════════════════════ */
 function toggleTemp() {
   S.isTempChat = !S.isTempChat;
+  syncTempUi();
+  toast(S.isTempChat ? 'Temporary chat on — won\'t be saved' : 'Temporary chat off', 'schedule');
+}
+
+function syncTempUi() {
   const tempBtn = document.getElementById('temp-btn');
   if (tempBtn) {
     tempBtn.selected = S.isTempChat;
+    tempBtn.toggleAttribute('selected', S.isTempChat);
     tempBtn.classList.toggle('active', S.isTempChat);
     tempBtn.setAttribute('aria-pressed', String(S.isTempChat));
   }
   const mobileTemp = document.getElementById('mobile-temp-btn');
   if (mobileTemp) {
     mobileTemp.selected = S.isTempChat;
+    mobileTemp.toggleAttribute('selected', S.isTempChat);
     mobileTemp.classList.toggle('active', S.isTempChat);
+    mobileTemp.setAttribute('aria-pressed', String(S.isTempChat));
   }
-  document.getElementById('temp-pill').classList.toggle('show', S.isTempChat);
-  toast(S.isTempChat ? 'Temporary chat on — won\'t be saved' : 'Temporary chat off', 'schedule');
+  const tempPill = document.getElementById('temp-pill');
+  if (tempPill) tempPill.classList.toggle('show', S.isTempChat);
+  const tempModePill = document.getElementById('temp-mode-pill');
+  if (tempModePill) tempModePill.classList.toggle('show', S.isTempChat);
 }
 
 function showComingSoon(label) {
@@ -1529,8 +1539,8 @@ function toast(msg, icon='info') {
    INPUT UTILITIES
 ══════════════════════════════════════════════ */
 function autoResize(el) {
-  const minHeight = 24;
-  const maxHeight = S.composerExpanded ? 340 : 120; // 5 lines ≈ 120px
+  const minHeight = 20;
+  const maxHeight = S.composerExpanded ? 340 : 110; // ~5 lines
   el.style.height = minHeight + 'px';
   const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
   el.style.height = newHeight + 'px';
@@ -1538,7 +1548,7 @@ function autoResize(el) {
   // Show expand button only when content exceeds ~5 lines
   const expandBtn = document.getElementById('composer-expand-btn');
   if (expandBtn) {
-    if (el.scrollHeight > 120) expandBtn.classList.add('show-expand');
+    if (el.scrollHeight > 110) expandBtn.classList.add('show-expand');
     else if (!S.composerExpanded) expandBtn.classList.remove('show-expand');
   }
 }
@@ -1760,6 +1770,7 @@ async function init() {
   if (isNowMobile) setSidebar(false);
   else setSidebar(true);
 
+  syncTempUi();
   renderHistory();
   setApiMode(S.apiMode, { silent: true });
   updateDemoBanner();

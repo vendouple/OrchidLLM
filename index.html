@@ -34,15 +34,17 @@
       <button class="new-chat-btn" id="new-chat-btn" type="button">
         <span class="ms">add</span> New Chat
       </button>
-      <button class="temp-btn" id="temp-btn" title="Temporary chat" type="button">
-        <span class="ms">schedule</span>
+      <m3e-icon-button class="temp-btn" id="temp-btn" title="Temporary chat" toggle>
+        <m3e-icon name="history_toggle_off"></m3e-icon>
         <div class="temp-dot-badge"></div>
-      </button>
+      </m3e-icon-button>
     </div>
 
     <div class="hist-scroll" id="hist-scroll" style="margin-top:10px;">
       <!-- populated by JS -->
     </div>
+
+    <div style="flex:1"></div>
 
     <!-- Sidebar quick nav placeholders -->
     <div class="side-quicknav" id="side-quicknav">
@@ -63,8 +65,6 @@
         <span class="qn-badge soon">Soon</span>
       </div>
     </div>
-
-    <div style="flex:1"></div>
     <div class="side-foot" style="padding:12px 16px; border-top: 1px solid var(--out-v); display:flex; align-items:center; gap:10px;">
       <div class="user-avatar" title="Your Profile" style="width:32px;height:32px;border-radius:50%;background:linear-gradient(145deg, var(--p), var(--t));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;box-shadow:var(--sh1);cursor:pointer;">
         <span class="ms sm">person</span>
@@ -150,6 +150,10 @@
         <div class="chat-title-label">Conversation</div>
         <div id="chat-title">New Conversation</div>
       </div>
+      <div class="temp-mode-pill" id="temp-mode-pill">
+        <span class="ms sm">history_toggle_off</span>
+        Temporary
+      </div>
       <div class="demo-mode-pill" id="demo-mode-pill">
         <span class="ms sm">bolt</span> Demo mode
       </div>
@@ -201,22 +205,18 @@
 
         <!-- Toolbar — BELOW textarea -->
         <div class="input-toolbar">
-          <div class="model-tools-split" id="tools-wrap" style="display:flex; align-items:center; background:var(--surf-hi); border-radius:var(--r-pill); border: 1px solid var(--out-v); padding:2px;">
-            <m3e-button variant="text" id="model-split-btn" style="--m3e-button-border-radius:var(--r-pill); --m3e-button-container-height:32px; padding:0 8px; color:var(--on-surf);">
-              <m3e-icon slot="icon" name="psychology"></m3e-icon>
+          <div class="composer-segbar">
+            <button class="seg-btn model-btn" id="model-split-btn" type="button" aria-label="Select model">
+              <m3e-icon name="psychology"></m3e-icon>
               <span id="cat-badge" class="cat-badge cb-text">Text</span>
-              <span id="model-name-display" style="font-weight:700; text-transform:lowercase; letter-spacing:0.02em;">openai</span>
-            </m3e-button>
-            <div style="width:1px; height:20px; background:var(--out-v); margin: 0 4px;"></div>
-            <m3e-icon-button variant="text" id="tools-btn" title="Tools" style="--m3e-icon-button-state-layer-size:32px; --m3e-icon-button-icon-size:20px; color:var(--on-surf);">
-              <span class="visually-hidden">Tools</span>
-              <m3e-icon name="tune"></m3e-icon>
-            </m3e-icon-button>
-          </div>
-
-          <div class="act-pillbar-wrap" style="position:relative">
-              <!-- Tools Popup anchored to pillbar -->
-              <div class="tools-pop" id="tools-pop" aria-hidden="true" style="bottom:48px; left:0;">
+              <span id="model-name-display" class="model-label">openai</span>
+            </button>
+            <div class="seg-btn-holder" id="tools-wrap">
+              <button class="seg-btn icon-btn" id="tools-btn" type="button" title="Tools" aria-label="Tools">
+                <m3e-icon name="tune"></m3e-icon>
+              </button>
+              <!-- Tools Popup anchored to segmented cluster -->
+              <div class="tools-pop" id="tools-pop" aria-hidden="true">
                 <div class="tools-pop-title">Tool calling</div>
                 <div class="tools-split">
                   <div class="tools-nav" id="tools-nav"></div>
@@ -230,6 +230,12 @@
                 </div>
               </div>
             </div>
+            <div class="seg-btn-holder" id="enhance-wrap">
+              <button class="seg-btn icon-btn" id="enhance-btn" type="button" title="Enhance prompt" aria-label="Enhance prompt">
+                <m3e-icon name="auto_fix_high"></m3e-icon>
+              </button>
+            </div>
+          </div>
 
           <!-- Spacer -->
           <div style="flex:1"></div>
