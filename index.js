@@ -42,7 +42,7 @@ const CAPS_META = {
   'audio-in':  { label:'Audio In',  icon:'mic' },
   'audio-out': { label:'Audio Out', icon:'volume_up' },
 };
-const SIDEBAR_BREAKPOINT = 1100;
+const SIDEBAR_BREAKPOINT = 1200;
 
 /* ══════════════════════════════════════════════
    STATE
@@ -378,7 +378,14 @@ function renderToolsNav() {
   }).join('');
 
   nav.querySelectorAll('.tool-nav-item').forEach((item) => {
-    item.addEventListener('click', () => setActiveToolCat(item.dataset.tool));
+    item.addEventListener('click', (event) => {
+      // Don't close popup or change active when clicking the switch
+      if (event.target.tagName === 'M3E-SWITCH' || event.target.closest('m3e-switch')) {
+        event.stopPropagation();
+        return;
+      }
+      setActiveToolCat(item.dataset.tool);
+    });
   });
   nav.querySelectorAll('m3e-switch[data-tool-toggle]').forEach((sw) => {
     sw.addEventListener('click', (event) => {
@@ -421,7 +428,8 @@ function renderToolsModelList() {
   }).join('');
 
   list.querySelectorAll('[data-tool-model]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
       setToolModel(cat, btn.dataset.toolModel);
     });
   });
@@ -506,7 +514,10 @@ function newChat() {
   S.attachments = [];
   renderChat([]);
   renderHistory();
-  document.getElementById('chat-title').textContent = 'New Conversation';
+  const title = 'New Conversation';
+  document.getElementById('chat-title').textContent = title;
+  const mobileTitle = document.getElementById('mobile-chat-title');
+  if (mobileTitle) mobileTitle.textContent = title;
   document.getElementById('msg-input').value = '';
   updateSendBtn();
   clearAttachPreview();
@@ -519,7 +530,10 @@ function loadChat(id) {
   S.attachments = [];
   renderChat(chat.messages || []);
   renderHistory();
-  document.getElementById('chat-title').textContent = chat.title || 'Conversation';
+  const title = chat.title || 'Conversation';
+  document.getElementById('chat-title').textContent = title;
+  const mobileTitle = document.getElementById('mobile-chat-title');
+  if (mobileTitle) mobileTitle.textContent = title;
   clearAttachPreview();
   if (S.isMobile) setSidebar(false);
 }
@@ -568,9 +582,10 @@ function renderHistory() {
     html += `<div class="hist-label">${grp}</div>`;
     chats.forEach(c => {
       const active = c.id === S.currentChatId ? 'active' : '';
+      const icon = S.isTempChat && c.id === S.currentChatId ? 'tmp' : '';
       html += `
         <div class="hist-item ${active}" onclick="loadChat('${c.id}')">
-          <div class="hi-icon"><span class="ms sm">chat_bubble</span></div>
+          <div class="hi-icon ${icon}"><span class="ms sm">chat_bubble</span></div>
           <span class="hi-title">${escHtml(c.title||'Untitled')}</span>
           <button class="hi-del" onclick="deleteChat('${c.id}',event)" title="Delete">
             <span class="ms">close</span>
@@ -708,6 +723,7 @@ function renderModelList(filter='') {
   list.innerHTML = models.map(m => {
     const sel = S.selectedModel.id === m.id ? 'sel' : '';
     const isProBlocked = S.demoMode && m.pro;
+    const proBadge = m.pro ? `<span class="cap-chip" style="background:linear-gradient(135deg,var(--p),var(--t));color:#fff;font-weight:800;"><span class="ms">star</span>Pro</span>` : '';
     const caps = (m.caps || []).map(c => {
       const cm = CAPS_META[c]; if (!cm) return '';
       return `<span class="cap-chip"><span class="ms">${cm.icon}</span>${cm.label}</span>`;
@@ -724,7 +740,7 @@ function renderModelList(filter='') {
           <div class="mi-name">${escHtml(m.name)}</div>
           <div class="mi-desc">${escHtml(m.desc)}</div>
           ${lockLine}
-          ${meta ? `<div class="mi-caps">${meta}</div>` : ''}
+          ${meta || proBadge ? `<div class="mi-caps">${proBadge}${meta}</div>` : ''}
           ${caps ? `<div class="mi-caps">${caps}</div>` : ''}
         </div>
       </div>`;
@@ -829,7 +845,10 @@ async function sendMessage() {
 
   // Update title
   if (!S.isTempChat && S.chats[chatId]) {
-    document.getElementById('chat-title').textContent = S.chats[chatId].title;
+    const title = S.chats[chatId].title;
+    document.getElementById('chat-title').textContent = title;
+    const mobileTitle = document.getElementById('mobile-chat-title');
+    if (mobileTitle) mobileTitle.textContent = title;
   }
 
   // Demo count
@@ -1378,8 +1397,9 @@ function importHistory(e) {
       const data = JSON.parse(ev.target.result);
       if (typeof data === 'object') {
         Object.assign(S.chats, data);
-        saveState(); renderHistory();
-        toast('History imported!', 'upload');
+        saveState();
+        toast('History imported! Reloading...', 'upload');
+        setTimeout(() => window.location.reload(), 1000);
       }
     } catch { toast('Invalid file format', 'error'); }
   };
@@ -1539,12 +1559,12 @@ function toast(msg, icon='info') {
    INPUT UTILITIES
 ══════════════════════════════════════════════ */
 function autoResize(el) {
-  const minHeight = 20;
+  const minHeight = 22;
   const maxHeight = S.composerExpanded ? 340 : 110; // ~5 lines
   el.style.height = minHeight + 'px';
   const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
   el.style.height = newHeight + 'px';
-  
+
   // Show expand button only when content exceeds ~5 lines
   const expandBtn = document.getElementById('composer-expand-btn');
   if (expandBtn) {
@@ -1593,10 +1613,10 @@ on('rail-menu-tog', 'click', toggleSidebar);
 on('side-ov', 'click', () => setSidebar(false));
 
 // New chat
-['new-chat-btn', 'mobile-new-chat-btn', 'rail-new-chat-btn'].forEach(id => on(id, 'click', newChat));
+['new-chat-btn', 'rail-new-chat-btn'].forEach(id => on(id, 'click', newChat));
 
 // Temp chat
-['temp-btn', 'mobile-temp-btn', 'rail-temp-btn'].forEach(id => on(id, 'click', toggleTemp));
+['temp-btn', 'rail-temp-btn'].forEach(id => on(id, 'click', toggleTemp));
 
 // Settings
 ['settings-btn', 'mobile-settings-btn', 'rail-settings-btn'].forEach(id => on(id, 'click', openSettings));

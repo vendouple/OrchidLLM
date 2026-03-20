@@ -35,7 +35,8 @@
         <span class="ms">add</span> New Chat
       </button>
       <m3e-icon-button class="temp-btn" id="temp-btn" title="Temporary chat" toggle>
-        <m3e-icon name="history_toggle_off"></m3e-icon>
+        <m3e-icon name="schedule"></m3e-icon>
+        <m3e-icon slot="selected" name="schedule"></m3e-icon>
         <div class="temp-dot-badge"></div>
       </m3e-icon-button>
     </div>
@@ -106,13 +107,13 @@
         <span>Faster load times, home screen access, and a full-screen experience.</span>
       </div>
       <div class="pwa-nudge-actions">
-        <m3e-button variant="outlined" id="pwa-dismiss-btn" type="button">
+        <m3e-button variant="outlined" size="small" id="pwa-dismiss-btn" type="button">
           <m3e-icon slot="icon" name="close"></m3e-icon>
           Dismiss
         </m3e-button>
-        <m3e-button variant="filled" id="pwa-open-settings-btn" type="button">
-          <m3e-icon slot="icon" name="settings"></m3e-icon>
-          Open Menu
+        <m3e-button variant="filled" size="small" id="pwa-open-settings-btn" type="button">
+          <m3e-icon slot="icon" name="open_in_new"></m3e-icon>
+          Open
         </m3e-button>
       </div>
     </div>
@@ -122,15 +123,12 @@
       <m3e-icon-button id="sidebar-toggle">
         <m3e-icon name="menu"></m3e-icon>
       </m3e-icon-button>
-      
-      <!-- Quick mobile actions -->
-      <m3e-icon-button id="mobile-new-chat-btn" title="New Chat" variant="tonal">
-        <m3e-icon name="add"></m3e-icon>
-      </m3e-icon-button>
-      <m3e-icon-button id="mobile-temp-btn" title="Temporary Chat" variant="tonal" toggle>
-        <m3e-icon name="history_toggle_off"></m3e-icon>
-        <m3e-icon slot="selected" name="history"></m3e-icon>
-      </m3e-icon-button>
+
+      <!-- Mobile chat title -->
+      <div style="flex: 1; min-width: 0;">
+        <div class="chat-title-label" style="font-size: 10px; color: var(--out); text-transform: uppercase; letter-spacing: 0.05em;">Chat</div>
+        <div id="mobile-chat-title" style="font-size: 14px; font-weight: 700; color: var(--on-surf); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New Conversation</div>
+      </div>
 
       <div class="temp-pill" id="temp-pill" style="margin-left:auto">
         <span class="ms sm">schedule</span>

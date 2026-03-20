@@ -95,6 +95,7 @@ a:hover { text-decoration: underline; }
   -webkit-font-smoothing: antialiased;
   font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
   user-select: none; pointer-events: none;
+  color: inherit;
 }
 .ms.fill { font-variation-settings: 'FILL' 1, 'wght' 500, 'GRAD' 0, 'opsz' 24; }
 .ms.sm { font-size: 18px; }
@@ -117,7 +118,7 @@ a:hover { text-decoration: underline; }
 .desktop-only { display: flex !important; }
 .mobile-only { display: none !important; }
 
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .desktop-only { display: none !important; }
   .mobile-only { display: flex !important; }
 }
@@ -233,14 +234,14 @@ a:hover { text-decoration: underline; }
   --m3e-icon-button-container-color: var(--surf);
   --m3e-icon-button-hover-container-color: var(--surf-hi);
   --m3e-icon-button-focus-ring-color: color-mix(in srgb, var(--t) 40%, transparent);
-  --m3e-icon-button-selected-container-color: linear-gradient(140deg, #f43f5e, #be123c);
-  --m3e-icon-button-selected-icon-color: #fff;
-  --m3e-icon-button-selected-hover-container-color: linear-gradient(140deg, #f43f5e, #b91c1c);
+  --m3e-icon-button-selected-container-color: var(--tc);
+  --m3e-icon-button-selected-icon-color: var(--on-tc);
+  --m3e-icon-button-selected-hover-container-color: color-mix(in srgb, var(--tc) 90%, var(--t));
   width: 48px; height: 48px;
   border-radius: 50%;
   position: relative;
   box-shadow: var(--sh1);
-  background: radial-gradient(circle at 30% 30%, color-mix(in srgb, var(--t) 24%, transparent), transparent 60%);
+  transition: all 0.2s var(--std);
 }
 [data-theme="dark"] .temp-btn.active,
 .temp-btn.active {
@@ -249,13 +250,6 @@ a:hover { text-decoration: underline; }
 [data-theme="dark"] .temp-btn {
   --m3e-icon-button-container-color: var(--surf-mid);
   --m3e-icon-button-hover-container-color: var(--surf-hi);
-  --m3e-icon-button-selected-container-color: linear-gradient(140deg, #f43f5e, #7f1d1d);
-  --m3e-icon-button-selected-icon-color: #ffe4e6;
-}
-#mobile-temp-btn[selected],
-#mobile-temp-btn.active {
-  --m3e-icon-button-selected-container-color: linear-gradient(145deg, #f43f5e, #be123c);
-  --m3e-icon-button-selected-icon-color: #fff;
 }
 .temp-dot-badge {
   position: absolute;
@@ -372,7 +366,7 @@ a:hover { text-decoration: underline; }
   display: none; align-items: center; gap: 8px;
   padding: 8px 20px;
   background: linear-gradient(135deg, color-mix(in srgb, var(--t) 18%, transparent), var(--tc));
-  color: var(--on-t);
+  color: var(--on-tc);
   font-size: 12px; font-weight: 700;
   border-bottom: 1px solid color-mix(in srgb, var(--t) 32%, transparent);
   box-shadow: var(--sh1);
@@ -383,6 +377,7 @@ a:hover { text-decoration: underline; }
   transition: border-color .2s, box-shadow .2s, max-height .28s var(--std), opacity .22s var(--std), transform .28s var(--std), padding .22s var(--std), margin .22s var(--std), border-width .18s var(--std);
 }
 #demo-banner.show { display: flex; }
+#demo-banner .ms { color: var(--on-tc); }
 .demo-pill {
   margin-left: auto;
   transition: background .22s var(--std), border-color .22s var(--std), box-shadow .22s var(--std), padding .22s var(--std);
@@ -510,6 +505,10 @@ a:hover { text-decoration: underline; }
 .w-chips {
   display: flex; flex-wrap: wrap; gap: 8px;
   justify-content: center; max-width: 520px;
+}
+.w-chips m3e-assist-chip {
+  --m3e-chip-label-color: var(--on-surf);
+  font-weight: 600;
 }
 /* w-chip styles removed — now using m3e-assist-chip */
 
@@ -1015,7 +1014,7 @@ a:hover { text-decoration: underline; }
 #msg-input {
   flex: 1; border: none; background: transparent; outline: none;
   font-size: 15px; color: var(--on-surf); line-height: 20px;
-  resize: none; height: 20px; min-height: 20px; max-height: 110px;
+  resize: none; height: 22px; min-height: 22px; max-height: 110px;
   padding-bottom: 2px; padding-top: 2px;
   scrollbar-width: thin;
   overflow-y: auto;
@@ -1150,7 +1149,7 @@ body.composer-expanded #msg-input {
 .settings-panel-inner {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 8px;
   padding: 8px 4px;
 }
 
@@ -1163,7 +1162,7 @@ body.composer-expanded #msg-input {
 }
 .srow {
   display: flex; align-items: center; gap: 12px;
-  padding: 13px 16px;
+  padding: 10px 14px;
   background: var(--surf-lo);
   border-radius: var(--r-lg);
 }
@@ -1302,32 +1301,50 @@ body.composer-expanded #msg-input {
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 20px;
+  padding: 8px 16px;
 }
 
 .pwa-nudge-copy {
   display: grid;
   gap: 2px;
+  flex: 1;
 }
 
 .pwa-nudge-copy strong {
   font-size: 12px;
   font-weight: 800;
+  color: var(--on-sc);
 }
 
 .pwa-nudge-copy span {
   font-size: 11px;
   color: var(--on-sc);
+  opacity: 0.85;
 }
 
 .pwa-nudge-actions {
   display: flex;
   gap: 6px;
+  flex-shrink: 0;
 }
 
 .pwa-nudge .btn {
   padding: 6px 10px;
   font-size: 12px;
+}
+
+@media (max-width: 720px) {
+  .pwa-nudge {
+    flex-wrap: wrap;
+    padding: 10px 12px;
+  }
+  .pwa-nudge-copy {
+    flex-basis: 100%;
+  }
+  .pwa-nudge-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* Toggle styles removed — now using m3e-switch */
@@ -1384,7 +1401,7 @@ body.composer-expanded #msg-input {
 /* ══════════════════════════════════════════════
    RESPONSIVE
 ══════════════════════════════════════════════ */
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   #sidebar {
     position: fixed; top: 0; left: 0; height: 100%;
     z-index: 20; box-shadow: var(--sh3);
@@ -1426,6 +1443,19 @@ body.composer-expanded #msg-input {
   .mi-caps { display: none; }
   .chat-inner { padding: 0 12px; }
   #input-area { padding: 8px 12px 14px; }
+
+  /* Compact model selector on smaller screens */
+  .model-label {
+    max-width: 120px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Adjust quick modes for smaller screens */
+  .quick-modes.qm-segment {
+    flex-shrink: 0;
+  }
 }
 @media (max-width: 480px) {
   #topbar { padding: 0 8px; }
@@ -1465,6 +1495,77 @@ body.composer-expanded #msg-input {
     padding: 8px 14px;
     gap: 6px;
   }
+
+  /* Compact toolbar on mobile */
+  .composer-segbar {
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  .seg-btn.model-btn {
+    flex: 1;
+    min-width: 140px;
+  }
+
+  .model-label {
+    max-width: 80px;
+  }
+
+  /* Hide new chat and temp buttons from mobile topbar */
+  #mobile-new-chat-btn,
+  #mobile-temp-btn {
+    display: none !important;
+  }
+
+  /* Ensure chat title stays visible */
+  .chat-title-label {
+    display: block;
+  }
+
+  /* Settings dialog mobile fixes */
+  m3e-dialog::part(panel) {
+    max-width: 100vw;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+
+  .settings-panel-inner {
+    padding: 12px 12px;
+  }
+
+  /* Tool calling UI mobile fixes */
+  .tools-split {
+    flex-direction: column;
+  }
+
+  .tools-nav {
+    width: 100%;
+    flex-direction: row;
+    overflow-x: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--out-v);
+    padding: 8px;
+  }
+
+  .tool-nav-item {
+    flex-direction: column;
+    min-width: 100px;
+    padding: 8px;
+    text-align: center;
+  }
+
+  .tool-nav-meta {
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .tool-nav-titles {
+    align-items: center;
+  }
+
+  .tool-nav-sub {
+    font-size: 10px;
+  }
 }
 
 /* Mobile settings layout removed — m3e-tabs handles responsive */
@@ -1482,16 +1583,16 @@ body.composer-expanded #msg-input {
 m3e-dialog { max-width: 100vw; }
 m3e-dialog::part(panel) {
   max-width: 96vw;
-  background: var(--surf);
-  color: var(--on-surf);
-  border: 1.5px solid var(--out-v);
+  background: var(--surf) !important;
+  color: var(--on-surf) !important;
+  border: 1.5px solid var(--out-v) !important;
   box-shadow: var(--sh3);
 }
 m3e-dialog::part(header),
 m3e-dialog::part(footer) {
-  background: var(--surf);
-  color: var(--on-surf);
-  border-color: var(--out-v);
+  background: var(--surf) !important;
+  color: var(--on-surf) !important;
+  border-color: var(--out-v) !important;
 }
 
 .settings-panel-inner {
@@ -1657,7 +1758,7 @@ m3e-dialog::part(footer) {
 .palette-btn:hover { transform: scale(1.15); border-color: var(--p); }
 
 .mobile-only-btn { display: none; }
-@media (max-width: 1100px) {
+@media (max-width: 1200px) {
   .side-foot #settings-btn { display: none; }
   .mobile-only-btn { display: inline-flex; }
 }
