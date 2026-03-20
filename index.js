@@ -42,7 +42,7 @@ const CAPS_META = {
   'audio-in':  { label:'Audio In',  icon:'mic' },
   'audio-out': { label:'Audio Out', icon:'volume_up' },
 };
-const SIDEBAR_BREAKPOINT = 1100;
+const SIDEBAR_BREAKPOINT = 1200;
 
 /* ══════════════════════════════════════════════
    STATE
@@ -378,7 +378,14 @@ function renderToolsNav() {
   }).join('');
 
   nav.querySelectorAll('.tool-nav-item').forEach((item) => {
-    item.addEventListener('click', () => setActiveToolCat(item.dataset.tool));
+    item.addEventListener('click', (event) => {
+      // Don't close popup or change active when clicking the switch
+      if (event.target.tagName === 'M3E-SWITCH' || event.target.closest('m3e-switch')) {
+        event.stopPropagation();
+        return;
+      }
+      setActiveToolCat(item.dataset.tool);
+    });
   });
   nav.querySelectorAll('m3e-switch[data-tool-toggle]').forEach((sw) => {
     sw.addEventListener('click', (event) => {
@@ -421,7 +428,8 @@ function renderToolsModelList() {
   }).join('');
 
   list.querySelectorAll('[data-tool-model]').forEach((btn) => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (event) => {
+      event.stopPropagation();
       setToolModel(cat, btn.dataset.toolModel);
     });
   });
@@ -708,6 +716,7 @@ function renderModelList(filter='') {
   list.innerHTML = models.map(m => {
     const sel = S.selectedModel.id === m.id ? 'sel' : '';
     const isProBlocked = S.demoMode && m.pro;
+    const proBadge = m.pro ? `<span class="cap-chip" style="background:linear-gradient(135deg,var(--p),var(--t));color:#fff;font-weight:800;"><span class="ms">star</span>Pro</span>` : '';
     const caps = (m.caps || []).map(c => {
       const cm = CAPS_META[c]; if (!cm) return '';
       return `<span class="cap-chip"><span class="ms">${cm.icon}</span>${cm.label}</span>`;
@@ -724,7 +733,7 @@ function renderModelList(filter='') {
           <div class="mi-name">${escHtml(m.name)}</div>
           <div class="mi-desc">${escHtml(m.desc)}</div>
           ${lockLine}
-          ${meta ? `<div class="mi-caps">${meta}</div>` : ''}
+          ${meta || proBadge ? `<div class="mi-caps">${proBadge}${meta}</div>` : ''}
           ${caps ? `<div class="mi-caps">${caps}</div>` : ''}
         </div>
       </div>`;
@@ -1378,8 +1387,9 @@ function importHistory(e) {
       const data = JSON.parse(ev.target.result);
       if (typeof data === 'object') {
         Object.assign(S.chats, data);
-        saveState(); renderHistory();
-        toast('History imported!', 'upload');
+        saveState();
+        toast('History imported! Reloading...', 'upload');
+        setTimeout(() => window.location.reload(), 1000);
       }
     } catch { toast('Invalid file format', 'error'); }
   };
@@ -1539,12 +1549,12 @@ function toast(msg, icon='info') {
    INPUT UTILITIES
 ══════════════════════════════════════════════ */
 function autoResize(el) {
-  const minHeight = 20;
+  const minHeight = 22;
   const maxHeight = S.composerExpanded ? 340 : 110; // ~5 lines
   el.style.height = minHeight + 'px';
   const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
   el.style.height = newHeight + 'px';
-  
+
   // Show expand button only when content exceeds ~5 lines
   const expandBtn = document.getElementById('composer-expand-btn');
   if (expandBtn) {
