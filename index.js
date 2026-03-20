@@ -42,7 +42,7 @@ const CAPS_META = {
   'audio-in':  { label:'Audio In',  icon:'mic' },
   'audio-out': { label:'Audio Out', icon:'volume_up' },
 };
-const SIDEBAR_BREAKPOINT = 1200;
+const SIDEBAR_BREAKPOINT = 1280;
 
 /* ══════════════════════════════════════════════
    STATE
@@ -313,6 +313,40 @@ function syncTempUi() {
   if (tempPill) tempPill.classList.toggle('show', S.isTempChat);
   const tempModePill = document.getElementById('temp-mode-pill');
   if (tempModePill) tempModePill.classList.toggle('show', S.isTempChat);
+}
+
+/* ══════════════════════════════════════════════
+   MOBILE TOPBAR ACTIONS
+══════════════════════════════════════════════ */
+function toggleMobileMenu(forceState) {
+  const menu = document.getElementById('mobile-more-menu');
+  const ov = document.getElementById('mobile-menu-ov');
+  if (!menu || !ov) return;
+  const next = typeof forceState === 'boolean' ? forceState : !menu.classList.contains('open');
+  menu.classList.toggle('open', next);
+  ov.classList.toggle('show', next);
+}
+function closeMobileMenu() { toggleMobileMenu(false); }
+
+function handleMobileAction(action) {
+  switch (action) {
+    case 'new-chat':
+      newChat();
+      break;
+    case 'delete-chat':
+      if (S.currentChatId) deleteChat(S.currentChatId);
+      else toast('No chat selected', 'info');
+      break;
+    case 'export-chat':
+      exportCurrentChat();
+      break;
+    case 'settings':
+      openSettings();
+      break;
+    default:
+      toast('Feedback coming soon', 'feedback');
+  }
+  closeMobileMenu();
 }
 
 function showComingSoon(label) {
@@ -640,17 +674,13 @@ function buildMsgEl(msg) {
   }
 
   const avatar = isUser
-    ? `<div class="avatar user-av">U</div>`
+    ? `<div class="avatar user-av"><span class="ms sm fill">chat</span></div>`
     : `<div class="avatar ai-av"><span class="ms sm fill">auto_awesome</span></div>`;
 
   const modelTag = msg.model ? ` · ${msg.model}` : '';
   const meta = `<div class="msg-meta">${msg.time || ts()}${modelTag}</div>`;
 
-  if (isUser) {
-    row.innerHTML = `${avatar}<div class="bubble">${bubbleContent}${meta}</div>`;
-  } else {
-    row.innerHTML = `${avatar}<div class="bubble">${bubbleContent}${meta}</div>`;
-  }
+  row.innerHTML = `${avatar}<div class="bubble">${bubbleContent}${meta}</div>`;
   return row;
 }
 
@@ -689,10 +719,20 @@ function scrollToBottom() {
 ══════════════════════════════════════════════ */
 function openDropup() {
   renderDropup();
-  document.getElementById('dropup-wrap').classList.add('open');
+  const wrap = document.getElementById('dropup-wrap');
+  wrap.classList.add('open');
+  wrap.setAttribute('aria-hidden', 'false');
 }
 function closeDropup() {
-  document.getElementById('dropup-wrap').classList.remove('open');
+  const wrap = document.getElementById('dropup-wrap');
+  wrap.classList.remove('open');
+  wrap.setAttribute('aria-hidden', 'true');
+}
+function toggleDropup() {
+  const wrap = document.getElementById('dropup-wrap');
+  if (!wrap) return;
+  if (wrap.classList.contains('open')) closeDropup();
+  else openDropup();
 }
 
 function renderDropup() {
@@ -723,6 +763,7 @@ function renderModelList(filter='') {
   list.innerHTML = models.map(m => {
     const sel = S.selectedModel.id === m.id ? 'sel' : '';
     const isProBlocked = S.demoMode && m.pro;
+    const proLabel = m.pro ? `<span class="mi-pro">Pro</span>` : '';
     const proBadge = m.pro ? `<span class="cap-chip" style="background:linear-gradient(135deg,var(--p),var(--t));color:#fff;font-weight:800;"><span class="ms">star</span>Pro</span>` : '';
     const caps = (m.caps || []).map(c => {
       const cm = CAPS_META[c]; if (!cm) return '';
@@ -737,7 +778,7 @@ function renderModelList(filter='') {
     return `
       <div class="model-item ${sel}" onclick="selectModel('${S.selectedCat}','${m.id}')" ${disabled}>
         <div class="mi-info">
-          <div class="mi-name">${escHtml(m.name)}</div>
+          <div class="mi-name-row"><div class="mi-name">${escHtml(m.name)}</div>${proLabel}</div>
           <div class="mi-desc">${escHtml(m.desc)}</div>
           ${lockLine}
           ${meta || proBadge ? `<div class="mi-caps">${proBadge}${meta}</div>` : ''}
@@ -752,7 +793,9 @@ function selectModel(catId, modelId, options = {}) {
   const model = models.find(m => m.id === modelId);
   if (!model || model.disabled) return;
   if (S.demoMode && model.pro) return;
-  const { silent = false } = options;
+  const { silent = false, keepOpen } = options;
+  const dropupOpen = document.getElementById('dropup-wrap')?.classList.contains('open');
+  const shouldKeepOpen = typeof keepOpen === 'boolean' ? keepOpen : dropupOpen;
   S.selectedCat = catId;
   S.selectedModel = model;
   // Update button
@@ -762,7 +805,7 @@ function selectModel(catId, modelId, options = {}) {
   document.getElementById('model-name-display').textContent = model.name;
   syncComposerModeControls();
   updateInputModeUI();
-  closeDropup();
+  if (!shouldKeepOpen) closeDropup();
   if (!silent) toast(`Model: ${model.name}`, 'check_circle');
   renderWelcomeSuggestions();
   startSuggestionRotation();
@@ -1389,6 +1432,20 @@ function exportHistory() {
   toast('History exported', 'download');
 }
 
+function exportCurrentChat() {
+  if (!S.currentChatId || !S.chats[S.currentChatId]) {
+    toast('No chat selected to export', 'info');
+    return;
+  }
+  const chat = S.chats[S.currentChatId];
+  const data = JSON.stringify(chat, null, 2);
+  const a = document.createElement('a');
+  a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+  a.download = `${(chat.title || 'chat').replace(/\\s+/g,'-').toLowerCase()}-${Date.now()}.json`;
+  a.click();
+  toast('Chat exported', 'ios_share');
+}
+
 function importHistory(e) {
   const file = e.target.files[0]; if (!file) return;
   const reader = new FileReader();
@@ -1559,11 +1616,13 @@ function toast(msg, icon='info') {
    INPUT UTILITIES
 ══════════════════════════════════════════════ */
 function autoResize(el) {
-  const minHeight = 22;
+  const style = getComputedStyle(el);
+  const lineHeight = parseFloat(style.lineHeight) || 20;
+  const minHeight = Math.max(lineHeight + 4, 24);
   const maxHeight = S.composerExpanded ? 340 : 110; // ~5 lines
-  el.style.height = minHeight + 'px';
+  el.style.height = 'auto';
   const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
-  el.style.height = newHeight + 'px';
+  el.style.height = `${newHeight}px`;
 
   // Show expand button only when content exceeds ~5 lines
   const expandBtn = document.getElementById('composer-expand-btn');
@@ -1613,13 +1672,13 @@ on('rail-menu-tog', 'click', toggleSidebar);
 on('side-ov', 'click', () => setSidebar(false));
 
 // New chat
-['new-chat-btn', 'rail-new-chat-btn'].forEach(id => on(id, 'click', newChat));
+['new-chat-btn', 'rail-new-chat-btn', 'mobile-new-chat-btn'].forEach(id => on(id, 'click', () => { newChat(); closeMobileMenu(); }));
 
 // Temp chat
 ['temp-btn', 'rail-temp-btn'].forEach(id => on(id, 'click', toggleTemp));
 
 // Settings
-['settings-btn', 'mobile-settings-btn', 'rail-settings-btn'].forEach(id => on(id, 'click', openSettings));
+['settings-btn', 'rail-settings-btn'].forEach(id => on(id, 'click', openSettings));
 const settingsDlgEl = document.getElementById('settings-dlg');
 if (settingsDlgEl) settingsDlgEl.addEventListener('closed', () => saveSettings());
 on('s-dark-tog', 'change', e => applyTheme(e.target.checked ? 'dark' : 'light'));
@@ -1667,9 +1726,15 @@ on('chat-wrap', 'drop', e => {
 });
 
 // Model dropup
-on('model-split-btn', 'click', openDropup);
+on('model-split-btn', 'click', toggleDropup);
 on('dropup-bg', 'click', closeDropup);
 on('tools-btn', 'click', (event) => { event.stopPropagation(); toggleToolsPop(); });
+on('mobile-more-btn', 'click', (event) => { event.stopPropagation(); toggleMobileMenu(); });
+on('mobile-menu-ov', 'click', closeMobileMenu);
+onAll('[data-mobile-action]', 'click', (event) => {
+  const action = event.currentTarget?.dataset?.mobileAction;
+  if (action) handleMobileAction(action);
+});
 
 onAll('[data-qmode]', 'click', (event) => {
   const button = event.currentTarget;
@@ -1728,12 +1793,20 @@ document.addEventListener('keydown', e => {
     closeDlg('settings-dlg'); closeDlg('enhance-dlg'); closeDropup();
     closeToolsPop();
     closeImageViewer();
+    closeMobileMenu();
   }
 });
 document.addEventListener('click', (event) => {
   const toolsWrap = document.getElementById('tools-wrap');
   if (toolsWrap && !toolsWrap.contains(event.target)) {
     closeToolsPop();
+  }
+  const mobileMenu = document.getElementById('mobile-more-menu');
+  const mobileBtn = document.getElementById('mobile-more-btn');
+  if (mobileMenu && mobileMenu.classList.contains('open')) {
+    if (!mobileMenu.contains(event.target) && !mobileBtn?.contains(event.target)) {
+      closeMobileMenu();
+    }
   }
 });
 // Paste images
@@ -1759,6 +1832,7 @@ function checkMobile() {
       if (S.sideOpen) setSidebar(false);
     } else {
       setSidebar(true);
+      closeMobileMenu();
     }
   }
 }
