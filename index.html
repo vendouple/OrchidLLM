@@ -141,6 +141,20 @@
       </m3e-icon-button>
     </header>
 
+    <!-- Desktop Chat Header -->
+    <div id="chat-top" class="desktop-only">
+      <m3e-icon-button id="desktop-menu-btn" title="Toggle sidebar">
+        <m3e-icon name="menu"></m3e-icon>
+      </m3e-icon-button>
+      <div class="chat-top-title">
+        <div class="chat-title-label">Conversation</div>
+        <div id="chat-title">New Conversation</div>
+      </div>
+      <div class="demo-mode-pill" id="demo-mode-pill">
+        <span class="ms sm">bolt</span> Demo mode
+      </div>
+    </div>
+
     <!-- Toast Host -->
   <div id="toast-host"></div>
 
@@ -187,9 +201,10 @@
 
         <!-- Toolbar — BELOW textarea -->
         <div class="input-toolbar">
-          <div class="model-tools-split" style="display:flex; align-items:center; background:var(--surf-hi); border-radius:var(--r-pill); border: 1px solid var(--out-v); padding:2px;">
+          <div class="model-tools-split" id="tools-wrap" style="display:flex; align-items:center; background:var(--surf-hi); border-radius:var(--r-pill); border: 1px solid var(--out-v); padding:2px;">
             <m3e-button variant="text" id="model-split-btn" style="--m3e-button-border-radius:var(--r-pill); --m3e-button-container-height:32px; padding:0 8px; color:var(--on-surf);">
               <m3e-icon slot="icon" name="psychology"></m3e-icon>
+              <span id="cat-badge" class="cat-badge cb-text">Text</span>
               <span id="model-name-display" style="font-weight:700; text-transform:lowercase; letter-spacing:0.02em;">openai</span>
             </m3e-button>
             <div style="width:1px; height:20px; background:var(--out-v); margin: 0 4px;"></div>
@@ -202,22 +217,16 @@
           <div class="act-pillbar-wrap" style="position:relative">
               <!-- Tools Popup anchored to pillbar -->
               <div class="tools-pop" id="tools-pop" aria-hidden="true" style="bottom:48px; left:0;">
-                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
-                  <div class="tools-pop-title" style="margin-bottom:0;">Text Tools</div>
-                  <!-- Tools Model Selector -->
-                  <div style="position:relative">
-                    <button type="button" id="tools-model-btn" class="cat-badge cb-text" style="display:flex;align-items:center;gap:4px;cursor:pointer;border:none;padding:4px 8px;">
-                      <span id="tools-model-display">openai</span>
-                      <span class="ms" style="font-size:14px">expand_more</span>
-                    </button>
-                    <m3e-menu id="tools-model-menu" anchor="tools-model-btn" positioning="popover"></m3e-menu>
+                <div class="tools-pop-title">Tool calling</div>
+                <div class="tools-split">
+                  <div class="tools-nav" id="tools-nav"></div>
+                  <div class="tools-models">
+                    <div class="tools-models-head">
+                      <div class="tools-models-title" id="tools-models-title">Select model</div>
+                      <div class="tools-models-hint">Choose which model to call per tool</div>
+                    </div>
+                    <div class="tools-model-list" id="tools-model-list"></div>
                   </div>
-                </div>
-                <div class="tools-chip-grid">
-                  <button class="tool-chip" type="button" data-tool="image">Image</button>
-                  <button class="tool-chip" type="button" data-tool="video">Video</button>
-                  <button class="tool-chip" type="button" data-tool="audio">Audio</button>
-                  <button class="tool-chip soon" type="button" disabled>Search Web (Soon)</button>
                 </div>
               </div>
             </div>
@@ -324,6 +333,9 @@
               <div class="palette-btn" id="pal-var-1" onclick="applySeamlessVariant(1)" title="Variant 1"></div>
               <div class="palette-btn" id="pal-var-2" onclick="applySeamlessVariant(2)" title="Variant 2"></div>
               <div class="palette-btn" id="pal-var-3" onclick="applySeamlessVariant(3)" title="Variant 3"></div>
+              <m3e-button variant="text" size="extra-small" id="randomize-palette-btn" type="button">
+                <m3e-icon slot="icon" name="auto_awesome"></m3e-icon> Randomize
+              </m3e-button>
               <m3e-button variant="outlined" size="extra-small" id="reset-palette-btn" type="button" style="margin-left:auto">
                 <m3e-icon slot="icon" name="restart_alt"></m3e-icon> Reset
               </m3e-button>
@@ -574,6 +586,6 @@
 
 </m3e-theme>
 
-<script src="./app.js?v=2" defer></script>
+<script type="module" src="./index.js?v=2"></script>
 </body>
 </html>
