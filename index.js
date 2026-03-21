@@ -3,6 +3,7 @@ import {
   DEMO_API_KEY,
   DEFAULT_BYOP_KEY,
   POLL_BASE,
+  getImageUrl,
   fetchAudioGeneration,
   fetchImageGeneration,
   fetchModelCatalog,
@@ -680,6 +681,8 @@ function buildMsgEl(msg) {
     bubbleContent += `<audio controls src="${escHtml(msg.audioUrl)}" style="width:100%"></audio>`;
   } else if (msg.content) {
     bubbleContent += escHtml(msg.content);
+  } else if (!isUser) {
+    bubbleContent += '<span style="opacity:0.5;font-style:italic">No content or pending tool call...</span>';
   }
 
   const avatar = isUser
@@ -1017,7 +1020,24 @@ async function callTextAPI(chatId, userText, userMsg) {
   if (S.systemPrompt) body.system = S.systemPrompt;
 
   const payload = await fetchTextCompletion(body, S.apiMode, S.byopKey);
-  const text = payload?.choices?.[0]?.message?.content || 'No response content.';
+  let text = payload?.choices?.[0]?.message?.content || '';
+  
+  // Handle potential tool calls or blank responses
+  const toolCalls = payload?.choices?.[0]?.message?.tool_calls;
+  if (toolCalls && toolCalls.length) {
+    const call = toolCalls[0];
+    const args = JSON.parse(call.function?.arguments || '{}');
+    if (call.function?.name === 'image' || args.prompt) {
+      text = `[Calling image generator for: ${args.prompt || 'image'}]`;
+      // We could potentially trigger callImageAPI here, but for now we just show the intent
+    } else {
+      text = `[Tool Call: ${call.function?.name}]`;
+    }
+  }
+
+  if (!text.trim() && !toolCalls) {
+    text = 'No response content.';
+  }
 
   removeTyping();
   const aiMsg = { role:'assistant', content: text.trim(), time: ts(), model: S.selectedModel.name };
@@ -1026,20 +1046,17 @@ async function callTextAPI(chatId, userText, userMsg) {
 }
 
 async function callImageAPI(chatId, prompt) {
-  const payload = await fetchImageGeneration({
-    model: S.selectedModel.id,
-    prompt: prompt || 'Generate an image',
-    size: '1024x1024',
-    response_format: 'url',
-    seed: -1,
-    enhance: false,
-    nologo: true,
-  }, S.apiMode, S.byopKey);
-  const url = payload?.data?.[0]?.url;
-  if (!url) throw new Error('No image URL returned');
-
+  // Use the construction helper for the most reliable Pollinations image URL
+  const url = getImageUrl(prompt, S.selectedModel.id, { nologo: 'true' }, S.apiMode, S.byopKey);
+  
   removeTyping();
-  const aiMsg = { role:'assistant', imageUrl: url, time: ts(), model: S.selectedModel.name };
+  const aiMsg = { 
+    role: 'assistant', 
+    imageUrl: url, 
+    content: `Generated with ${S.selectedModel.name}.`,
+    time: ts(), 
+    model: S.selectedModel.name 
+  };
   addMessage(chatId, aiMsg);
   addMsgToView(aiMsg);
 }
@@ -1495,7 +1512,7 @@ function _doClearHistory() {
 function updateDemoBanner() {
   const b = document.getElementById('demo-banner');
   b.classList.toggle('show', S.demoMode);
-  document.getElementById('demo-counter').textContent = `${demoRemaining()} left`;
+  document.getElementById('demo-counter').textContent = `${demoRemaining()} requests left`;
   const demoPill = document.getElementById('demo-mode-pill');
   if (demoPill) demoPill.classList.toggle('show', S.demoMode);
 }

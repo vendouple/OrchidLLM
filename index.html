@@ -89,8 +89,8 @@
     <!-- Demo Banner -->
     <div id="demo-banner">
       <span class="ms sm">bolt</span>
-      Demo mode — 20 requests/day limit
-      <div class="demo-pill" id="demo-counter">20 left</div>
+      Demo mode
+      <div class="demo-pill" id="demo-counter">20 requests left</div>
     </div>
 
     <div id="demo-data-banner">
@@ -112,7 +112,7 @@
           <span class="hide-mobile">Dismiss</span>
         </m3e-button>
         <m3e-button variant="filled" size="small" id="pwa-open-settings-btn" type="button">
-          <m3e-icon slot="icon" name="shortcut"></m3e-icon>
+          <m3e-icon slot="icon" name="open-in-new-tab"></m3e-icon>
           <span class="hide-mobile">Open</span>
         </m3e-button>
       </div>
@@ -514,11 +514,16 @@
     <m3e-tab-panel id="s-about">
       <div class="settings-panel-inner">
         <div class="sec-title">About OrchidLLM</div>
-        <div style="font-size:14px;color:var(--out)">UI and feature wrapper powered by Pollinations.ai infrastructure.</div>
+        <div style="font-size:14px;color:var(--out)">UI and feature wrapper powered by Pollinations.ai.</div>
         <div style="height:16px;"></div>
         <a href="https://github.com/matraic/m3e" target="_blank" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;color:var(--on-surf);text-decoration:none;padding:8px 12px;border-radius:var(--r-md);background:var(--surf-hi);">
           <m3e-icon name="code" style="font-size:18px;color:var(--p)"></m3e-icon> View M3E Component Library
         </a>
+        <div style="height:16px;">
+        <span style="font-size:14px;color:var(--out)">This app is still in beta! Expect Bugs!</span>
+        <br>
+        Version: v0.1.0
+        </div>
       </div>
     </m3e-tab-panel>
   </m3e-tabs>
