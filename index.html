@@ -45,10 +45,10 @@
       <!-- populated by JS -->
     </div>
 
-    <div style="flex:1"></div>
+    <div style="flex:1; min-height:0; display:none;"></div>
 
     <!-- Sidebar quick nav placeholders -->
-    <div class="side-quicknav" id="side-quicknav">
+    <div class="side-quicknav" id="side-quicknav" style="margin-top:auto;">
       <div class="qn-label">Quick Access</div>
       <div class="qn-item" onclick="showComingSoon('Explore Apps')">
         <span class="ms sm">grid_view</span>
@@ -72,7 +72,7 @@
       </div>
       <div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
         <span style="font-size:13px; font-weight:700; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; color:var(--on-surf)">User</span>
-        <span style="font-size:11px; color:var(--out);">Playground</span>
+        <span style="font-size:11px; color:var(--out);">0/5% </span>
       </div>
       <m3e-icon-button id="settings-btn" title="Settings" variant="tonal">
         <m3e-icon name="settings"></m3e-icon>
@@ -109,11 +109,11 @@
       <div class="pwa-nudge-actions">
       <m3e-button variant="outlined" size="small" id="pwa-dismiss-btn" type="button">
           <m3e-icon slot="icon" name="close"></m3e-icon>
-          Dismiss
+          <span class="hide-mobile">Dismiss</span>
         </m3e-button>
         <m3e-button variant="filled" size="small" id="pwa-open-settings-btn" type="button">
           <m3e-icon slot="icon" name="shortcut"></m3e-icon>
-          Open
+          <span class="hide-mobile">Open</span>
         </m3e-button>
       </div>
     </div>
@@ -131,14 +131,8 @@
       </div>
 
       <div class="topbar-actions">
-        <div class="topbar-user">
-          <div class="topbar-avatar" title="Your Profile">
-            <span class="ms sm">person</span>
-          </div>
-          <m3e-icon-button id="mobile-settings-btn" title="Settings">
-            <m3e-icon name="settings"></m3e-icon>
-          </m3e-icon-button>
-        </div>
+        <!-- Removed avatar and settings button from mobile view -->
+        <div class="topbar-user" style="display:none;"></div>
         <m3e-icon-button id="mobile-new-chat-btn" title="New chat">
           <m3e-icon name="add_comment"></m3e-icon>
         </m3e-icon-button>
@@ -164,13 +158,16 @@
         <div class="chat-title-label">Conversation</div>
         <div id="chat-title">New Conversation</div>
       </div>
-      <div class="temp-mode-pill" id="temp-mode-pill">
+      <div class="temp-mode-pill" id="temp-mode-pill" style="margin-left:auto">
         <span class="ms sm">history_toggle_off</span>
-        Temporary
+        <span class="hide-mobile">Temporary</span>
       </div>
       <div class="demo-mode-pill" id="demo-mode-pill">
-        <span class="ms sm">bolt</span> Demo mode
+        <span class="ms sm">bolt</span> <span class="hide-mobile">Demo mode</span>
       </div>
+      <m3e-icon-button id="desktop-more-btn" title="Chat actions">
+        <m3e-icon name="more_vert"></m3e-icon>
+      </m3e-icon-button>
     </div>
 
     <!-- Toast Host -->
@@ -222,7 +219,7 @@
           <div class="composer-segbar">
             <button class="seg-btn model-btn" id="model-split-btn" type="button" aria-label="Select model">
               <m3e-icon name="psychology"></m3e-icon>
-              <span id="cat-badge" class="cat-badge cb-text">Text</span>
+              <span id="cat-badge" class="cat-badge cb-text hide-mobile">Text</span>
               <span id="model-name-display" class="model-label">openai</span>
             </button>
             <div class="seg-btn-holder" id="tools-wrap">
@@ -257,11 +254,11 @@
           <div class="quick-modes qm-segment" id="quick-modes" aria-label="More modes">
             <button class="qm-pill" type="button" data-qmode="voice" disabled title="Coming soon">
               <span class="ms sm">graphic_eq</span>
-              Voice
+              <span class="hide-mobile">Voice</span>
             </button>
             <button class="qm-pill" type="button" data-qmode="agentic" disabled title="Coming soon">
               <span class="ms sm">smart_toy</span>
-              Agentic
+              <span class="hide-mobile">Agentic</span>
             </button>
           </div>
 

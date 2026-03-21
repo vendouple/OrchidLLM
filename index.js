@@ -59,6 +59,7 @@ let S = {
   systemPrompt: '',
   enhanceModel: 'openai',
   selectedCat: 'text',
+  uiSelectedCat: 'text',
   selectedModel: { id: 'openai', name: 'openai', desc: 'Default model', caps: ['tools'], pro: false, caching: false },
   currentChatId: null,
   isTempChat: false,
@@ -78,6 +79,7 @@ let S = {
   },
   toolsModel: 'openai',
   chats: {},       // { [id]: {id,title,messages,createdAt} }
+  tempMessages: [], // For temp chat mode
   attachments: [], // [{name,type,size,data,icon}]
   enhancedPrompt: null,
   demoSnapshot: null,
@@ -217,6 +219,7 @@ async function loadLocalModelCatalog() {
     const keepModel = (MODELS[S.selectedCat] || []).some((m) => m.id === S.selectedModel.id);
     if (!keepModel) {
       S.selectedCat = 'text';
+      S.uiSelectedCat = 'text';
       S.selectedModel = MODELS.text[0] || S.selectedModel;
     }
 
@@ -460,6 +463,7 @@ function renderToolsModelList() {
 
   list.querySelectorAll('[data-tool-model]').forEach((btn) => {
     btn.addEventListener('click', (event) => {
+      event.preventDefault();
       event.stopPropagation();
       setToolModel(cat, btn.dataset.toolModel);
     });
@@ -543,12 +547,15 @@ function adjustImageZoom(delta) {
 function newChat() {
   S.currentChatId = null;
   S.attachments = [];
+  S.tempMessages = [];
   renderChat([]);
   renderHistory();
   const title = 'New Conversation';
   document.getElementById('chat-title').textContent = title;
   const mobileTitle = document.getElementById('mobile-chat-title');
   if (mobileTitle) mobileTitle.textContent = title;
+  const labels = document.querySelectorAll('.chat-title-label');
+  labels.forEach(lb => lb.textContent = 'NEW CHAT');
   document.getElementById('msg-input').value = '';
   updateSendBtn();
   clearAttachPreview();
@@ -565,6 +572,8 @@ function loadChat(id) {
   document.getElementById('chat-title').textContent = title;
   const mobileTitle = document.getElementById('mobile-chat-title');
   if (mobileTitle) mobileTitle.textContent = title;
+  const labels = document.querySelectorAll('.chat-title-label');
+  labels.forEach(lb => lb.textContent = 'CONVERSATION');
   clearAttachPreview();
   if (S.isMobile) setSidebar(false);
 }
@@ -593,7 +602,10 @@ function ensureCurrentChat(firstMsg) {
 }
 
 function addMessage(chatId, msg) {
-  if (chatId === '__temp__') return; // don't persist
+  if (chatId === '__temp__') {
+    S.tempMessages.push(msg);
+    return;
+  }
   if (!S.chats[chatId]) return;
   S.chats[chatId].messages.push(msg);
   saveState();
@@ -715,6 +727,7 @@ function scrollToBottom() {
    MODEL DROPUP
 ══════════════════════════════════════════════ */
 function openDropup() {
+  S.uiSelectedCat = S.selectedCat;
   renderDropup();
   const wrap = document.getElementById('dropup-wrap');
   wrap.classList.add('open');
@@ -736,21 +749,21 @@ function renderDropup() {
   // Categories
   const catsEl = document.getElementById('du-cats');
   catsEl.innerHTML = CATS.map(c => `
-    <div class="du-cat ${S.selectedCat===c.id?'active':''}" onclick="selectCat('${c.id}')">
+    <div class="du-cat ${S.uiSelectedCat===c.id?'active':''}" onclick="selectCat('${c.id}')">
       <span class="ms sm">${c.icon}</span>${c.label}
     </div>`).join('');
   renderModelList();
 }
 
 function selectCat(id) {
-  S.selectedCat = id;
+  S.uiSelectedCat = id;
   renderDropup();
   document.getElementById('model-search').value = '';
 }
 
 function renderModelList(filter='') {
   const list = document.getElementById('du-list');
-  const models = (MODELS[S.selectedCat] || []).filter(m =>
+  const models = (MODELS[S.uiSelectedCat] || []).filter(m =>
     !filter || m.name.toLowerCase().includes(filter.toLowerCase()) || m.desc.toLowerCase().includes(filter.toLowerCase())
   );
   if (!models.length) {
@@ -773,7 +786,7 @@ function renderModelList(filter='') {
     const disabled = (m.disabled || isProBlocked) ? 'style="opacity:.45;pointer-events:none;filter:grayscale(0.25)"' : '';
     const lockLine = isProBlocked ? `<div class="mi-desc" style="color:var(--t)">Pro model unavailable in Demo Mode</div>` : '';
     return `
-      <div class="model-item ${sel}" onclick="selectModel('${S.selectedCat}','${m.id}')" ${disabled}>
+      <div class="model-item ${sel}" onclick="selectModel('${S.uiSelectedCat}','${m.id}')" ${disabled}>
         <div class="mi-info">
           <div class="mi-name-row"><div class="mi-name">${escHtml(m.name)}</div>${proLabel}</div>
           <div class="mi-desc">${escHtml(m.desc)}</div>
@@ -792,8 +805,9 @@ function selectModel(catId, modelId, options = {}) {
   if (S.demoMode && model.pro) return;
   const { silent = false, keepOpen } = options;
   const dropupOpen = document.getElementById('dropup-wrap')?.classList.contains('open');
-  const shouldKeepOpen = typeof keepOpen === 'boolean' ? keepOpen : dropupOpen;
+  const shouldKeepOpen = typeof keepOpen === 'boolean' ? keepOpen : false;
   S.selectedCat = catId;
+  S.uiSelectedCat = catId;
   S.selectedModel = model;
   // Update button
   const cat = getCatInfo(catId);
@@ -911,11 +925,7 @@ async function sendMessage() {
     } else if (S.selectedCat === 'transcription') {
       await callTranscriptionAPI(chatId, userMsg.attachments || []);
     } else if (isTextCat(S.selectedCat)) {
-      if (S.isTempChat) {
-        await simulateResponse(chatId, 'Temporary chat mode is active. This conversation is not saved to history.');
-      } else {
-        await callTextAPI(chatId, text, userMsg);
-      }
+      await callTextAPI(chatId, text, userMsg);
     } else {
       // Placeholder for other model types
       await simulateResponse(chatId, `[${S.selectedModel.name}] This model type (${S.selectedCat}) will be available soon. Powered by pollinations.ai.`);
@@ -970,17 +980,17 @@ function renderWelcomeSuggestions() {
 async function callTextAPI(chatId, userText, userMsg) {
   // Build messages array from history
   let messages = [];
-  if (!S.isTempChat && S.chats[chatId]) {
+  
+  if (S.isTempChat) {
+    messages = S.tempMessages.map((m) => {
+      const fallback = m.imageUrl ? '[Image response]' : m.videoUrl ? '[Video response]' : m.audioUrl ? '[Audio response]' : '';
+      return { role: m.role, content: (m.content || fallback || '').trim() };
+    }).filter((m) => m.content.length > 0);
+  } else if (S.chats[chatId]) {
     messages = (S.chats[chatId].messages || [])
       .filter(m => m.role === 'user' || m.role === 'assistant')
       .map((m) => {
-        const fallback = m.imageUrl
-          ? '[Image response]'
-          : m.videoUrl
-            ? '[Video response]'
-            : m.audioUrl
-              ? '[Audio response]'
-              : '';
+        const fallback = m.imageUrl ? '[Image response]' : m.videoUrl ? '[Video response]' : m.audioUrl ? '[Audio response]' : '';
         return { role: m.role, content: (m.content || fallback || '').trim() };
       })
       .filter((m) => m.content.length > 0);
@@ -1172,6 +1182,7 @@ function useEnhanced() {
 
 function renderEnhanceModelList(elId, current) {
   const el = document.getElementById(elId);
+  if (!el) return;
   el.innerHTML = MODELS.text.slice(0,6).map(m => `
     <div class="em-opt ${current===m.id?'sel':''}" onclick="selectEnhanceModel('${elId}','${m.id}')">
       <span class="ms sm">psychology</span>
@@ -1616,17 +1627,18 @@ function autoResize(el) {
   const style = getComputedStyle(el);
   const lineHeight = parseFloat(style.lineHeight) || 20;
   const paddingY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
-  const minHeight = Math.max(lineHeight + paddingY, 24);
-  const maxHeight = S.composerExpanded ? 340 : 110; // ~5 lines
+  const minHeight = Math.max(lineHeight + paddingY, 30);
+  const maxHeight = S.composerExpanded ? 400 : 140; // ~5 lines
   el.style.height = 'auto';
   const hasValue = !!el.value.trim();
   const newHeight = hasValue ? Math.min(Math.max(minHeight, el.scrollHeight), maxHeight) : minHeight;
   el.style.height = `${newHeight}px`;
+  el.style.overflowY = el.scrollHeight > maxHeight ? 'auto' : 'hidden';
 
   // Show expand button only when content exceeds ~5 lines
   const expandBtn = document.getElementById('composer-expand-btn');
   if (expandBtn) {
-    if (el.scrollHeight > 110) expandBtn.classList.add('show-expand');
+    if (el.scrollHeight > 140) expandBtn.classList.add('show-expand');
     else if (!S.composerExpanded) expandBtn.classList.remove('show-expand');
   }
 }
@@ -1656,7 +1668,7 @@ function toggleComposerExpanded(forceState) {
   document.querySelector('.input-row')?.classList.toggle('expanded', next);
   const icon = document.getElementById('composer-expand-icon');
   const btn = document.getElementById('composer-expand-btn');
-  if (icon) icon.textContent = next ? 'close_fullscreen' : 'open_in_full';
+  if (icon) icon.setAttribute('name', next ? 'close_fullscreen' : 'open_in_full');
   if (btn) btn.title = next ? 'Collapse composer' : 'Expand composer';
   autoResize(document.getElementById('msg-input'));
 }
@@ -1824,7 +1836,29 @@ document.getElementById('msg-input').addEventListener('paste', e => {
    RESPONSIVE CHECK
 ══════════════════════════════════════════════ */
 function checkMobile() {
-  const mobile = window.innerWidth <= SIDEBAR_BREAKPOINT;
+  const width = window.innerWidth;
+  const mobile = width <= SIDEBAR_BREAKPOINT;
+  const isSquare = width <= 720;
+  document.querySelectorAll('.input-acts m3e-icon-button').forEach(b => {
+    const hasSquare = b.getAttribute('shape') === 'square';
+    if (isSquare && !hasSquare) {
+      b.setAttribute('shape', 'square');
+    } else if (!isSquare && hasSquare) {
+      const newBtn = document.createElement('m3e-icon-button');
+      Array.from(b.attributes).forEach(attr => {
+        if (attr.name !== 'shape') newBtn.setAttribute(attr.name, attr.value);
+      });
+      newBtn.innerHTML = b.innerHTML;
+      b.replaceWith(newBtn);
+      
+      // Rebind necessary event listeners
+      if (newBtn.id === 'send-btn') {
+        newBtn.addEventListener('click', sendMessage);
+      } else if (newBtn.id === 'composer-expand-btn') {
+        newBtn.addEventListener('click', () => toggleComposerExpanded());
+      }
+    }
+  });
   if (S.isMobile !== mobile) {
     S.isMobile = mobile;
     if (mobile) {
@@ -1835,6 +1869,7 @@ function checkMobile() {
     }
   }
 }
+checkMobile();
 window.addEventListener('resize', checkMobile);
 
 Object.assign(window, {
