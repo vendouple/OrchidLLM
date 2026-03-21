@@ -107,12 +107,12 @@
         <span>Faster load times, home screen access, and a full-screen experience.</span>
       </div>
       <div class="pwa-nudge-actions">
-        <m3e-button variant="outlined" size="small" id="pwa-dismiss-btn" type="button">
+      <m3e-button variant="outlined" size="small" id="pwa-dismiss-btn" type="button">
           <m3e-icon slot="icon" name="close"></m3e-icon>
           Dismiss
         </m3e-button>
         <m3e-button variant="filled" size="small" id="pwa-open-settings-btn" type="button">
-          <m3e-icon slot="icon" name="open_in_new"></m3e-icon>
+          <m3e-icon slot="icon" name="shortcut"></m3e-icon>
           Open
         </m3e-button>
       </div>
@@ -130,14 +130,23 @@
         <div id="mobile-chat-title" style="font-size: 14px; font-weight: 700; color: var(--on-surf); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">New Conversation</div>
       </div>
 
-      <div class="temp-pill" id="temp-pill" style="margin-left:auto">
-        <span class="ms sm">schedule</span>
-        Temporary
+      <div class="topbar-actions">
+        <m3e-icon-button id="mobile-new-chat-btn" title="New chat">
+          <m3e-icon name="add_comment"></m3e-icon>
+        </m3e-icon-button>
+        <m3e-icon-button id="mobile-more-btn" title="Chat actions">
+          <m3e-icon name="more_vert"></m3e-icon>
+        </m3e-icon-button>
       </div>
-      <m3e-icon-button id="mobile-settings-btn" title="Settings" style="margin-left:4px">
-        <m3e-icon name="settings"></m3e-icon>
-      </m3e-icon-button>
     </header>
+    <div id="mobile-menu-ov"></div>
+    <div id="mobile-more-menu" class="mobile-menu">
+      <button type="button" data-mobile-action="new-chat"><span class="ms sm">add_comment</span>New chat</button>
+      <button type="button" data-mobile-action="delete-chat"><span class="ms sm">delete</span>Delete chat</button>
+      <button type="button" data-mobile-action="export-chat"><span class="ms sm">ios_share</span>Export chat</button>
+      <button type="button" data-mobile-action="feedback" disabled><span class="ms sm">feedback</span>Feedback (soon)</button>
+      <button type="button" data-mobile-action="settings"><span class="ms sm">settings</span>Settings</button>
+    </div>
 
     <!-- Desktop Chat Header -->
     <div id="chat-top" class="desktop-only">
@@ -408,7 +417,7 @@
           </m3e-button>
           <label for="import-file" style="display:contents">
             <m3e-button variant="outlined" id="import-btn-label" type="button">
-              <m3e-icon slot="icon" name="upload"></m3e-icon> Import
+              <m3e-icon slot="icon" name="upload"></m3e-icon> Import chat/history
             </m3e-button>
           </label>
           <input type="file" id="import-file" accept=".json" style="display:none">
