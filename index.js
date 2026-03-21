@@ -340,9 +340,6 @@ function handleMobileAction(action) {
     case 'export-chat':
       exportCurrentChat();
       break;
-    case 'settings':
-      openSettings();
-      break;
     default:
       toast('Feedback coming soon', 'feedback');
   }
@@ -1618,10 +1615,12 @@ function toast(msg, icon='info') {
 function autoResize(el) {
   const style = getComputedStyle(el);
   const lineHeight = parseFloat(style.lineHeight) || 20;
-  const minHeight = Math.max(lineHeight + 4, 24);
+  const paddingY = (parseFloat(style.paddingTop) || 0) + (parseFloat(style.paddingBottom) || 0);
+  const minHeight = Math.max(lineHeight + paddingY, 24);
   const maxHeight = S.composerExpanded ? 340 : 110; // ~5 lines
   el.style.height = 'auto';
-  const newHeight = Math.max(minHeight, Math.min(el.scrollHeight, maxHeight));
+  const hasValue = !!el.value.trim();
+  const newHeight = hasValue ? Math.min(Math.max(minHeight, el.scrollHeight), maxHeight) : minHeight;
   el.style.height = `${newHeight}px`;
 
   // Show expand button only when content exceeds ~5 lines
@@ -1678,7 +1677,7 @@ on('side-ov', 'click', () => setSidebar(false));
 ['temp-btn', 'rail-temp-btn'].forEach(id => on(id, 'click', toggleTemp));
 
 // Settings
-['settings-btn', 'rail-settings-btn'].forEach(id => on(id, 'click', openSettings));
+['settings-btn', 'rail-settings-btn', 'mobile-settings-btn'].forEach(id => on(id, 'click', () => { openSettings(); closeMobileMenu(); }));
 const settingsDlgEl = document.getElementById('settings-dlg');
 if (settingsDlgEl) settingsDlgEl.addEventListener('closed', () => saveSettings());
 on('s-dark-tog', 'change', e => applyTheme(e.target.checked ? 'dark' : 'light'));
