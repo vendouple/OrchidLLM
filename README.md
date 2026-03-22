@@ -1,4 +1,4 @@
-# OneLLM Playground
+# OrchidLLM Playground
 
 A LLM Playground built with the chat feature with additional apps coming soon
 
@@ -10,9 +10,6 @@ A LLM Playground built with the chat feature with additional apps coming soon
 
 This application is powered by [Pollinations.ai](https://pollinations.ai) - providing access to various AI models for text, image, video, and audio generation.
 
-## 🤝 Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## 🐛 Known Limitations
 
@@ -35,3 +32,4 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ---
 
 Built with ❤️ using vanilla HTML, CSS, and JavaScript
+Framework will be migrated soon.
