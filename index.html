@@ -34,11 +34,12 @@
       <button class="new-chat-btn" id="new-chat-btn" type="button">
         <span class="ms">add</span> New Chat
       </button>
-      <m3e-icon-button class="temp-btn" id="temp-btn" title="Temporary chat" toggle>
-        <m3e-icon name="schedule"></m3e-icon>
-        <m3e-icon slot="selected" name="schedule"></m3e-icon>
-        <div class="temp-dot-badge"></div>
-      </m3e-icon-button>
+      <div class="temp-wrap" style="position:relative">
+        <button class="temp-btn" id="temp-btn" type="button" aria-label="Temporary chat">
+          <span class="ms">schedule</span>
+          <div class="temp-dot-badge"></div>
+        </button>
+      </div>
     </div>
 
     <div class="hist-scroll" id="hist-scroll" style="margin-top:10px;">
@@ -107,13 +108,13 @@
         <span>Faster load times, home screen access, and a full-screen experience.</span>
       </div>
       <div class="pwa-nudge-actions">
-      <m3e-button variant="outlined" size="small" id="pwa-dismiss-btn" type="button">
+        <m3e-button variant="outlined" size="small" id="pwa-dismiss-btn" type="button">
           <m3e-icon slot="icon" name="close"></m3e-icon>
-          <span class="hide-mobile">Dismiss</span>
+          <span>Dismiss</span>
         </m3e-button>
         <m3e-button variant="filled" size="small" id="pwa-open-settings-btn" type="button">
-          <m3e-icon slot="icon" name="open-in-new-tab"></m3e-icon>
-          <span class="hide-mobile">Open</span>
+          <m3e-icon slot="icon" name="open_in_new"></m3e-icon>
+          <span>Open</span>
         </m3e-button>
       </div>
     </div>
@@ -216,51 +217,52 @@
 
         <!-- Toolbar — BELOW textarea -->
         <div class="input-toolbar">
-          <div class="composer-segbar">
-            <button class="seg-btn model-btn" id="model-split-btn" type="button" aria-label="Select model">
-              <m3e-icon name="psychology"></m3e-icon>
-              <span id="cat-badge" class="cat-badge cb-text hide-mobile">Text</span>
-              <span id="model-name-display" class="model-label">openai</span>
-            </button>
-            <div class="seg-btn-holder" id="tools-wrap">
-              <button class="seg-btn icon-btn" id="tools-btn" type="button" title="Tools" aria-label="Tools">
+          <div id="tools-wrap" style="position:relative;display:inline-flex;align-items:center;">
+            <m3e-button-group variant="connected" class="composer-segbar" id="composer-m3e-segbar">
+              <m3e-button variant="outlined" id="model-split-btn" type="button" aria-label="Select model">
+                <m3e-icon slot="icon" name="psychology"></m3e-icon>
+                <span id="cat-badge" class="cat-badge cb-text hide-mobile">Text</span>
+                <span id="model-name-display" class="model-label">openai</span>
+              </m3e-button>
+              
+              <m3e-icon-button variant="outlined" id="tools-btn" type="button" title="Tools" aria-label="Tools">
                 <m3e-icon name="tune"></m3e-icon>
-              </button>
-              <!-- Tools Popup anchored to segmented cluster -->
-              <div class="tools-pop" id="tools-pop" aria-hidden="true">
-                <div class="tools-pop-title">Tool calling</div>
-                <div class="tools-split">
-                  <div class="tools-nav" id="tools-nav"></div>
-                  <div class="tools-models">
-                    <div class="tools-models-head">
-                      <div class="tools-models-title" id="tools-models-title">Select model</div>
-                      <div class="tools-models-hint">Choose which model to call per tool</div>
-                    </div>
-                    <div class="tools-model-list" id="tools-model-list"></div>
+              </m3e-icon-button>
+
+              <m3e-icon-button variant="outlined" id="enhance-btn" type="button" title="Enhance prompt" aria-label="Enhance prompt">
+                <m3e-icon name="auto_fix_high"></m3e-icon>
+              </m3e-icon-button>
+            </m3e-button-group>
+
+            <!-- Tools Popup anchored around tools-btn (handled by JS) -->
+            <div class="tools-pop" id="tools-pop" aria-hidden="true">
+              <div class="tools-pop-title">Tool calling</div>
+              <div class="tools-split">
+                <div class="tools-nav" id="tools-nav"></div>
+                <div class="tools-models">
+                  <div class="tools-models-head">
+                    <div class="tools-models-title" id="tools-models-title">Select model</div>
+                    <div class="tools-models-hint">Choose which model to call per tool</div>
                   </div>
+                  <div class="tools-model-list" id="tools-model-list"></div>
                 </div>
               </div>
-            </div>
-            <div class="seg-btn-holder" id="enhance-wrap">
-              <button class="seg-btn icon-btn" id="enhance-btn" type="button" title="Enhance prompt" aria-label="Enhance prompt">
-                <m3e-icon name="auto_fix_high"></m3e-icon>
-              </button>
             </div>
           </div>
 
           <!-- Spacer -->
           <div style="flex:1"></div>
 
-          <div class="quick-modes qm-segment" id="quick-modes" aria-label="More modes">
-            <button class="qm-pill" type="button" data-qmode="voice" disabled title="Coming soon">
-              <span class="ms sm">graphic_eq</span>
+          <m3e-button-group variant="connected" class="quick-modes" id="quick-modes" aria-label="More modes">
+            <m3e-button variant="outlined" data-qmode="voice" disabled title="Coming soon">
+              <m3e-icon slot="icon" name="graphic_eq"></m3e-icon>
               <span class="hide-mobile">Voice</span>
-            </button>
-            <button class="qm-pill" type="button" data-qmode="agentic" disabled title="Coming soon">
-              <span class="ms sm">smart_toy</span>
+            </m3e-button>
+            <m3e-button variant="outlined" data-qmode="agentic" disabled title="Coming soon">
+              <m3e-icon slot="icon" name="smart_toy"></m3e-icon>
               <span class="hide-mobile">Agentic</span>
-            </button>
-          </div>
+            </m3e-button>
+          </m3e-button-group>
 
           <!-- Attach button -->
           <m3e-icon-button id="attach-btn" title="Attach file" style="flex-shrink:0">
@@ -289,7 +291,7 @@
 </div>
 
 <!-- ═══════ SETTINGS DIALOG (M3E) ═══════ -->
-<m3e-dialog id="settings-dlg" dismissible style="--m3e-dialog-max-width:920px;--m3e-dialog-width:min(920px, calc(100vw - 24px))">
+<m3e-dialog id="settings-dlg" dismissible style="--m3e-dialog-max-width:920px;--m3e-dialog-width:min(400px, calc(100vw - 24px))">
   <span slot="header">
     <m3e-icon name="settings" style="vertical-align:middle;margin-right:8px"></m3e-icon>
     Settings

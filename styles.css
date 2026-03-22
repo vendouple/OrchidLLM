@@ -203,14 +203,26 @@ a:hover { text-decoration: underline; }
 .new-chat-row m3e-button {
   --m3e-button-container-height: 40px;
 }
-.new-chat-row m3e-icon-button {
-  --m3e-icon-button-state-layer-size: 40px;
-  --m3e-icon-button-icon-size: 20px;
+.temp-btn {
+  display: flex; align-items: center; justify-content: center;
   width: 40px; height: 40px;
+  background: var(--sc); color: var(--on-sc);
+  border: none; border-radius: var(--r-md);
+  cursor: pointer; position: relative;
+  transition: all .2s var(--std);
 }
+.temp-btn .ms { font-size: 22px; }
+.temp-btn:hover { background: color-mix(in srgb, var(--sc), #000 8%); transform: scale(1.04); }
+.temp-btn.active,
+#temp-btn[selected] {
+  background: var(--tc); color: var(--t);
+  box-shadow: var(--sh1);
+}
+.temp-btn.active .ms { font-variation-settings: 'FILL' 1; }
 .new-chat-btn {
   flex: 1; display: flex; align-items: center; gap: 9px;
-  padding: 13px 18px;
+  padding: 0 18px;
+  height: 40px;
   background: var(--p); color: var(--on-p);
   border: none; border-radius: var(--r-pill);
   font-size: 14px; font-weight: 700;
@@ -224,23 +236,6 @@ a:hover { text-decoration: underline; }
 }
 .new-chat-btn:active { transform: scale(.96); box-shadow: none; }
 
-/* Temp Chat Toggle */
-.temp-btn {
-  --m3e-icon-button-state-layer-size: 40px;
-  --m3e-icon-button-icon-size: 22px;
-  --m3e-icon-button-selected-container-color: var(--tc);
-  --m3e-icon-button-selected-icon-color: var(--on-tc);
-  --m3e-icon-button-selected-hover-container-color: color-mix(in srgb, var(--tc) 90%, var(--t));
-  width: 40px; height: 40px;
-  position: relative;
-  transition: all 0.2s var(--std);
-}
-.temp-btn.active,
-#temp-btn[selected] {
-  --m3e-icon-button-selected-container-color: color-mix(in srgb, var(--t) 12%, var(--surf));
-  --m3e-icon-button-selected-icon-color: var(--t);
-  box-shadow: var(--sh1);
-}
 .temp-dot-badge {
   position: absolute;
   top: 6px; right: 6px;
@@ -598,7 +593,29 @@ a:hover { text-decoration: underline; }
   --m3e-chip-outline-color: var(--out-v);
   --m3e-chip-label-color: var(--on-surf);
 }
-/* w-chip styles removed — now using m3e-assist-chip */
+/* Temporary Welcome Variant */
+.temp-welcome-box {
+  display: flex; flex-direction: column; align-items: center; justify-content: center;
+  text-align: center; gap: 16px; width: 100%;
+  padding-top: 60px; animation: fadeIn .4s ease;
+}
+.temp-welcome-box .w-logo {
+  background: var(--surf-hi);
+  border: 2px dashed var(--out-v);
+  box-shadow: none;
+  animation: none;
+}
+.temp-welcome-box .w-logo .ms { color: var(--out); }
+.temp-welcome-box .w-heading {
+  background: none;
+  -webkit-text-fill-color: var(--on-surf);
+  background-clip: unset;
+  color: var(--on-surf);
+}
+.temp-welcome-box .w-sub {
+  color: var(--out);
+  max-width: 460px;
+}
 
 /* ══════════════════════════════════════════════
    DROPUP SYSTEM (Categories & Models)
@@ -813,112 +830,8 @@ a:hover { text-decoration: underline; }
   flex-wrap: wrap; min-height: 36px;
 }
 
-.composer-segbar {
-  display: inline-flex;
-  align-items: stretch;
-  gap: 0;
-  background: var(--surf);
-  border: 1.5px solid var(--out-v);
-  border-radius: var(--r-pill);
-  overflow: visible;
-  box-shadow: var(--sh1);
-  min-height: 38px;
-}
-.composer-segbar > *:not(:first-child) {
-  border-left: 1px solid var(--out-v);
-}
-.seg-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 12px;
-  background: transparent;
-  border: none;
-  color: var(--on-surf);
-  font-size: 13px;
-  font-weight: 700;
-  height: 38px;
-  transition: background var(--dur-short) var(--std), color var(--dur-short) var(--std);
-}
-.seg-btn:hover { background: var(--surf-hi); }
-.seg-btn:active { background: var(--surf-mid); }
-.seg-btn.model-btn { min-width: 0; }
-.seg-btn .model-label {
-  font-weight: 800;
-  text-transform: lowercase;
-  letter-spacing: 0.02em;
-}
-.seg-btn.icon-btn {
-  width: 42px;
-  justify-content: center;
-  padding: 0 10px;
-}
-.seg-btn-holder {
-  display: none;
-  position: relative;
-  align-items: center;
-}
-.seg-btn-holder.show {
-  display: flex;
-}
 
-.quick-modes {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  min-width: 0;
-}
 
-.quick-modes.qm-segment {
-  gap: 0;
-  border: 1.5px solid var(--out-v);
-  border-radius: var(--r-pill);
-  overflow: hidden;
-  background: var(--surf);
-}
-
-.qm-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  border: 1.5px solid var(--out-v);
-  border-radius: var(--r-pill);
-  background: var(--surf);
-  color: var(--on-surf-v);
-  font-size: 12px;
-  font-weight: 700;
-  padding: 7px 11px;
-  transition: all .22s var(--spring);
-  white-space: nowrap;
-}
-
-.quick-modes.qm-segment .qm-pill {
-  border: none;
-  border-right: 1px solid var(--out-v);
-  border-radius: 0;
-  padding: 7px 12px;
-}
-
-.quick-modes.qm-segment .qm-pill:last-child {
-  border-right: none;
-}
-
-.qm-pill:hover {
-  border-color: var(--p);
-}
-
-.qm-pill.active {
-  background: var(--pc);
-  border-color: var(--p);
-  color: var(--on-pc);
-}
-
-.qm-pill:disabled {
-  opacity: .62;
-  cursor: not-allowed;
-  background: var(--surf-lo);
-  color: var(--out);
-}
 
 /* Model categories */
 .cat-badge {
@@ -962,11 +875,13 @@ a:hover { text-decoration: underline; }
 }
 @media (max-width: 720px) {
   .tools-pop {
-    width: calc(100vw - 20px);
-    left: -2px;
-    right: -2px;
+    width: min(640px, calc(100vw - 24px));
+    left: auto;
+    right: 0;
+    max-height: 80vh;
   }
 }
+body.tools-open .input-toolbar { overflow: visible !important; }
 
 .tools-pop-title {
   font-size: 12px;
@@ -1417,18 +1332,15 @@ m3e-dialog {
 }
 
 .pwa-nudge {
-  border-bottom: 1px solid color-mix(in srgb, var(--s) 35%, transparent);
-  background: color-mix(in srgb, var(--sc) 60%, var(--surf));
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 12px;
-  padding: 8px 14px;
-  max-width: 860px;
-  margin: 6px auto 12px;
-  border-radius: var(--r-lg);
+  padding: 8px 20px;
+  background: linear-gradient(135deg, color-mix(in srgb, var(--s) 18%, transparent), var(--sc));
+  color: var(--on-sc);
+  border-bottom: 1px solid color-mix(in srgb, var(--s) 32%, transparent);
   box-shadow: var(--sh1);
-  flex-wrap: wrap;
 }
 
 .pwa-nudge-copy {
@@ -1622,7 +1534,6 @@ m3e-dialog {
     flex: 0 0 auto;
     min-height: 0;
   }
-  #model-name-display, #cat-badge { display: none !important; }
   .seg-btn.model-btn { padding: 0 8px; font-size: 0; gap: 0; }
   .seg-btn.model-btn .ms { margin: 0; font-size: 18px; }
   .w-heading {
@@ -1660,19 +1571,24 @@ m3e-dialog {
   .hist-scroll { padding-bottom: 80px; }
   .input-toolbar > m3e-icon-button#attach-btn { margin-left: auto; }
 }
-@media (max-width: 480px) {
+@media (max-width: 565px) {
+  #model-name-display, #cat-badge { display: none !important; }
+  .input-toolbar {
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+  }
   #topbar { padding: 0 8px; }
   .w-heading { font-size: 26px; }
   .msg-row.user .bubble,
   .msg-row.assistant .bubble { max-width: 94%; }
   .quick-modes {
-    order: 3;
-    width: 100%;
+    order: unset;
+    width: auto;
   }
   .tools-pop {
-    width: min(280px, calc(100vw - 28px));
-    left: auto;
-    right: 0;
+    width: min(340px, calc(100vw - 20px));
+    left: 0;
+    right: auto;
   }
   /* Mobile: dropup fits screen, categories are icon-only except active */
   #dropup-panel {
@@ -1988,6 +1904,5 @@ m3e-dialog m3e-tab-panel {
 
 .mobile-only-btn { display: none; }
 @media (max-width: 1200px) {
-  .side-foot #settings-btn { display: none; }
   .mobile-only-btn { display: inline-flex; }
 }

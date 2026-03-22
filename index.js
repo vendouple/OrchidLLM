@@ -293,9 +293,28 @@ function toggleSidebar() { setSidebar(!S.sideOpen); }
    TEMP CHAT
 ══════════════════════════════════════════════ */
 function toggleTemp() {
-  S.isTempChat = !S.isTempChat;
+  const wasOn = S.isTempChat;
+  const isOn = !wasOn;
+  
+  // If toggling ON and already in a conversation with messages, start new.
+  // We check if currentChatId exists or tempMessages has content.
+  const hasCurrentMessages = S.currentChatId || (S.tempMessages && S.tempMessages.length);
+  
+  if (isOn) {
+    S.isTempChat = true;
+    if (hasCurrentMessages) {
+      newChat();
+    } else {
+      renderChat([]);
+    }
+  } else {
+    // Toggling OFF
+    S.isTempChat = false;
+    newChat();
+  }
+  
   syncTempUi();
-  toast(S.isTempChat ? 'Temporary chat on — won\'t be saved' : 'Temporary chat off', 'schedule');
+  toast(S.isTempChat ? 'Temporary chat on' : 'Temporary chat off', 'schedule');
 }
 
 function syncTempUi() {
@@ -407,7 +426,7 @@ function renderToolsNav() {
             <div class="tool-nav-sub">${enabled ? 'Enabled' : 'Disabled'}</div>
           </div>
         </div>
-        <m3e-switch data-tool-toggle="${cat}" aria-label="Toggle ${info?.label || cat}" ${enabled ? 'selected' : ''}></m3e-switch>
+        <m3e-switch data-tool-toggle="${cat}" aria-label="Toggle ${info?.label || cat}" ${enabled ? 'checked' : ''}></m3e-switch>
       </button>
     `;
   }).join('');
@@ -423,7 +442,7 @@ function renderToolsNav() {
     });
   });
   nav.querySelectorAll('m3e-switch[data-tool-toggle]').forEach((sw) => {
-    sw.addEventListener('click', (event) => {
+    sw.addEventListener('change', (event) => {
       event.stopPropagation();
       toggleTextTool(sw.dataset.toolToggle);
     });
@@ -451,10 +470,17 @@ function renderToolsModelList() {
   const current = S.textToolModels[cat];
   list.innerHTML = models.map((m) => {
     const selected = current === m.id;
+    const isProBlocked = S.demoMode && m.pro;
+    const proLabel = m.pro ? `<span class="mi-pro">Pro</span>` : '';
+    const disabledAttr = (m.disabled || isProBlocked) ? 'disabled style="opacity:.45;pointer-events:none"' : '';
+    
     return `
-      <button class="tool-model-row ${selected ? 'sel' : ''}" data-tool-model="${m.id}">
-        <div class="tool-model-main">
-          <div class="tool-model-name">${escHtml(m.name)}</div>
+      <button class="tool-model-row ${selected ? 'sel' : ''}" data-tool-model="${m.id}" ${disabledAttr}>
+        <div class="tool-model-main" style="flex:1">
+          <div style="display:flex; align-items:center; gap:6px;">
+            <div class="tool-model-name">${escHtml(m.name)}</div>
+            ${proLabel}
+          </div>
           <div class="tool-model-desc">${escHtml(m.desc)}</div>
         </div>
         <span class="tool-model-badge">${m.context || '—'}</span>
@@ -476,6 +502,7 @@ function closeToolsPop() {
   if (!pop) return;
   pop.classList.remove('open');
   pop.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('tools-open');
 }
 
 function openToolsPop() {
@@ -486,6 +513,7 @@ function openToolsPop() {
   renderToolsModelList();
   pop.classList.add('open');
   pop.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('tools-open');
 }
 
 function toggleToolsPop() {
@@ -496,17 +524,27 @@ function toggleToolsPop() {
 }
 
 function syncComposerModeControls() {
-  const enhanceWrap = document.getElementById('enhance-wrap');
-  const toolsWrap = document.getElementById('tools-wrap');
-  if (!enhanceWrap || !toolsWrap) return;
+  const segbar = document.getElementById('composer-m3e-segbar');
+  if (!window._m3eButtonsInit) {
+    window._toolsBtn = document.getElementById('tools-btn');
+    window._enhanceBtn = document.getElementById('enhance-btn');
+    window._m3eButtonsInit = true;
+  }
 
   const cat = S.selectedCat;
   const supportsTools = supportsToolCalling(S.selectedModel);
   const showEnhance = cat === 'image' || cat === 'video' || cat === 'audio';
   const showTools = cat === 'text' && supportsTools;
 
-  enhanceWrap.classList.toggle('show', showEnhance);
-  toolsWrap.classList.toggle('show', showTools);
+  if (window._enhanceBtn && window._enhanceBtn.parentNode) window._enhanceBtn.remove();
+  if (window._toolsBtn && window._toolsBtn.parentNode) window._toolsBtn.remove();
+
+  if (showEnhance && window._enhanceBtn) {
+    segbar.appendChild(window._enhanceBtn);
+  }
+  if (showTools && window._toolsBtn) {
+    segbar.appendChild(window._toolsBtn);
+  }
 
   if (!showTools) closeToolsPop();
 }
@@ -560,6 +598,7 @@ function newChat() {
   document.getElementById('msg-input').value = '';
   updateSendBtn();
   clearAttachPreview();
+  renderWelcomeSuggestions();
 }
 
 function loadChat(id) {
@@ -641,15 +680,48 @@ function renderHistory() {
   el.innerHTML = html;
 }
 
+function renderWelcomeHtml() {
+  if (S.isTempChat) {
+    return `
+      <div id="welcome" class="temp-welcome-box">
+        <div class="w-logo"><span class="ms xl">history_toggle_off</span></div>
+        <div class="w-heading">Temporary chat</div>
+        <div class="w-sub">Temporary chats don't appear in Recent Chats and won't be saved at all.</div>
+      </div>
+    `;
+  }
+  return `
+    <div id="welcome">
+      <div class="w-logo"><span class="ms xl fill">auto_awesome</span></div>
+      <div class="w-heading">OrchidLLM Playground</div>
+      <div class="w-sub">One screen. Every model. Chat with text models, generate images, transcribe audio, and more — all powered by Pollinations.ai.</div>
+      <m3e-chip-set class="w-chips">
+        <!-- Suggestions go here -->
+      </m3e-chip-set>
+    </div>
+  `;
+}
+
+function updateWelcome() {
+  const inner = document.getElementById('chat-inner');
+  if (!inner) return;
+  // This helps when we want to force re-render the welcome box (e.g. from toggleTemp)
+  if (inner.querySelector('#welcome') || inner.innerHTML === '') {
+    inner.innerHTML = renderWelcomeHtml();
+    renderWelcomeSuggestions();
+  }
+}
+
+
 /* ══════════════════════════════════════════════
    RENDER CHAT
 ══════════════════════════════════════════════ */
 function renderChat(messages) {
   const inner = document.getElementById('chat-inner');
-  const welcome = document.getElementById('welcome');
+  if (!inner) return;
   if (!messages.length) {
-    inner.innerHTML = '';
-    inner.appendChild(welcome);
+    inner.innerHTML = renderWelcomeHtml();
+    renderWelcomeSuggestions();
     return;
   }
   inner.innerHTML = '';
@@ -777,7 +849,6 @@ function renderModelList(filter='') {
     const sel = S.selectedModel.id === m.id ? 'sel' : '';
     const isProBlocked = S.demoMode && m.pro;
     const proLabel = m.pro ? `<span class="mi-pro">Pro</span>` : '';
-    const proBadge = m.pro ? `<span class="cap-chip" style="background:linear-gradient(135deg,var(--p),var(--t));color:#fff;font-weight:800;"><span class="ms">star</span>Pro</span>` : '';
     const caps = (m.caps || []).map(c => {
       const cm = CAPS_META[c]; if (!cm) return '';
       return `<span class="cap-chip"><span class="ms">${cm.icon}</span>${cm.label}</span>`;
@@ -794,7 +865,7 @@ function renderModelList(filter='') {
           <div class="mi-name-row"><div class="mi-name">${escHtml(m.name)}</div>${proLabel}</div>
           <div class="mi-desc">${escHtml(m.desc)}</div>
           ${lockLine}
-          ${meta || proBadge ? `<div class="mi-caps">${proBadge}${meta}</div>` : ''}
+          ${meta ? `<div class="mi-caps">${meta}</div>` : ''}
           ${caps ? `<div class="mi-caps">${caps}</div>` : ''}
         </div>
       </div>`;
@@ -1826,7 +1897,7 @@ document.addEventListener('keydown', e => {
 });
 document.addEventListener('click', (event) => {
   const toolsWrap = document.getElementById('tools-wrap');
-  if (toolsWrap && !toolsWrap.contains(event.target)) {
+  if (toolsWrap && !event.composedPath().includes(toolsWrap)) {
     closeToolsPop();
   }
   const mobileMenu = document.getElementById('mobile-more-menu');
