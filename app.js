@@ -2,7 +2,7 @@
 
 export const POLL_BASE = 'https://gen.pollinations.ai';
 export const DEMO_API_KEY = 'pk_BU8jPqG7RBj8yOxh';
-export const DEFAULT_BYOP_KEY = 'pk_dfgOjlw1zrrhB5eZ';
+export const DEFAULT_BYOP_KEY = '';
 
 export function getActiveApiKey(apiMode = 'demo', byopKey = '') {
   if (apiMode === 'byop') {
