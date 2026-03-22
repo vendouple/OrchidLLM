@@ -217,15 +217,17 @@ a:hover { text-decoration: underline; }
   display: flex; align-items: center; justify-content: center;
   width: 40px; height: 40px;
   background: var(--sc); color: var(--on-sc);
-  border: none; border-radius: var(--r-md);
+  border: none; border-radius: 50%; /* Disabled = circle */
   cursor: pointer; position: relative;
-  transition: all .2s var(--std);
+  transition: background .2s var(--std), border-radius .25s var(--spring),
+              box-shadow .2s var(--std), transform .2s var(--std);
 }
 .temp-btn .ms { font-size: 22px; }
 .temp-btn:hover { background: color-mix(in srgb, var(--sc), #000 8%); transform: scale(1.04); }
 .temp-btn.active,
 #temp-btn[selected] {
   background: var(--tc); color: var(--t);
+  border-radius: var(--r-md); /* Enabled = rounded square */
   box-shadow: var(--sh1);
 }
 .temp-btn.active .ms { font-variation-settings: 'FILL' 1; }
