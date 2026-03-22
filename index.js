@@ -1474,6 +1474,16 @@ function applyPalette(palette) {
   root.style.setProperty('--on-t', isDark ? '#000' : '#fff');
   root.style.setProperty('--tc', hslToHex(palette.hueT, isDark ? 28 : 75, isDark ? 15 : 92));
   root.style.setProperty('--on-tc', hslToHex(palette.hueT, 55, isDark ? 85 : 20));
+
+  // Library Compatibility — Map to standard MD3 tokens
+  root.style.setProperty('--md-sys-color-primary', root.style.getPropertyValue('--p'));
+  root.style.setProperty('--md-sys-color-on-primary', root.style.getPropertyValue('--on-p'));
+  root.style.setProperty('--md-sys-color-primary-container', root.style.getPropertyValue('--pc'));
+  root.style.setProperty('--md-sys-color-on-primary-container', root.style.getPropertyValue('--on-pc'));
+  root.style.setProperty('--md-sys-color-secondary', root.style.getPropertyValue('--s'));
+  root.style.setProperty('--md-sys-color-on-secondary', root.style.getPropertyValue('--on-s'));
+  root.style.setProperty('--md-sys-color-tertiary', root.style.getPropertyValue('--t'));
+  root.style.setProperty('--md-sys-color-on-tertiary', root.style.getPropertyValue('--on-t'));
 }
 
 function applySeamlessVariant(id) {

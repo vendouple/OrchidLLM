@@ -16,8 +16,18 @@
   --bg: #FAFAFA; --on-bg: #1A1625;
   --surf: #FFFFFF; --on-surf: #1A1625;
   --surf-v: #EDE9FE; --on-surf-v: #49454F;
+  --on-surf-variant: #49454F;
   --surf-lo: #F4F0FA; --surf-mid: #EEE9F5;
   --surf-hi: #E8E3F0; --surf-hst: #E2DCE9;
+  /* Library Compatibility Layer */
+  --md-sys-color-primary: var(--p);
+  --md-sys-color-on-primary: var(--on-p);
+  --md-sys-color-primary-container: var(--pc);
+  --md-sys-color-on-primary-container: var(--on-pc);
+  --md-sys-color-surface: var(--surf);
+  --md-sys-color-on-surface: var(--on-surf);
+  --md-sys-color-on-surface-variant: var(--on-surf-v);
+  --md-sys-color-outline: var(--out-v);
   /* Outline */
   --out: #7C7589; --out-v: #CAC4D0;
   /* Error */
@@ -320,11 +330,84 @@ a:hover { text-decoration: underline; }
 }
 #settings-btn, #rail-settings-btn {
   --m3e-icon-button-icon-color: var(--on-surf);
-  --m3e-icon-button-container-color: var(--surf);
+  --m3e-icon-button-container-color: transparent !important;
 }
-#settings-btn m3e-icon,
-#rail-settings-btn m3e-icon {
-  color: var(--on-surf);
+
+/* Global M3E component overrides for high-contrast accessibility in all states */
+m3e-icon-button {
+  --m3e-icon-button-icon-color: var(--on-surf);
+  --m3e-icon-button-hover-icon-color: var(--on-surf);
+  --m3e-icon-button-focus-icon-color: var(--on-surf);
+  --m3e-icon-button-pressed-icon-color: var(--on-surf);
+}
+m3e-icon-button[variant="outlined"] {
+  --m3e-icon-button-outline-color: var(--out);
+}
+m3e-button[variant="outlined"] {
+  --m3e-button-label-color: var(--p);
+  --m3e-button-label-text-color: var(--p);
+  --m3e-button-icon-color: var(--p);
+  --m3e-button-hover-label-color: var(--p);
+  --m3e-button-hover-label-text-color: var(--p);
+  --m3e-button-hover-icon-color: var(--p);
+  --m3e-button-focus-label-color: var(--p);
+  --m3e-button-pressed-label-color: var(--p);
+  --m3e-button-outline-color: var(--out);
+}
+
+/* Improve legibility of disabled buttons (Voice/Agentic) in light mode */
+m3e-button[disabled],
+m3e-icon-button[disabled] {
+  opacity: 1 !important; /* Disable double opacity penalty */
+  --m3e-button-disabled-label-text-color: var(--on-surf-v) !important;
+  --m3e-button-disabled-label-color: var(--on-surf-v) !important;
+  --m3e-button-disabled-icon-color: var(--on-surf-v) !important;
+  --m3e-button-disabled-outline-color: var(--out) !important;
+  --m3e-icon-button-disabled-icon-color: var(--on-surf-v) !important;
+}
+
+/* Model Selector inner fixes */
+.composer-segbar {
+  --m3e-button-outline-color: var(--out);
+}
+#model-split-btn m3e-icon {
+  color: var(--p) !important;
+}
+
+/* Force dark text for settings dialog and tabs in light mode */
+m3e-dialog {
+  --m3e-dialog-headline-color: var(--on-surf) !important;
+  --m3e-dialog-supporting-text-color: var(--on-surf-v) !important;
+  --m3e-dialog-icon-color: var(--on-surf) !important;
+  --m3e-icon-button-icon-color: var(--on-surf) !important;
+}
+m3e-dialog::part(close-icon) {
+  color: var(--on-surf) !important;
+}
+m3e-dialog span[slot="header"] {
+  color: var(--on-surf) !important;
+}
+/* Tabs — using exact M3E token names from library source */
+m3e-tabs {
+  --m3e-tabs-active-indicator-color: var(--p) !important;
+}
+m3e-tab {
+  --m3e-tab-unselected-color: var(--on-surf-v) !important;
+  --m3e-tab-selected-color: var(--p) !important;
+}
+m3e-tab[selected], m3e-tab[active] {
+  --m3e-tab-unselected-color: var(--p) !important;
+  --m3e-tab-selected-color: var(--p) !important;
+}
+
+/* History Clear All Button — using exact M3E tonal-button token names */
+#clear-btn {
+  --m3e-tonal-button-label-text-color: var(--err) !important;
+  --m3e-tonal-button-icon-color: var(--err) !important;
+  --m3e-tonal-button-container-color: var(--err-c) !important;
+  --m3e-tonal-button-hover-label-text-color: var(--err) !important;
+  --m3e-tonal-button-hover-icon-color: var(--err) !important;
+  --m3e-tonal-button-hover-container-color: var(--err-c) !important;
 }
 .user-mini {
   width: 40px;
@@ -579,6 +662,9 @@ a:hover { text-decoration: underline; }
 }
 .w-chips m3e-assist-chip {
   --m3e-chip-label-color: var(--on-pc);
+  --m3e-chip-label-text-color: var(--on-pc);
+  --m3e-chip-hover-label-color: var(--on-pc);
+  --m3e-chip-hover-label-text-color: var(--on-pc);
   --m3e-chip-container-color: color-mix(in srgb, var(--surf) 90%, var(--pc));
   --m3e-chip-hover-container-color: color-mix(in srgb, var(--pc) 30%, var(--surf));
   --m3e-chip-outline-color: color-mix(in srgb, var(--p) 24%, var(--out-v));
@@ -1028,7 +1114,7 @@ body.tools-open .input-toolbar { overflow: visible !important; }
 }
 #msg-input::placeholder { color: var(--out); }
 .input-acts { 
-  display: flex; align-items: center; gap: 4px; align-self: center; 
+  display: flex; align-items: center; gap: 4px; align-self: flex-end; padding-bottom: 2px;
 }
 .input-acts m3e-icon-button {
   --m3e-icon-button-state-layer-size: 40px;
@@ -1693,15 +1779,14 @@ m3e-dialog {
 /* ══════════════════════════════════════════════
    SETTINGS
 ══════════════════════════════════════════════ */
-m3e-dialog { max-width: 100vw; color-scheme: light; }
-[data-theme="dark"] m3e-dialog { color-scheme: light; }
+m3e-dialog { max-width: 100vw; }
+[data-theme="dark"] m3e-dialog { color-scheme: dark; }
 m3e-dialog::part(panel) {
   max-width: 96vw;
   background: var(--surf) !important;
   color: var(--on-surf) !important;
   border: 1.5px solid var(--out-v) !important;
   box-shadow: var(--sh3);
-  color-scheme: light;
   max-height: calc(100vh - 12px);
   overflow: hidden;
   border-radius: var(--r-lg);
