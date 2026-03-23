@@ -308,18 +308,19 @@ function toggleTemp() {
   
   if (isOn) {
     S.isTempChat = true;
+    syncTempUi();
     if (hasCurrentMessages) {
-      newChat();
+      newChat({ preserveTemp: true });
     } else {
       renderChat([]);
     }
   } else {
     // Toggling OFF
     S.isTempChat = false;
-    newChat();
+    syncTempUi();
+    newChat({ preserveTemp: true });
   }
-  
-  syncTempUi();
+
   toast(S.isTempChat ? 'Temporary chat on' : 'Temporary chat off', 'schedule');
 }
 
@@ -682,7 +683,12 @@ function onImageViewerPointerUp(event) {
 /* ══════════════════════════════════════════════
    CHAT MANAGEMENT
 ══════════════════════════════════════════════ */
-function newChat() {
+function newChat(options = {}) {
+  const { preserveTemp = false } = options;
+  if (!preserveTemp && S.isTempChat) {
+    S.isTempChat = false;
+    syncTempUi();
+  }
   S.currentChatId = null;
   S.attachments = [];
   S.tempMessages = [];
@@ -703,6 +709,10 @@ function newChat() {
 function loadChat(id) {
   const chat = S.chats[id];
   if (!chat) return;
+  if (S.isTempChat) {
+    S.isTempChat = false;
+    syncTempUi();
+  }
   S.currentChatId = id;
   S.attachments = [];
   renderChat(chat.messages || []);
