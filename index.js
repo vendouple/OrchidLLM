@@ -758,7 +758,7 @@ function buildMsgEl(msg) {
   }
 
   const avatar = isUser
-    ? `<div class="avatar user-av"><span class="ms sm fill">chat</span></div>`
+    ? `<div class="avatar user-av"><span class="ms sm fill">person</span></div>`
     : `<div class="avatar ai-av"><span class="ms sm fill">auto_awesome</span></div>`;
 
   const modelTag = msg.model ? ` · ${msg.model}` : '';
@@ -1839,6 +1839,7 @@ on('model-split-btn', 'click', toggleDropup);
 on('dropup-bg', 'click', closeDropup);
 on('tools-btn', 'click', (event) => { event.stopPropagation(); toggleToolsPop(); });
 on('mobile-more-btn', 'click', (event) => { event.stopPropagation(); toggleMobileMenu(); });
+on('desktop-more-btn', 'click', (event) => { event.stopPropagation(); toggleMobileMenu(); });
 on('mobile-menu-ov', 'click', closeMobileMenu);
 onAll('[data-mobile-action]', 'click', (event) => {
   const action = event.currentTarget?.dataset?.mobileAction;
@@ -1912,8 +1913,9 @@ document.addEventListener('click', (event) => {
   }
   const mobileMenu = document.getElementById('mobile-more-menu');
   const mobileBtn = document.getElementById('mobile-more-btn');
+  const desktopBtn = document.getElementById('desktop-more-btn');
   if (mobileMenu && mobileMenu.classList.contains('open')) {
-    if (!mobileMenu.contains(event.target) && !mobileBtn?.contains(event.target)) {
+    if (!mobileMenu.contains(event.target) && !mobileBtn?.contains(event.target) && !desktopBtn?.contains(event.target)) {
       closeMobileMenu();
     }
   }
