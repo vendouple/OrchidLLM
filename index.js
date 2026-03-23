@@ -439,7 +439,6 @@ function renderToolsNav() {
 
   nav.querySelectorAll('.tool-nav-item').forEach((item) => {
     item.addEventListener('click', (event) => {
-      // Don't close popup or change active when clicking the switch
       if (event.target.tagName === 'M3E-SWITCH' || event.target.closest('m3e-switch')) {
         event.stopPropagation();
         return;
@@ -559,8 +558,7 @@ function openImageViewer(src) {
   const viewer = document.getElementById('img-viewer');
   const img = document.getElementById('img-viewer-img');
   const stage = document.getElementById('img-viewer-stage');
-  const download = document.getElementById('img-download-btn');
-  if (!viewer || !img || !download || !stage) return;
+  if (!viewer || !img || !stage) return;
 
   IMG_VIEWER.scale = 1;
   IMG_VIEWER.src = src;
@@ -568,6 +566,7 @@ function openImageViewer(src) {
   IMG_VIEWER.offsetY = 0;
   IMG_VIEWER.dragging = false;
   IMG_VIEWER.pointerId = null;
+
   img.onload = () => {
     IMG_VIEWER.offsetX = 0;
     IMG_VIEWER.offsetY = 0;
@@ -575,14 +574,10 @@ function openImageViewer(src) {
   };
   img.src = src;
   updateImageViewerTransform();
-  download.href = src;
   document.getElementById('img-zoom-label').textContent = '100%';
   stage.classList.remove('dragging');
   viewer.classList.add('open');
   viewer.setAttribute('aria-hidden', 'false');
-
-  // Re-clamp after the image is actually laid out.
-  requestAnimationFrame(updateImageViewerTransform);
 }
 
 function closeImageViewer() {
@@ -596,68 +591,61 @@ function closeImageViewer() {
   viewer.setAttribute('aria-hidden', 'true');
 }
 
-function getImageViewerPanBounds() {
-  const stage = document.getElementById('img-viewer-stage');
-  const img = document.getElementById('img-viewer-img');
-  if (!stage || !img) return { maxX: 0, maxY: 0 };
-
-  const imgW = img.naturalWidth || img.clientWidth;
-  const imgH = img.naturalHeight || img.clientHeight;
-
-  // Compute the fitted size (same logic as CSS max-width/max-height: 100%)
-  const stageStyle = getComputedStyle(stage);
-  const padH = parseFloat(stageStyle.paddingLeft) + parseFloat(stageStyle.paddingRight);
-  const padV = parseFloat(stageStyle.paddingTop) + parseFloat(stageStyle.paddingBottom);
-  const contentW = stage.clientWidth - padH;
-  const contentH = stage.clientHeight - padV;
-
-  const ratio = Math.min(contentW / imgW, contentH / imgH, 1);
-  const fittedW = imgW * ratio;
-  const fittedH = imgH * ratio;
-
-  const scaledW = fittedW * IMG_VIEWER.scale;
-  const scaledH = fittedH * IMG_VIEWER.scale;
-
-  return {
-    maxX: Math.max(0, (scaledW - contentW) / 2),
-    maxY: Math.max(0, (scaledH - contentH) / 2),
-  };
-}
-
-function clampImageViewerPan() {
-  const { maxX, maxY } = getImageViewerPanBounds();
-  IMG_VIEWER.offsetX = Math.max(-maxX, Math.min(maxX, IMG_VIEWER.offsetX));
-  IMG_VIEWER.offsetY = Math.max(-maxY, Math.min(maxY, IMG_VIEWER.offsetY));
-}
 
 function updateImageViewerTransform() {
   const img = document.getElementById('img-viewer-img');
   const stage = document.getElementById('img-viewer-stage');
   if (!img) return;
-
-  clampImageViewerPan();
   img.style.transform = `translate(${IMG_VIEWER.offsetX}px, ${IMG_VIEWER.offsetY}px) scale(${IMG_VIEWER.scale})`;
-
-  if (stage) {
-    const { maxX, maxY } = getImageViewerPanBounds();
-    stage.classList.toggle('pannable', maxX > 0 || maxY > 0);
-  }
+  if (stage) stage.classList.add('pannable');
 }
 
-function adjustImageZoom(delta) {
-  IMG_VIEWER.scale = Math.max(0.5, Math.min(4, Number((IMG_VIEWER.scale + delta).toFixed(2))));
-  if (IMG_VIEWER.scale <= 1) {
-    IMG_VIEWER.offsetX = 0;
-    IMG_VIEWER.offsetY = 0;
-  }
+
+function zoomImageViewerAt(factor, cx, cy) {
+  const oldScale = IMG_VIEWER.scale;
+  const newScale = Math.max(0.1, Math.min(10, oldScale * factor));
+  if (newScale === oldScale) return;
+  const scaleRatio = newScale / oldScale;
+
+  IMG_VIEWER.offsetX = cx - scaleRatio * (cx - IMG_VIEWER.offsetX);
+  IMG_VIEWER.offsetY = cy - scaleRatio * (cy - IMG_VIEWER.offsetY);
+  IMG_VIEWER.scale = newScale;
+
   updateImageViewerTransform();
   const label = document.getElementById('img-zoom-label');
-  if (label) label.textContent = `${Math.round(IMG_VIEWER.scale * 100)}%`;
+  if (label) label.textContent = `${Math.round(newScale * 100)}%`;
+}
+
+function adjustImageZoom(direction) {
+  const factor = direction > 0 ? 1.25 : 1 / 1.25;
+  zoomImageViewerAt(factor, 0, 0);
+}
+
+
+async function downloadImageViewer() {
+  const src = IMG_VIEWER.src;
+  if (!src) return;
+  try {
+    const res = await fetch(src);
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    const rawName = src.split('/').pop().split('?')[0];
+    a.download = rawName && rawName.length < 100 ? decodeURIComponent(rawName) : 'generated-image.jpg';
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 5000);
+  } catch (e) {
+    window.open(src, '_blank', 'noopener,noreferrer');
+    toast('Download started in new tab', 'download');
+  }
 }
 
 function onImageViewerPointerDown(event) {
-  const { maxX, maxY } = getImageViewerPanBounds();
-  if (maxX <= 0 && maxY <= 0) return;
+  // Ignore right-click
+  if (event.button === 2) return;
   const stage = document.getElementById('img-viewer-stage');
   if (!stage) return;
 
@@ -1993,8 +1981,9 @@ on('chat-inner', 'click', (event) => {
 });
 onAll('#img-viewer .img-viewer-bg', 'click', closeImageViewer);
 on('img-close-btn', 'click', closeImageViewer);
-on('img-zoom-in', 'click', () => adjustImageZoom(0.15));
-on('img-zoom-out', 'click', () => adjustImageZoom(-0.15));
+on('img-zoom-in', 'click', () => adjustImageZoom(1));
+on('img-zoom-out', 'click', () => adjustImageZoom(-1));
+on('img-download-btn', 'click', downloadImageViewer);
 const imgViewerStage = document.getElementById('img-viewer-stage');
 if (imgViewerStage) {
   imgViewerStage.addEventListener('pointerdown', onImageViewerPointerDown);
@@ -2008,7 +1997,17 @@ if (imgViewerStage) {
   });
   imgViewerStage.addEventListener('wheel', (event) => {
     event.preventDefault();
-    adjustImageZoom(event.deltaY < 0 ? 0.08 : -0.08);
+    const stage = imgViewerStage;
+    const rect = stage.getBoundingClientRect();
+    // Focal point relative to stage center
+    const cx = event.clientX - rect.left - rect.width / 2;
+    const cy = event.clientY - rect.top - rect.height / 2;
+    const factor = event.deltaY < 0 ? 1.1 : 1 / 1.1;
+    // Suppress CSS transition during wheel zoom for smoothness
+    stage.classList.add('dragging');
+    zoomImageViewerAt(factor, cx, cy);
+    clearTimeout(stage._wheelTimer);
+    stage._wheelTimer = setTimeout(() => stage.classList.remove('dragging'), 80);
   }, { passive: false });
 }
 
