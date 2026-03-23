@@ -93,6 +93,12 @@ let deferredInstallPrompt = null;
 const IMG_VIEWER = {
   scale: 1,
   src: '',
+  offsetX: 0,
+  offsetY: 0,
+  dragging: false,
+  pointerId: null,
+  lastX: 0,
+  lastY: 0,
 };
 let suggestionInterval = null;
 
@@ -552,32 +558,137 @@ function syncComposerModeControls() {
 function openImageViewer(src) {
   const viewer = document.getElementById('img-viewer');
   const img = document.getElementById('img-viewer-img');
+  const stage = document.getElementById('img-viewer-stage');
   const download = document.getElementById('img-download-btn');
-  if (!viewer || !img || !download) return;
+  if (!viewer || !img || !download || !stage) return;
 
   IMG_VIEWER.scale = 1;
   IMG_VIEWER.src = src;
+  IMG_VIEWER.offsetX = 0;
+  IMG_VIEWER.offsetY = 0;
+  IMG_VIEWER.dragging = false;
+  IMG_VIEWER.pointerId = null;
+  img.onload = () => {
+    IMG_VIEWER.offsetX = 0;
+    IMG_VIEWER.offsetY = 0;
+    updateImageViewerTransform();
+  };
   img.src = src;
-  img.style.transform = 'scale(1)';
+  updateImageViewerTransform();
   download.href = src;
   document.getElementById('img-zoom-label').textContent = '100%';
+  stage.classList.remove('dragging');
   viewer.classList.add('open');
   viewer.setAttribute('aria-hidden', 'false');
+
+  // Re-clamp after the image is actually laid out.
+  requestAnimationFrame(updateImageViewerTransform);
 }
 
 function closeImageViewer() {
   const viewer = document.getElementById('img-viewer');
+  const stage = document.getElementById('img-viewer-stage');
   if (!viewer) return;
+  IMG_VIEWER.dragging = false;
+  IMG_VIEWER.pointerId = null;
+  if (stage) stage.classList.remove('dragging');
   viewer.classList.remove('open');
   viewer.setAttribute('aria-hidden', 'true');
 }
 
+function getImageViewerPanBounds() {
+  const stage = document.getElementById('img-viewer-stage');
+  const img = document.getElementById('img-viewer-img');
+  if (!stage || !img) return { maxX: 0, maxY: 0 };
+
+  const imgW = img.naturalWidth || img.clientWidth;
+  const imgH = img.naturalHeight || img.clientHeight;
+
+  // Compute the fitted size (same logic as CSS max-width/max-height: 100%)
+  const stageStyle = getComputedStyle(stage);
+  const padH = parseFloat(stageStyle.paddingLeft) + parseFloat(stageStyle.paddingRight);
+  const padV = parseFloat(stageStyle.paddingTop) + parseFloat(stageStyle.paddingBottom);
+  const contentW = stage.clientWidth - padH;
+  const contentH = stage.clientHeight - padV;
+
+  const ratio = Math.min(contentW / imgW, contentH / imgH, 1);
+  const fittedW = imgW * ratio;
+  const fittedH = imgH * ratio;
+
+  const scaledW = fittedW * IMG_VIEWER.scale;
+  const scaledH = fittedH * IMG_VIEWER.scale;
+
+  return {
+    maxX: Math.max(0, (scaledW - contentW) / 2),
+    maxY: Math.max(0, (scaledH - contentH) / 2),
+  };
+}
+
+function clampImageViewerPan() {
+  const { maxX, maxY } = getImageViewerPanBounds();
+  IMG_VIEWER.offsetX = Math.max(-maxX, Math.min(maxX, IMG_VIEWER.offsetX));
+  IMG_VIEWER.offsetY = Math.max(-maxY, Math.min(maxY, IMG_VIEWER.offsetY));
+}
+
+function updateImageViewerTransform() {
+  const img = document.getElementById('img-viewer-img');
+  const stage = document.getElementById('img-viewer-stage');
+  if (!img) return;
+
+  clampImageViewerPan();
+  img.style.transform = `translate(${IMG_VIEWER.offsetX}px, ${IMG_VIEWER.offsetY}px) scale(${IMG_VIEWER.scale})`;
+
+  if (stage) {
+    const { maxX, maxY } = getImageViewerPanBounds();
+    stage.classList.toggle('pannable', maxX > 0 || maxY > 0);
+  }
+}
+
 function adjustImageZoom(delta) {
   IMG_VIEWER.scale = Math.max(0.5, Math.min(4, Number((IMG_VIEWER.scale + delta).toFixed(2))));
-  const img = document.getElementById('img-viewer-img');
-  if (img) img.style.transform = `scale(${IMG_VIEWER.scale})`;
+  if (IMG_VIEWER.scale <= 1) {
+    IMG_VIEWER.offsetX = 0;
+    IMG_VIEWER.offsetY = 0;
+  }
+  updateImageViewerTransform();
   const label = document.getElementById('img-zoom-label');
   if (label) label.textContent = `${Math.round(IMG_VIEWER.scale * 100)}%`;
+}
+
+function onImageViewerPointerDown(event) {
+  const { maxX, maxY } = getImageViewerPanBounds();
+  if (maxX <= 0 && maxY <= 0) return;
+  const stage = document.getElementById('img-viewer-stage');
+  if (!stage) return;
+
+  IMG_VIEWER.dragging = true;
+  IMG_VIEWER.pointerId = event.pointerId;
+  IMG_VIEWER.lastX = event.clientX;
+  IMG_VIEWER.lastY = event.clientY;
+  stage.classList.add('dragging');
+  stage.setPointerCapture?.(event.pointerId);
+  event.preventDefault();
+}
+
+function onImageViewerPointerMove(event) {
+  if (!IMG_VIEWER.dragging || IMG_VIEWER.pointerId !== event.pointerId) return;
+
+  IMG_VIEWER.offsetX += event.clientX - IMG_VIEWER.lastX;
+  IMG_VIEWER.offsetY += event.clientY - IMG_VIEWER.lastY;
+  IMG_VIEWER.lastX = event.clientX;
+  IMG_VIEWER.lastY = event.clientY;
+  updateImageViewerTransform();
+}
+
+function onImageViewerPointerUp(event) {
+  if (IMG_VIEWER.pointerId !== event.pointerId) return;
+  const stage = document.getElementById('img-viewer-stage');
+  IMG_VIEWER.dragging = false;
+  IMG_VIEWER.pointerId = null;
+  if (stage) {
+    stage.classList.remove('dragging');
+    stage.releasePointerCapture?.(event.pointerId);
+  }
 }
 
 /* ══════════════════════════════════════════════
@@ -1886,6 +1997,15 @@ on('img-zoom-in', 'click', () => adjustImageZoom(0.15));
 on('img-zoom-out', 'click', () => adjustImageZoom(-0.15));
 const imgViewerStage = document.getElementById('img-viewer-stage');
 if (imgViewerStage) {
+  imgViewerStage.addEventListener('pointerdown', onImageViewerPointerDown);
+  imgViewerStage.addEventListener('pointermove', onImageViewerPointerMove);
+  imgViewerStage.addEventListener('pointerup', onImageViewerPointerUp);
+  imgViewerStage.addEventListener('pointercancel', onImageViewerPointerUp);
+  imgViewerStage.addEventListener('lostpointercapture', () => {
+    imgViewerStage.classList.remove('dragging');
+    IMG_VIEWER.dragging = false;
+    IMG_VIEWER.pointerId = null;
+  });
   imgViewerStage.addEventListener('wheel', (event) => {
     event.preventDefault();
     adjustImageZoom(event.deltaY < 0 ? 0.08 : -0.08);

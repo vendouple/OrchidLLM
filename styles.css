@@ -834,17 +834,39 @@ m3e-tab[selected], m3e-tab[active] {
 }
 
 .img-viewer-stage {
-  overflow: auto;
+  overflow: hidden;
   display: grid;
   place-items: center;
   padding: 14px;
+  cursor: default;
+  touch-action: none;
+  user-select: none;
+}
+
+.img-viewer-stage.pannable {
+  cursor: grab;
+}
+
+.img-viewer-stage.dragging {
+  cursor: grabbing;
 }
 
 #img-viewer-img {
   max-width: 100%;
   max-height: 100%;
+  width: auto;
+  height: auto;
+  display: block;
   transform-origin: center center;
   transition: transform .2s var(--std);
+  user-select: none;
+  pointer-events: none;
+  -webkit-user-drag: none;
+  will-change: transform;
+}
+
+.img-viewer-stage.dragging #img-viewer-img {
+  transition: none;
 }
 
 /* Attachment chip in message */
