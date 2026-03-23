@@ -4,18 +4,7 @@ A LLM Playground built with the chat feature with additional apps coming soon
 
 ## ✨ Features
 
-- Current features include a base chatting feature. More will come soon, and maybe you can even submit your own prompts and apps once this migrates to another website.
-
-## Powered By
-
-This application is powered by [Pollinations.ai](https://pollinations.ai) - providing access to various AI models for text, image, video, and audio generation.
-
-
-## 🐛 Known Limitations
-
-- Frontend-only demo (no actual API integration yet)
-- Chat history limited by browser localStorage quota
-- Demo mode counter resets daily based on local time
+Current features include a base chatting feature. More will come soon, and maybe you can even submit your own prompts and apps once this migrates to another framework.
 
 ## 🔮 Future Enhancements
 
@@ -23,13 +12,14 @@ This application is powered by [Pollinations.ai](https://pollinations.ai) - prov
 - [ ] Markdown formatting support
 - [ ] Code syntax highlighting
 - [ ] Mermaid diagram rendering
-- [ ] Real API integration with Pollinations.ai
 - [ ] Voice input/output
-- [ ] Image preview in chat
 - [ ] Export conversations as PDF/HTML
 - [ ] Multi-language support
 
+## 🔥 Powered By
+
+This application is powered by [Pollinations.ai](https://pollinations.ai) - providing access to various AI models for text, image, video, and audio generation.
+
 ---
 
-Built with ❤️ using vanilla HTML, CSS, and JavaScript
-Framework will be migrated soon.
+Built with ❤️ from Indonesia

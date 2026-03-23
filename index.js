@@ -1967,8 +1967,29 @@ function checkMobile() {
     }
   }
 }
+
+function syncViewportMetrics() {
+  const root = document.documentElement;
+  const vv = window.visualViewport;
+  const height = vv?.height || window.innerHeight;
+  if (!height || Number.isNaN(height)) return;
+
+  root.style.setProperty('--app-vh', `${Math.round(height)}px`);
+
+  // Use visual viewport offset when browser chrome or gesture area overlays content.
+  const chromeInset = Math.max(0, window.innerHeight - Math.round(height + (vv?.offsetTop || 0)));
+  root.style.setProperty('--safe-bottom', `${chromeInset}px`);
+}
+
 checkMobile();
+syncViewportMetrics();
 window.addEventListener('resize', checkMobile);
+window.addEventListener('resize', syncViewportMetrics);
+window.addEventListener('orientationchange', syncViewportMetrics);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncViewportMetrics);
+  window.visualViewport.addEventListener('scroll', syncViewportMetrics);
+}
 
 Object.assign(window, {
   selectCat,
@@ -2033,6 +2054,9 @@ async function init() {
 
   // Focus input
   setTimeout(() => document.getElementById('msg-input').focus(), 100);
+
+  // One more pass after initial layout settles (fonts/components can shift viewport).
+  setTimeout(syncViewportMetrics, 0);
 }
 
 init();
