@@ -1088,9 +1088,6 @@ export default function ChatPage() {
                       </div>
                     )}
                   </div>
-                  {selectedModel === model.id && (
-                    <span className="ms sm" style={{ color: 'var(--p)' }}>check</span>
-                  )}
                 </div>
               ))}
             </div>

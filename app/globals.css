@@ -1223,7 +1223,7 @@ body.composer-expanded #msg-input {
   padding: 10px 12px; border-radius: var(--r-md);
   cursor: pointer; font-size: 13px; font-weight: 600;
   color: var(--on-surf-v); transition: all .2s var(--std);
-  user-select: none;
+  user-select: none; border: none; background: none;
 }
 .du-cat:hover { background: var(--surf-mid); color: var(--on-surf); }
 .du-cat.active { background: var(--pc); color: var(--on-pc); }
