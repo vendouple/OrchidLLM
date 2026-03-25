@@ -1,4 +1,4 @@
-# OrchidLLM Playground
+# OrchidLLM - Next.js Backend
 
 A LLM Playground built with the chat feature with additional apps coming soon
 
@@ -22,4 +22,4 @@ This application is powered by [Pollinations.ai](https://pollinations.ai) - prov
 
 ---
 
-Built with ❤️ from Indonesia
+Built with ❤️ with Next.js
