@@ -1023,15 +1023,14 @@ export default function ChatPage() {
         <div id="dropup-panel">
           <div className="du-cats" id="du-cats">
             {categories.map((cat) => (
-              <button
+              <div
                 key={cat.id}
-                type="button"
                 className={`du-cat ${selectedCategory === cat.id ? 'active' : ''}`}
                 onClick={() => setSelectedCategory(cat.id)}
               >
                 <span className="ms sm">{cat.icon}</span>
                 <span>{cat.label}</span>
-              </button>
+              </div>
             ))}
           </div>
           <div className="du-models">
