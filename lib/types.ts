@@ -1,3 +1,24 @@
+// User Types (for GitHub OAuth)
+export interface User {
+  id: string;
+  githubId: string;
+  githubUsername: string;
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+  isAdmin: boolean;
+  createdAt: number;
+  lastLogin: number | null;
+}
+
+export interface CreateUserInput {
+  githubId: string;
+  githubUsername: string;
+  email: string | null;
+  name: string | null;
+  avatarUrl: string | null;
+}
+
 // API Key Types
 export interface ApiKeyPermissions {
   providers: ('nvidia' | 'pollinations' | 'openai')[];

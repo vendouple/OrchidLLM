@@ -1,5 +1,6 @@
 import { connect } from '@planetscale/database';
-import { ApiKeyRecord, ApiKeyPermissions } from './types';
+import { ApiKeyRecord, ApiKeyPermissions, User, CreateUserInput } from './types';
+import { v4 as uuidv4 } from 'uuid';
 
 // Initialize PlanetScale connection
 const getConnection = () => {
@@ -175,4 +176,243 @@ export function isKeyExpired(permissions: ApiKeyPermissions): boolean {
     return false;
   }
   return Date.now() > permissions.expiresAt;
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// USER MANAGEMENT FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Create or update a user from GitHub OAuth
+ */
+export async function createOrUpdateUser(input: CreateUserInput): Promise<User> {
+  try {
+    const conn = getConnection();
+
+    // Check if user exists
+    const existing = await conn.execute(
+      'SELECT * FROM users WHERE github_id = ?',
+      [input.githubId]
+    );
+
+    if (existing.rows.length > 0) {
+      // Update existing user
+      await conn.execute(
+        `UPDATE users SET
+          github_username = ?,
+          email = ?,
+          name = ?,
+          avatar_url = ?,
+          last_login = NOW()
+        WHERE github_id = ?`,
+        [input.githubUsername, input.email, input.name, input.avatarUrl, input.githubId]
+      );
+
+      const row = existing.rows[0] as any;
+      return {
+        id: row.id,
+        githubId: row.github_id,
+        githubUsername: input.githubUsername,
+        email: input.email,
+        name: input.name,
+        avatarUrl: input.avatarUrl,
+        isAdmin: row.is_admin === 1 || row.github_username === 'vendouple',
+        createdAt: new Date(row.created_at).getTime(),
+        lastLogin: Date.now(),
+      };
+    } else {
+      // Create new user
+      const id = uuidv4();
+      // Auto-grant admin to vendouple
+      const isAdmin = input.githubUsername.toLowerCase() === 'vendouple';
+
+      await conn.execute(
+        `INSERT INTO users (id, github_id, github_username, email, name, avatar_url, is_admin, last_login)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NOW())`,
+        [id, input.githubId, input.githubUsername, input.email, input.name, input.avatarUrl, isAdmin]
+      );
+
+      return {
+        id,
+        githubId: input.githubId,
+        githubUsername: input.githubUsername,
+        email: input.email,
+        name: input.name,
+        avatarUrl: input.avatarUrl,
+        isAdmin,
+        createdAt: Date.now(),
+        lastLogin: Date.now(),
+      };
+    }
+  } catch (error) {
+    console.error('Error creating/updating user:', error);
+    throw new Error('Database error while managing user');
+  }
+}
+
+/**
+ * Get user by GitHub ID
+ */
+export async function getUserByGithubId(githubId: string): Promise<User | null> {
+  try {
+    const conn = getConnection();
+    const result = await conn.execute(
+      'SELECT * FROM users WHERE github_id = ?',
+      [githubId]
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0] as any;
+    return {
+      id: row.id,
+      githubId: row.github_id,
+      githubUsername: row.github_username,
+      email: row.email,
+      name: row.name,
+      avatarUrl: row.avatar_url,
+      isAdmin: row.is_admin === 1,
+      createdAt: new Date(row.created_at).getTime(),
+      lastLogin: row.last_login ? new Date(row.last_login).getTime() : null,
+    };
+  } catch (error) {
+    console.error('Error getting user by GitHub ID:', error);
+    return null;
+  }
+}
+
+/**
+ * Get user by internal ID
+ */
+export async function getUserById(id: string): Promise<User | null> {
+  try {
+    const conn = getConnection();
+    const result = await conn.execute(
+      'SELECT * FROM users WHERE id = ?',
+      [id]
+    );
+
+    if (result.rows.length === 0) {
+      return null;
+    }
+
+    const row = result.rows[0] as any;
+    return {
+      id: row.id,
+      githubId: row.github_id,
+      githubUsername: row.github_username,
+      email: row.email,
+      name: row.name,
+      avatarUrl: row.avatar_url,
+      isAdmin: row.is_admin === 1,
+      createdAt: new Date(row.created_at).getTime(),
+      lastLogin: row.last_login ? new Date(row.last_login).getTime() : null,
+    };
+  } catch (error) {
+    console.error('Error getting user by ID:', error);
+    return null;
+  }
+}
+
+/**
+ * List all users (for admin)
+ */
+export async function listUsers(limit = 100, offset = 0): Promise<User[]> {
+  try {
+    const conn = getConnection();
+    const result = await conn.execute(
+      'SELECT * FROM users ORDER BY created_at DESC LIMIT ? OFFSET ?',
+      [limit, offset]
+    );
+
+    return result.rows.map((row: any) => ({
+      id: row.id,
+      githubId: row.github_id,
+      githubUsername: row.github_username,
+      email: row.email,
+      name: row.name,
+      avatarUrl: row.avatar_url,
+      isAdmin: row.is_admin === 1,
+      createdAt: new Date(row.created_at).getTime(),
+      lastLogin: row.last_login ? new Date(row.last_login).getTime() : null,
+    }));
+  } catch (error) {
+    console.error('Error listing users:', error);
+    return [];
+  }
+}
+
+/**
+ * Update user admin status
+ */
+export async function setUserAdmin(userId: string, isAdmin: boolean): Promise<boolean> {
+  try {
+    const conn = getConnection();
+    const result = await conn.execute(
+      'UPDATE users SET is_admin = ? WHERE id = ?',
+      [isAdmin, userId]
+    );
+    return result.rowsAffected > 0;
+  } catch (error) {
+    console.error('Error updating user admin status:', error);
+    return false;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// DEMO KEY CLEANUP FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+
+/**
+ * Get demo keys that have been inactive for N days
+ */
+export async function getInactiveDemoKeys(daysInactive: number = 30): Promise<ApiKeyRecord[]> {
+  try {
+    const conn = getConnection();
+    const result = await conn.execute(
+      `SELECT * FROM api_keys
+       WHERE is_demo = TRUE
+       AND (last_used IS NULL OR last_used < DATE_SUB(NOW(), INTERVAL ? DAY))
+       ORDER BY last_used ASC`,
+      [daysInactive]
+    );
+
+    return result.rows.map((row: any) => ({
+      key: row.key,
+      permissions: {
+        providers: JSON.parse(row.providers),
+        rateLimit: row.rate_limit,
+        models: row.models ? JSON.parse(row.models) : '*',
+        expiresAt: row.expires_at ? new Date(row.expires_at).getTime() : undefined,
+      },
+      createdAt: new Date(row.created_at).getTime(),
+      createdBy: row.created_by,
+      lastUsed: row.last_used ? new Date(row.last_used).getTime() : undefined,
+      usageCount: row.usage_count || 0,
+    }));
+  } catch (error) {
+    console.error('Error getting inactive demo keys:', error);
+    return [];
+  }
+}
+
+/**
+ * Delete demo keys that have been inactive for N days
+ */
+export async function cleanupInactiveDemoKeys(daysInactive: number = 30): Promise<number> {
+  try {
+    const conn = getConnection();
+    const result = await conn.execute(
+      `DELETE FROM api_keys
+       WHERE is_demo = TRUE
+       AND (last_used IS NULL OR last_used < DATE_SUB(NOW(), INTERVAL ? DAY))`,
+      [daysInactive]
+    );
+    return result.rowsAffected;
+  } catch (error) {
+    console.error('Error cleaning up inactive demo keys:', error);
+    return 0;
+  }
 }

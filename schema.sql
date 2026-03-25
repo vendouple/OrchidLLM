@@ -1,6 +1,21 @@
 -- OrchidLLM API Keys Database Schema
 -- Run this in PlanetScale or your MySQL database
 
+-- Users table (for GitHub OAuth)
+CREATE TABLE IF NOT EXISTS users (
+  id VARCHAR(36) PRIMARY KEY,
+  github_id VARCHAR(64) NOT NULL UNIQUE,
+  github_username VARCHAR(39) NOT NULL,
+  email VARCHAR(255),
+  name VARCHAR(255),
+  avatar_url VARCHAR(500),
+  is_admin BOOLEAN DEFAULT FALSE,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  last_login TIMESTAMP NULL,
+  INDEX idx_github_id (github_id),
+  INDEX idx_github_username (github_username)
+);
+
 -- API Keys table
 CREATE TABLE IF NOT EXISTS api_keys (
   id INT AUTO_INCREMENT PRIMARY KEY,
@@ -13,8 +28,13 @@ CREATE TABLE IF NOT EXISTS api_keys (
   created_by VARCHAR(255),
   last_used TIMESTAMP NULL,
   usage_count INT DEFAULT 0,
+  user_id VARCHAR(36) NULL,
+  is_demo BOOLEAN DEFAULT FALSE,
+  key_name VARCHAR(100) NULL,
   INDEX idx_key (`key`),
-  INDEX idx_created_at (created_at)
+  INDEX idx_created_at (created_at),
+  INDEX idx_user_id (user_id),
+  INDEX idx_is_demo (is_demo)
 );
 
 -- Usage tracking table (for demo mode)
