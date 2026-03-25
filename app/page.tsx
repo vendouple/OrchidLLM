@@ -1,11 +1,10 @@
 /// <reference path="../global.d.ts" />
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { useChatStore } from '@/stores/chatStore';
 import { useSettingsStore } from '@/stores/settingsStore';
 import { SignInModal } from '@/components/auth/SignInModal';
-import { UserMenu } from '@/components/auth/UserMenu';
 import { ChatMessageState } from '@/lib/types';
 
 export default function ChatPage() {
@@ -231,8 +230,8 @@ export default function ChatPage() {
   };
 
   const toggleSidebar = () => {
-    setSidebarOpen(!sidebarOpen);
-    setMobileMenuOpen(!mobileMenuOpen);
+    setSidebarOpen((prev) => !prev);
+    setMobileMenuOpen((prev) => !prev);
   };
 
   const showComingSoon = (feature: string) => {
@@ -250,9 +249,9 @@ export default function ChatPage() {
   );
 
   return (
-    <m3e-theme id="app" color-scheme={theme} style={{ display: 'flex', width: '100vw', height: '100vh', overflow: 'hidden' }}>
+    <m3e-theme id="app" color-scheme={theme} style={{ display: 'flex', width: '100vw', height: '100vh', minHeight: '100dvh', overflow: 'hidden' }}>
       {/* ═══════ SIDEBAR (Drawer) ═══════ */}
-      <aside id="sidebar" className={`side ${sidebarOpen ? '' : 'hide'}`} style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--out-v)' }}>
+      <aside id="sidebar" className={`side ${sidebarOpen ? '' : 'closed'}`} style={{ display: 'flex', flexDirection: 'column', borderRight: '1px solid var(--out-v)' }}>
         <div className="side-head" style={{ paddingTop: '16px', paddingLeft: '16px', paddingRight: '16px', display: 'flex', gap: '12px', alignItems: 'flex-start' }}>
           <div className="w-logo" style={{ width: '42px', height: '42px', minWidth: '42px', borderRadius: '12px' }}>
             <span className="ms fill" style={{ fontSize: '24px' }}>auto_awesome</span>
@@ -284,14 +283,14 @@ export default function ChatPage() {
               className={`hist-item ${currentChatId === chat.id ? 'active' : ''}`}
               onClick={() => setCurrentChat(chat.id)}
             >
-              <span className="ms sm" style={{ color: 'var(--out)' }}>chat_bubble</span>
-              <span className="hist-title">{chat.title}</span>
+              <div className="hi-icon"><span className="ms sm">chat_bubble</span></div>
+              <span className="hi-title">{chat.title}</span>
               <button
-                className="hist-del"
+                className="hi-del"
                 onClick={(e) => { e.stopPropagation(); deleteChat(chat.id); }}
                 type="button"
               >
-                <span className="ms sm">delete</span>
+                <span className="ms">close</span>
               </button>
             </div>
           ))}
@@ -320,7 +319,31 @@ export default function ChatPage() {
         </div>
 
         <div className="side-foot" style={{ padding: '12px 16px', borderTop: '1px solid var(--out-v)', display: 'flex', alignItems: 'center', gap: '10px' }}>
-          <UserMenu onSignInClick={() => setShowSignIn(true)} />
+          <div
+            className="user-avatar"
+            title="Sign in"
+            onClick={() => setShowSignIn(true)}
+            style={{
+              width: '32px',
+              height: '32px',
+              borderRadius: '50%',
+              background: 'linear-gradient(145deg, var(--p), var(--t))',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontWeight: 'bold',
+              fontSize: '14px',
+              boxShadow: 'var(--sh1)',
+              cursor: 'pointer',
+            }}
+          >
+            <span className="ms sm">person</span>
+          </div>
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden' }}>
+            <span style={{ fontSize: '13px', fontWeight: 700, whiteSpace: 'nowrap', textOverflow: 'ellipsis', overflow: 'hidden', color: 'var(--on-surf)' }}>Guest</span>
+            <span style={{ fontSize: '11px', color: 'var(--out)' }}>Sign in</span>
+          </div>
           <m3e-icon-button id="settings-btn" title="Settings" variant="tonal" onClick={() => setShowSettingsDialog(true)}>
             <m3e-icon name="settings"></m3e-icon>
           </m3e-icon-button>
@@ -334,7 +357,7 @@ export default function ChatPage() {
       <main id="main" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', minWidth: 0 }}>
         {/* Demo Banner */}
         {apiMode === 'demo' && (
-          <div id="demo-banner">
+          <div id="demo-banner" className="show">
             <span className="ms sm">bolt</span>
             Demo mode
             <div className="demo-pill" id="demo-counter">{demoRequestsLeft} requests left</div>
@@ -410,7 +433,6 @@ export default function ChatPage() {
         <div id="chat-wrap" ref={chatWrapRef} style={{ flex: 1, overflowY: 'auto', paddingBottom: '120px' }}>
           <div className="chat-inner" id="chat-inner">
             {messages.length === 0 ? (
-              /* Welcome */
               <div id="welcome">
                 <div className="w-logo"><span className="ms xl fill">auto_awesome</span></div>
                 <div className="w-heading">OrchidLLM Playground</div>
@@ -423,27 +445,20 @@ export default function ChatPage() {
                 </m3e-chip-set>
               </div>
             ) : (
-              /* Messages */
               messages.map((msg) => (
                 <div key={msg.id} className={`msg-row ${msg.role}`}>
                   <div className={`avatar ${msg.role === 'user' ? 'user-av' : 'ai-av'}`}>
-                    {msg.role === 'user' ? (
-                      'U'
-                    ) : (
-                      <span className="ms">auto_awesome</span>
-                    )}
+                    {msg.role === 'user' ? <span className="ms sm fill">person</span> : <span className="ms sm fill">auto_awesome</span>}
                   </div>
                   <div className="bubble">
-                    {msg.content || (isLoading && msg.role === 'assistant' ? (
-                      <span style={{ color: 'var(--out)' }}>Thinking...</span>
-                    ) : null)}
+                    {msg.content || (isLoading && msg.role === 'assistant' ? <span style={{ color: 'var(--out)' }}>Thinking...</span> : null)}
+                    {msg.time && (
+                      <div className="msg-meta">
+                        {msg.time}
+                        {msg.model && <span> · {msg.model}</span>}
+                      </div>
+                    )}
                   </div>
-                  {msg.role === 'assistant' && (
-                    <div className="msg-meta">
-                      {msg.model && <span>{msg.model}</span>}
-                      {msg.time && <span> · {msg.time}</span>}
-                    </div>
-                  )}
                 </div>
               ))
             )}

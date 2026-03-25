@@ -1,32 +1,14 @@
 'use client';
 
 import { SessionProvider } from 'next-auth/react';
-import { useEffect, useState } from 'react';
+import { useEffect } from 'react';
 
 function M3EProvider({ children }: { children: React.ReactNode }) {
-  const [loaded, setLoaded] = useState(false);
-
   useEffect(() => {
-    import('@m3e/web/all').then(() => {
-      setLoaded(true);
+    import('@m3e/web/all').catch(() => {
+      // Keep rendering even if module preloading fails.
     });
   }, []);
-
-  if (!loaded) {
-    return (
-      <div style={{
-        display: 'flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        height: '100vh',
-        background: 'var(--bg, #FAFAFA)',
-        color: 'var(--on-bg, #1A1625)',
-        fontFamily: 'Plus Jakarta Sans, system-ui, sans-serif',
-      }}>
-        Loading...
-      </div>
-    );
-  }
 
   return <>{children}</>;
 }
