@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import models from '@/../public/models.json';
+import models from '@/public/models.json';
 
 const NVIDIA_BASE = 'https://integrate.api.nvidia.com/v1';
 

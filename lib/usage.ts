@@ -1,4 +1,22 @@
-import { kv } from '@vercel/kv';
+import { Redis } from '@upstash/redis';
+
+let redis: Redis | null = null;
+
+function getRedisClient(): Redis | null {
+  if (redis) {
+    return redis;
+  }
+
+  const url = process.env.UPSTASH_REDIS_REST_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+
+  if (!url || !token) {
+    return null;
+  }
+
+  redis = new Redis({ url, token });
+  return redis;
+}
 
 const DAILY_LIMIT = 20;
 const USAGE_PREFIX = 'usage';
@@ -8,8 +26,13 @@ const USAGE_PREFIX = 'usage';
  */
 export async function getUsage(identifier: string): Promise<number> {
   try {
+    const redisClient = getRedisClient();
+    if (!redisClient) {
+      return 0;
+    }
+
     const key = getUsageKey(identifier);
-    const count = await kv.get<number>(key);
+    const count = await redisClient.get<number>(key);
     return count || 0;
   } catch (error) {
     console.error('Error getting usage:', error);
@@ -22,12 +45,17 @@ export async function getUsage(identifier: string): Promise<number> {
  */
 export async function incrementUsage(identifier: string): Promise<void> {
   try {
+    const redisClient = getRedisClient();
+    if (!redisClient) {
+      return;
+    }
+
     const key = getUsageKey(identifier);
     // Use atomic increment to prevent race conditions
-    const newValue = await kv.incr(key);
+    const newValue = await redisClient.incr(key);
     // Set expiry only on first increment (when value is 1)
     if (newValue === 1) {
-      await kv.expire(key, 86400);
+      await redisClient.expire(key, 86400);
     }
   } catch (error) {
     console.error('Error incrementing usage:', error);
@@ -122,8 +150,17 @@ export async function checkRateLimit(
   rateLimit: number
 ): Promise<{ allowed: boolean; remaining: number; resetAt: number }> {
   try {
+    const redisClient = getRedisClient();
+    if (!redisClient) {
+      return {
+        allowed: true,
+        remaining: rateLimit,
+        resetAt: Date.now() + 86400000,
+      };
+    }
+
     const key_ = `ratelimit:${key}:${new Date().toDateString()}`;
-    const current = await kv.get<number>(key_) || 0;
+    const current = await redisClient.get<number>(key_) || 0;
     const remaining = Math.max(0, rateLimit - current);
     const resetAt = new Date();
     resetAt.setHours(23, 59, 59, 999);
@@ -148,12 +185,17 @@ export async function checkRateLimit(
  */
 export async function incrementRateLimit(key: string): Promise<void> {
   try {
+    const redisClient = getRedisClient();
+    if (!redisClient) {
+      return;
+    }
+
     const key_ = `ratelimit:${key}:${new Date().toDateString()}`;
     // Use atomic increment to prevent race conditions
-    const newValue = await kv.incr(key_);
+    const newValue = await redisClient.incr(key_);
     // Set expiry only on first increment
     if (newValue === 1) {
-      await kv.expire(key_, 86400);
+      await redisClient.expire(key_, 86400);
     }
   } catch (error) {
     console.error('Error incrementing rate limit:', error);
