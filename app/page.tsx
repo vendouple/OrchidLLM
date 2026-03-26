@@ -84,11 +84,10 @@ export default function ChatPage() {
   const messages = getCurrentMessages();
   const chatList = getChatList();
 
-  // Categories (text, image, vision, audio, video, transcription)
+  // Categories (text, image, audio, video, transcription)
   const categories = [
     { id: 'text',          label: 'Text',          icon: 'psychology' },
     { id: 'image',         label: 'Image',         icon: 'image' },
-    { id: 'vision',        label: 'Vision',        icon: 'visibility' },
     { id: 'audio',         label: 'Audio',         icon: 'graphic_eq' },
     { id: 'video',         label: 'Video',         icon: 'videocam' },
     { id: 'transcription', label: 'Transcribe',    icon: 'mic' },
@@ -110,9 +109,6 @@ export default function ChatPage() {
     ],
     video: [
       { id:'grok-video', name:'Grok Video', desc:'xAI video generation', context:'70', pro:false, capabilities:['vision'] },
-    ],
-    vision: [
-      { id:'openai', name:'GPT-4o Vision', desc:'Vision understanding', context:'1K', pro:false, capabilities:['vision'] },
     ],
     transcription: [
       { id:'whisper-large-v3', name:'Whisper Large V3', desc:'Speech-to-text', context:'1.3K', pro:false, capabilities:['audio-in'] },
