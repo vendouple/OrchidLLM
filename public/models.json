@@ -707,12 +707,14 @@
                 ],
                 "pro": false,
                 "caching": false
-            },
+            }
+        ],
+        "audio": [
             {
                 "id": "elevenlabs",
                 "name": "ElevenLabs v3 TTS",
                 "desc": "Expressive voices with emotions",
-                "context": "45",
+                "context": "50",
                 "capabilities": [
                     "audio-out"
                 ],
