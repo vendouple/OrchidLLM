@@ -40,6 +40,7 @@ export default function ChatPage() {
   const [systemPrompt, setSystemPrompt] = useState('');
   const [demoUiMode, setDemoUiMode] = useState(false);
   const [isDarkMode, setIsDarkMode] = useState(false);
+  const [byopKeyInput, setByopKeyInput] = useState('');
   // Models loaded from public/models.json
   const [modelsData, setModelsData] = useState<Record<string, {id:string;name:string;desc:string;context:string;pro:boolean;capabilities:string[]}[]>>({});
   // Suggestions loaded from suggestionstrip.json, rotated per category
@@ -243,6 +244,60 @@ export default function ChatPage() {
     return () => document.removeEventListener('click', handleClick);
   }, [showDropup]);
 
+  // Persist state to localStorage (like legacy saveState)
+  useEffect(() => {
+    try {
+      localStorage.setItem('orchidllm_ui_state', JSON.stringify({
+        systemPrompt,
+        demoUiMode,
+        byopKeyInput,
+        textTools,
+        textToolModels,
+        activeToolCat,
+        enhanceModel,
+      }));
+    } catch (e) { /* ignore */ }
+  }, [systemPrompt, demoUiMode, byopKeyInput, textTools, textToolModels, activeToolCat, enhanceModel]);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('orchidllm_ui_state');
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.systemPrompt) setSystemPrompt(data.systemPrompt);
+        if (data.demoUiMode !== undefined) setDemoUiMode(data.demoUiMode);
+        if (data.byopKeyInput) setByopKeyInput(data.byopKeyInput);
+        if (data.textTools) setTextTools(data.textTools);
+        if (data.textToolModels) setTextToolModels(data.textToolModels);
+        if (data.activeToolCat) setActiveToolCat(data.activeToolCat);
+        if (data.enhanceModel) setEnhanceModel(data.enhanceModel);
+      }
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  // Settings dialog close handler - save settings
+  useEffect(() => {
+    const dlg = settingsDlgRef.current as any;
+    if (!dlg) return;
+    const handleClose = () => {
+      // Save settings on close (like legacy)
+      try {
+        localStorage.setItem('orchidllm_ui_state', JSON.stringify({
+          systemPrompt,
+          demoUiMode,
+          byopKeyInput,
+          textTools,
+          textToolModels,
+          activeToolCat,
+          enhanceModel,
+        }));
+      } catch (e) { /* ignore */ }
+    };
+    dlg.addEventListener('closed', handleClose);
+    return () => dlg.removeEventListener('closed', handleClose);
+  }, [systemPrompt, demoUiMode, byopKeyInput, textTools, textToolModels, activeToolCat, enhanceModel]);
+
   // Legacy-matching newChat: just resets state, does NOT persist an empty chat
   const handleNewChat = () => {
     if (isTempChat) toggleTempChat();
@@ -402,6 +457,22 @@ export default function ChatPage() {
     showToast(`${feature} is coming soon`, 'hourglass_top');
   };
 
+  // Export all history (all chats)
+  const exportHistory = () => {
+    const data = JSON.stringify(chats, null, 2);
+    const a = document.createElement('a');
+    a.href = 'data:application/json;charset=utf-8,' + encodeURIComponent(data);
+    a.download = `orchidllm-history-${Date.now()}.json`;
+    a.click();
+    showToast('History exported', 'download');
+  };
+
+  // Set API mode (demo or byop)
+  const setApiModeHandler = (mode: string) => {
+    // This should update the settings store - for now we'll use useSettingsStore
+    showToast(`API mode: ${mode}`, 'swap_horiz');
+  };
+
   // Open settings via M3E dialog's own .show() so it can reopen after close
   const openSettings = () => {
     const dlg = settingsDlgRef.current as any;
@@ -454,6 +525,7 @@ export default function ChatPage() {
   // Demo UI mode — populate fake chats matching legacy
   const applyDemoUiMode = (on: boolean) => {
     setDemoUiMode(on);
+    setShowDemoDataBanner(on);
     if (on) {
       const now = Date.now();
       const demoData: Record<string, any> = {
@@ -501,10 +573,12 @@ export default function ChatPage() {
         const data = JSON.parse(e.target?.result as string);
         if (typeof data === 'object' && data.id) {
           useChatStore.setState(state => ({ chats: { ...state.chats, [data.id]: data } }));
-          showToast('Chat imported!', 'upload');
+          showToast('Chat imported! Reloading...', 'upload');
+          setTimeout(() => window.location.reload(), 1000);
         } else if (typeof data === 'object') {
           useChatStore.setState(state => ({ chats: { ...state.chats, ...data } }));
-          showToast('History imported!', 'upload');
+          showToast('History imported! Reloading...', 'upload');
+          setTimeout(() => window.location.reload(), 1000);
         }
       } catch { showToast('Invalid file format', 'error'); }
     };
@@ -521,7 +595,17 @@ export default function ChatPage() {
   };
 
   const toggleComposerExpand = () => {
-    setComposerExpanded(prev => !prev);
+    setComposerExpanded(prev => {
+      const next = !prev;
+      // Update DOM classes and attributes like legacy
+      document.body.classList.toggle('composer-expanded', next);
+      document.querySelector('.input-row')?.classList.toggle('expanded', next);
+      const icon = document.getElementById('composer-expand-icon');
+      const btn = document.getElementById('composer-expand-btn');
+      if (icon) icon.setAttribute('name', next ? 'close_fullscreen' : 'open_in_full');
+      if (btn) btn.title = next ? 'Collapse composer' : 'Expand composer';
+      return next;
+    });
   };
 
   const applyPaletteVariant = (variantId: number) => {
@@ -611,7 +695,7 @@ export default function ChatPage() {
             <span className="ms">add</span> New Chat
           </button>
           <div className="temp-wrap" style={{ position: 'relative' }}>
-            <button className={`temp-btn ${isTempChat ? 'active' : ''}`} id="temp-btn" type="button" aria-label="Temporary chat" onClick={() => toggleTempChat()}>
+            <button className={`temp-btn ${isTempChat ? 'active' : ''}`} id="temp-btn" type="button" aria-label="Temporary chat" aria-pressed={isTempChat} onClick={() => toggleTempChat()}>
               <span className="ms">schedule</span>
               {isTempChat && <div className="temp-dot-badge"></div>}
             </button>
@@ -713,7 +797,7 @@ export default function ChatPage() {
               <span className="ms sm">theaters</span>
               Demo Data — Sample chats and model states loaded
             </div>
-            <m3e-button variant="outlined" size="extra-small" id="demo-data-exit-btn" type="button" onClick={() => setShowDemoDataBanner(false)}>
+            <m3e-button variant="outlined" size="extra-small" id="demo-data-exit-btn" type="button" onClick={() => applyDemoUiMode(false)}>
               Exit Demo
             </m3e-button>
           </div>
@@ -756,7 +840,7 @@ export default function ChatPage() {
             <m3e-icon-button id="mobile-new-chat-btn" title="New chat" onClick={handleNewChat}>
               <m3e-icon name="add_comment"></m3e-icon>
             </m3e-icon-button>
-            <m3e-icon-button id="mobile-more-btn" title="Chat actions" onClick={() => setShowMobileMore(!showMobileMore)}>
+            <m3e-icon-button id="mobile-more-btn" title="Chat actions" onClick={(e) => { e.stopPropagation(); setShowMobileMore(!showMobileMore); }}>
               <m3e-icon name="more_vert"></m3e-icon>
             </m3e-icon-button>
           </div>
@@ -770,7 +854,7 @@ export default function ChatPage() {
           <button type="button" onClick={() => { exportCurrentChat(); setShowMobileMore(false); }}>
             <span className="ms sm">ios_share</span>Export chat
           </button>
-          <button type="button" onClick={() => { showComingSoon('Feedback'); setShowMobileMore(false); }}>
+          <button type="button" disabled onClick={() => { showComingSoon('Feedback'); setShowMobileMore(false); }}>
             <span className="ms sm">feedback</span>Feedback (soon)
           </button>
         </div>
@@ -796,7 +880,7 @@ export default function ChatPage() {
               <span className="hide-mobile">Demo mode</span>
             </div>
           )}
-          <m3e-icon-button id="desktop-more-btn" title="Chat actions">
+          <m3e-icon-button id="desktop-more-btn" title="Chat actions" onClick={(e) => { e.stopPropagation(); setShowMobileMore(!showMobileMore); }}>
             <m3e-icon name="more_vert"></m3e-icon>
           </m3e-icon-button>
         </div>
@@ -906,7 +990,7 @@ export default function ChatPage() {
               <div id="tools-wrap" style={{ position: 'relative', display: 'inline-flex', alignItems: 'center' }}>
                 <m3e-button-group variant="connected" className="composer-segbar" id="composer-m3e-segbar">
                   {/* Composer model selector button - icon+badge+name match legacy */}
-                  <m3e-button variant="outlined" id="model-split-btn" type="button" aria-label="Select model" onClick={() => setShowDropup(!showDropup)}>
+                  <m3e-button variant="outlined" id="model-split-btn" type="button" aria-label="Select model" onClick={(e) => { e.stopPropagation(); setShowDropup(!showDropup); }}>
                     <m3e-icon slot="icon" name={categories.find(c => c.id === activeCat)?.icon ?? 'psychology'}></m3e-icon>
                     <span id="cat-badge" className={`cat-badge cb-${activeCat} hide-mobile`}>
                       {categories.find(c => c.id === activeCat)?.label ?? 'Text'}
@@ -918,7 +1002,7 @@ export default function ChatPage() {
 
                   {/* Tools btn — only for text + tool-capable models (based on COMMITTED activeCat) */}
                   {(activeCat === 'text') && (
-                    <m3e-icon-button variant="outlined" id="tools-btn" type="button" title="Tools" aria-label="Tools" onClick={() => setShowToolsPop(!showToolsPop)}>
+                    <m3e-icon-button variant="outlined" id="tools-btn" type="button" title="Tools" aria-label="Tools" onClick={(e) => { e.stopPropagation(); setShowToolsPop(!showToolsPop); }}>
                       <m3e-icon name="tune"></m3e-icon>
                     </m3e-icon-button>
                   )}
@@ -1005,7 +1089,7 @@ export default function ChatPage() {
               </m3e-button-group>
 
               {/* Attach button */}
-              <m3e-icon-button id="attach-btn" title="Attach file" style={{ flexShrink: 0 }}>
+              <m3e-icon-button id="attach-btn" title="Attach file" style={{ flexShrink: 0 }} onClick={() => document.getElementById('file-input')?.click()}>
                 <m3e-icon name="attach_file"></m3e-icon>
               </m3e-icon-button>
             </div>
@@ -1046,46 +1130,55 @@ export default function ChatPage() {
               {filteredModels.length === 0 && (
                 <div style={{ padding:'20px', textAlign:'center', color:'var(--out)', fontSize:'13px' }}>No models found</div>
               )}
-              {filteredModels.map((model) => (
-                <div
-                  key={model.id}
-                  className={`model-item ${selectedModel === model.id ? 'sel' : ''}`}
-                  onClick={() => {
-                    setSelectedModel(model.id);
-                    setActiveCat(selectedCategory);
-                    setShowDropup(false);
-                  }}
-                >
-                  <div className="mi-info">
-                    <div className="mi-name-row">
-                      <div className="mi-name">{model.name}</div>
-                      {model.pro && <span className="mi-pro">Pro</span>}
-                    </div>
-                    <div className="mi-desc">{model.desc}</div>
-                    {/* Capability + context chips */}
-                    {((model.capabilities?.length > 0) || model.context) && (
-                      <div className="mi-caps">
-                        {model.context && <span className="cap-chip"><span className="ms">data_object</span>{model.context}</span>}
-                        {(model.capabilities || []).map(cap => {
-                          const META: Record<string,{label:string;icon:string}> = {
-                            vision:    {label:'Vision',    icon:'visibility'},
-                            reasoning: {label:'Reasoning', icon:'psychology'},
-                            tools:     {label:'Tools',     icon:'build'},
-                            search:    {label:'Search',    icon:'search'},
-                            code:      {label:'Code',      icon:'code'},
-                            'code-exec':{label:'Code Exec',icon:'terminal'},
-                            caching:   {label:'Caching',   icon:'memory'},
-                            'audio-in':{label:'Audio In',  icon:'mic'},
-                            'audio-out':{label:'Audio Out',icon:'volume_up'},
-                          };
-                          const cm = META[cap]; if (!cm) return null;
-                          return <span key={cap} className="cap-chip"><span className="ms">{cm.icon}</span>{cm.label}</span>;
-                        })}
+              {filteredModels.map((model) => {
+                const isProBlocked = apiMode === 'demo' && model.pro;
+                const disabled = isProBlocked ? { opacity: '.45', pointerEvents: 'none' as const, filter: 'grayscale(0.25)' } : {};
+                return (
+                  <div
+                    key={model.id}
+                    className={`model-item ${selectedModel === model.id ? 'sel' : ''}`}
+                    style={disabled}
+                    onClick={() => {
+                      if (isProBlocked) return;
+                      setSelectedModel(model.id);
+                      setActiveCat(selectedCategory);
+                      setShowDropup(false);
+                    }}
+                  >
+                    <div className="mi-info">
+                      <div className="mi-name-row">
+                        <div className="mi-name">{model.name}</div>
+                        {model.pro && <span className="mi-pro">Pro</span>}
                       </div>
-                    )}
+                      <div className="mi-desc">{model.desc}</div>
+                      {isProBlocked && (
+                        <div className="mi-desc" style={{ color: 'var(--t)' }}>Pro model unavailable in Demo Mode</div>
+                      )}
+                      {/* Capability + context chips */}
+                      {((model.capabilities?.length > 0) || model.context) && (
+                        <div className="mi-caps">
+                          {model.context && <span className="cap-chip"><span className="ms">data_object</span>{model.context}</span>}
+                          {(model.capabilities || []).map(cap => {
+                            const META: Record<string,{label:string;icon:string}> = {
+                              vision:    {label:'Vision',    icon:'visibility'},
+                              reasoning: {label:'Reasoning', icon:'psychology'},
+                              tools:     {label:'Tools',     icon:'build'},
+                              search:    {label:'Search',    icon:'search'},
+                              code:      {label:'Code',      icon:'code'},
+                              'code-exec':{label:'Code Exec',icon:'terminal'},
+                              caching:   {label:'Caching',   icon:'memory'},
+                              'audio-in':{label:'Audio In',  icon:'mic'},
+                              'audio-out':{label:'Audio Out',icon:'volume_up'},
+                            };
+                            const cm = META[cap]; if (!cm) return null;
+                            return <span key={cap} className="cap-chip"><span className="ms">{cm.icon}</span>{cm.label}</span>;
+                          })}
+                        </div>
+                      )}
+                    </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           </div>
         </div>
@@ -1214,7 +1307,7 @@ export default function ChatPage() {
                   </div>
                 </div>
                 <div className="mode-cards" id="api-mode-cards">
-                  <article className={`mode-card ${apiMode === 'demo' ? 'active' : ''}`} data-mode-card="demo" tabIndex={0} role="button" aria-pressed={apiMode === 'demo'}>
+                  <article className={`mode-card ${apiMode === 'demo' ? 'active' : ''}`} data-mode-card="demo" tabIndex={0} role="button" aria-pressed={apiMode === 'demo'} onClick={() => setApiModeHandler('demo')}>
                     <div className="mode-card-head">
                       <div className="mode-card-title">Demo Mode</div>
                       <label className="mode-radio" aria-label="Select demo mode">
@@ -1227,7 +1320,7 @@ export default function ChatPage() {
                     </div>
                   </article>
 
-                  <article className={`mode-card ${apiMode === 'bpolly' ? 'active' : ''}`} data-mode-card="byop" tabIndex={0} role="button" aria-pressed={apiMode === 'bpolly'}>
+                  <article className={`mode-card ${apiMode === 'bpolly' ? 'active' : ''}`} data-mode-card="byop" tabIndex={0} role="button" aria-pressed={apiMode === 'bpolly'} onClick={() => setApiModeHandler('bpolly')}>
                     <div className="mode-card-head">
                       <div className="mode-card-title">BYOP</div>
                       <label className="mode-radio" aria-label="Select BYOP mode">
@@ -1237,7 +1330,13 @@ export default function ChatPage() {
                     <div className="mode-card-short">Bring your own Pollinations key.</div>
                     <div className="mode-card-expanded">
                       <p>Use your own API key for personal usage and fewer demo restrictions. The key is stored locally in your browser.</p>
-                      <input className="s-input" id="byop-key-input" type="password" placeholder="Enter your BYOP key" />
+                      <input className="s-input" id="byop-key-input" type="password" placeholder="Enter your BYOP key" value={byopKeyInput} onChange={(e) => setByopKeyInput(e.target.value)} />
+                      <div className="btn-row">
+                        <m3e-button variant="outlined" id="byop-link-btn" type="button" onClick={() => window.open('https://enter.pollinations.ai', '_blank', 'noopener,noreferrer')}>
+                          <m3e-icon slot="icon" name="link"></m3e-icon>
+                          Get Key
+                        </m3e-button>
+                      </div>
                     </div>
                   </article>
                 </div>
@@ -1249,7 +1348,7 @@ export default function ChatPage() {
             <div className="settings-panel-inner">
               <div className="sec-title">Chat History</div>
               <div className="btn-row">
-                <m3e-button variant="outlined" id="export-btn" onClick={exportCurrentChat}>
+                <m3e-button variant="outlined" id="export-btn" onClick={exportHistory}>
                   <m3e-icon slot="icon" name="download"></m3e-icon> Export
                 </m3e-button>
                 <label htmlFor="import-file" style={{ display: 'contents' }}>
