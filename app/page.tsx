@@ -244,6 +244,60 @@ export default function ChatPage() {
     return () => document.removeEventListener('click', handleClick);
   }, [showDropup]);
 
+  // Persist state to localStorage (like legacy saveState)
+  useEffect(() => {
+    try {
+      localStorage.setItem('orchidllm_ui_state', JSON.stringify({
+        systemPrompt,
+        demoUiMode,
+        byopKeyInput,
+        textTools,
+        textToolModels,
+        activeToolCat,
+        enhanceModel,
+      }));
+    } catch (e) { /* ignore */ }
+  }, [systemPrompt, demoUiMode, byopKeyInput, textTools, textToolModels, activeToolCat, enhanceModel]);
+
+  // Load state from localStorage on mount
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('orchidllm_ui_state');
+      if (saved) {
+        const data = JSON.parse(saved);
+        if (data.systemPrompt) setSystemPrompt(data.systemPrompt);
+        if (data.demoUiMode !== undefined) setDemoUiMode(data.demoUiMode);
+        if (data.byopKeyInput) setByopKeyInput(data.byopKeyInput);
+        if (data.textTools) setTextTools(data.textTools);
+        if (data.textToolModels) setTextToolModels(data.textToolModels);
+        if (data.activeToolCat) setActiveToolCat(data.activeToolCat);
+        if (data.enhanceModel) setEnhanceModel(data.enhanceModel);
+      }
+    } catch (e) { /* ignore */ }
+  }, []);
+
+  // Settings dialog close handler - save settings
+  useEffect(() => {
+    const dlg = settingsDlgRef.current as any;
+    if (!dlg) return;
+    const handleClose = () => {
+      // Save settings on close (like legacy)
+      try {
+        localStorage.setItem('orchidllm_ui_state', JSON.stringify({
+          systemPrompt,
+          demoUiMode,
+          byopKeyInput,
+          textTools,
+          textToolModels,
+          activeToolCat,
+          enhanceModel,
+        }));
+      } catch (e) { /* ignore */ }
+    };
+    dlg.addEventListener('closed', handleClose);
+    return () => dlg.removeEventListener('closed', handleClose);
+  }, [systemPrompt, demoUiMode, byopKeyInput, textTools, textToolModels, activeToolCat, enhanceModel]);
+
   // Legacy-matching newChat: just resets state, does NOT persist an empty chat
   const handleNewChat = () => {
     if (isTempChat) toggleTempChat();
@@ -641,7 +695,7 @@ export default function ChatPage() {
             <span className="ms">add</span> New Chat
           </button>
           <div className="temp-wrap" style={{ position: 'relative' }}>
-            <button className={`temp-btn ${isTempChat ? 'active' : ''}`} id="temp-btn" type="button" aria-label="Temporary chat" onClick={() => toggleTempChat()}>
+            <button className={`temp-btn ${isTempChat ? 'active' : ''}`} id="temp-btn" type="button" aria-label="Temporary chat" aria-pressed={isTempChat} onClick={() => toggleTempChat()}>
               <span className="ms">schedule</span>
               {isTempChat && <div className="temp-dot-badge"></div>}
             </button>
