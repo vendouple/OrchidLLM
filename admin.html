@@ -3,1025 +3,1020 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Admin Dashboard - OrchidLLM</title>
+<title>Admin Dashboard - OneLLM</title>
+<meta name="description" content="Admin dashboard for managing API keys and demo sessions on OneLLM.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
 <link rel="stylesheet" href="./styles.css?v=2">
 <style>
-/* Admin Dashboard Specific Styles */
+/* ── Admin Shell ────────────────────────────────────────────── */
 :root {
---admin-card-bg: rgba(255,255,255,0.8);
---admin-border: rgba(0,0,0,0.08);
+  --admin-card: rgba(255,255,255,0.82);
+  --admin-border: rgba(0,0,0,0.08);
+  --demo-green: #16a34a;
+  --demo-green-bg: #dcfce7;
+  --demo-red: #dc2626;
+  --demo-red-bg: #fee2e2;
+  --demo-amber: #d97706;
+  --demo-amber-bg: #fef3c7;
+  --demo-blue: #2563eb;
+  --demo-blue-bg: #dbeafe;
+  --demo-purple: #7c3aed;
+  --demo-purple-bg: #ede9fe;
 }
-
 [data-theme="dark"] {
---admin-card-bg: rgba(30,30,30,0.8);
---admin-border: rgba(255,255,255,0.08);
+  --admin-card: rgba(28,28,32,0.85);
+  --admin-border: rgba(255,255,255,0.08);
+  --demo-green-bg: rgba(22,163,74,0.15);
+  --demo-red-bg: rgba(220,38,38,0.15);
+  --demo-amber-bg: rgba(217,119,6,0.15);
+  --demo-blue-bg: rgba(37,99,235,0.15);
+  --demo-purple-bg: rgba(124,58,237,0.15);
 }
 
-/* Sidebar Navigation */
+body { margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+
+/* Sidebar */
+.admin-sidebar {
+  width: 256px; min-width: 256px;
+  border-right: 1px solid var(--admin-border);
+  display: flex; flex-direction: column;
+  background: var(--surf);
+  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+}
+.sidebar-logo { padding: 20px; border-bottom: 1px solid var(--admin-border); }
+.sidebar-logo-inner { display: flex; align-items: center; gap: 12px; }
+.sidebar-logo-icon { width: 42px; height: 42px; min-width: 42px; border-radius: 12px; background: var(--p-c); display: flex; align-items: center; justify-content: center; }
+.sidebar-logo-text { font-size: 17px; font-weight: 800; line-height: 1.2; }
+.sidebar-logo-sub { font-size: 11px; color: var(--out); margin-top: 2px; }
+
+.sidebar-nav { padding: 12px; flex: 1; }
+.nav-group-label { font-size: 11px; font-weight: 600; color: var(--out); text-transform: uppercase; letter-spacing: .06em; padding: 8px 12px 4px; }
 .nav-item {
-transition: all 0.2s;
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border-radius: 12px;
+  color: var(--on-surf); text-decoration: none; font-weight: 600;
+  font-size: 14px; transition: all .18s; cursor: pointer;
+  border: none; background: none; width: 100%; text-align: left;
 }
-.nav-item:hover {
-background: var(--out-v);
-}
-.nav-item.active {
-background: var(--p-c);
-}
+.nav-item:hover { background: var(--out-v); }
+.nav-item.active { background: var(--p-c); color: var(--p); }
+.nav-item .ms { font-size: 20px; transition: inherit; }
+.nav-item.active .ms { color: var(--p); }
+.nav-badge { margin-left: auto; background: var(--p); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; min-width: 20px; text-align: center; }
 
-/* Main Container */
-.admin-container {
-flex: 1;
-padding: 24px;
-overflow-y: auto;
-}
+.sidebar-foot { padding: 16px; border-top: 1px solid var(--admin-border); }
+.user-row { display: flex; align-items: center; gap: 10px; }
+.user-avatar-sm { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: var(--sh1); }
+.user-avatar-icon { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(145deg, var(--p), var(--t)); color: #fff; display: flex; align-items: center; justify-content: center; }
+.user-name { font-size: 13px; font-weight: 700; }
+.user-role { font-size: 11px; color: var(--p); font-weight: 600; }
+.logout-btn { margin-left: auto; width: 32px; height: 32px; border: none; background: var(--out-v); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .18s; }
+.logout-btn:hover { background: var(--err-c); }
 
-.admin-header {
-display: flex;
-align-items: center;
-justify-content: space-between;
-margin-bottom: 24px;
-padding-bottom: 16px;
-border-bottom: 1px solid var(--out-v);
-}
+/* Main content */
+.admin-main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }
+.admin-topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
+.admin-title { font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
+.admin-title .ms { font-size: 24px; color: var(--p); }
 
-.admin-title {
-display: flex;
-align-items: center;
-gap: 12px;
-}
-
-.admin-title h1 {
-font-size: 24px;
-font-weight: 800;
-margin: 0;
-}
-
-.admin-title .ms {
-font-size: 28px;
-color: var(--p);
-}
-
-.admin-header-actions {
-display: flex;
-gap: 12px;
-}
-
+/* Stat grid */
+.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; padding: 20px 24px; }
 .stat-card {
-  background: var(--admin-card-bg);
+  background: var(--admin-card);
   border: 1px solid var(--admin-border);
-  border-radius: 16px;
-  padding: 20px;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  border-radius: 16px; padding: 18px;
+  display: flex; flex-direction: column; gap: 10px;
+  backdrop-filter: blur(8px);
+  transition: transform .15s, box-shadow .15s;
 }
+.stat-card:hover { transform: translateY(-2px); box-shadow: var(--sh2); }
+.stat-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
+.stat-icon.blue   { background: var(--demo-blue-bg); color: var(--demo-blue); }
+.stat-icon.green  { background: var(--demo-green-bg); color: var(--demo-green); }
+.stat-icon.purple { background: var(--demo-purple-bg); color: var(--demo-purple); }
+.stat-icon.amber  { background: var(--demo-amber-bg); color: var(--demo-amber); }
+.stat-icon.red    { background: var(--demo-red-bg); color: var(--demo-red); }
+.stat-icon.p { background: var(--p-c); color: var(--p); }
+.stat-value { font-size: 28px; font-weight: 800; line-height: 1; }
+.stat-label { font-size: 12px; color: var(--out); font-weight: 500; }
 
-.stat-card .stat-icon {
-  width: 40px;
-  height: 40px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--p-c);
-  color: var(--p);
-}
+/* Chart */
+.chart-section { padding: 0 24px 20px; }
+.chart-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 16px; padding: 20px; }
+.chart-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
+.chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
+.chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
+.chart-bar { width: 100%; background: var(--p-c); border-radius: 4px 4px 0 0; transition: background .2s; min-height: 2px; cursor: pointer; }
+.chart-bar:hover { background: var(--p); }
+.chart-label { font-size: 9px; color: var(--out); font-weight: 500; white-space: nowrap; }
 
-.stat-card .stat-value {
-  font-size: 32px;
-  font-weight: 800;
-  line-height: 1;
-}
+/* Section */
+.section-wrap { padding: 0 24px 24px; flex: 1; }
+.section-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 16px; overflow: hidden; backdrop-filter: blur(8px); }
+.section-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--admin-border); gap: 12px; flex-wrap: wrap; }
+.section-head-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+.section-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
-.stat-card .stat-label {
-  font-size: 13px;
-  color: var(--out);
-  font-weight: 500;
+/* Filter chips */
+.filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
+.chip {
+  padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+  border: 1.5px solid var(--admin-border); background: none; cursor: pointer;
+  color: var(--on-surf); transition: all .15s;
 }
+.chip:hover { background: var(--out-v); }
+.chip.active { background: var(--p); border-color: var(--p); color: #fff; }
 
-/* Tabs */
-.admin-tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 24px;
-  border-bottom: 1px solid var(--out-v);
-  padding-bottom: 8px;
+/* Table */
+.data-table-wrap { overflow-x: auto; }
+.data-table { width: 100%; border-collapse: collapse; }
+.data-table th {
+  padding: 10px 14px; text-align: left;
+  font-size: 11px; font-weight: 600; color: var(--out); text-transform: uppercase; letter-spacing: .06em;
+  background: rgba(0,0,0,0.025); border-bottom: 1px solid var(--admin-border); white-space: nowrap;
 }
+[data-theme="dark"] .data-table th { background: rgba(255,255,255,0.025); }
+.data-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--admin-border); vertical-align: middle; }
+.data-table tr:last-child td { border-bottom: none; }
+.data-table tr:hover td { background: rgba(0,0,0,0.015); }
+[data-theme="dark"] .data-table tr:hover td { background: rgba(255,255,255,0.015); }
 
-.admin-tab {
-  padding: 10px 20px;
-  border: none;
-  background: none;
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--out);
-  cursor: pointer;
-  border-radius: 8px 8px 0 0;
-  transition: all 0.2s;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
+/* Badges */
+.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
+.badge.green  { background: var(--demo-green-bg); color: var(--demo-green); }
+.badge.red    { background: var(--demo-red-bg); color: var(--demo-red); }
+.badge.amber  { background: var(--demo-amber-bg); color: var(--demo-amber); }
+.badge.blue   { background: var(--demo-blue-bg); color: var(--demo-blue); }
+.badge.purple { background: var(--demo-purple-bg); color: var(--demo-purple); }
+.badge.grey   { background: var(--out-v); color: var(--out); }
 
-.admin-tab:hover {
-  background: var(--p-c);
-  color: var(--p);
-}
+/* Mono text */
+.mono { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 12px; background: var(--out-v); padding: 2px 6px; border-radius: 5px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; display: inline-block; white-space: nowrap; vertical-align: middle; cursor: help; }
 
-.admin-tab.active {
-  background: var(--p);
-  color: #fff;
-}
-
-/* Keys Table */
-.keys-section {
-  background: var(--admin-card-bg);
-  border: 1px solid var(--admin-border);
-  border-radius: 16px;
-  overflow: hidden;
-}
-
-.keys-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--admin-border);
-}
-
-.keys-header h2 {
-  font-size: 18px;
-  font-weight: 700;
-  margin: 0;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.keys-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.keys-table th,
-.keys-table td {
-  padding: 12px 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--admin-border);
-}
-
-.keys-table th {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--out);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  background: rgba(0,0,0,0.02);
-}
-
-[data-theme="dark"] .keys-table th {
-  background: rgba(255,255,255,0.02);
-}
-
-.keys-table tr:last-child td {
-  border-bottom: none;
-}
-
-.keys-table tr:hover td {
-  background: rgba(0,0,0,0.02);
-}
-
-[data-theme="dark"] .keys-table tr:hover td {
-  background: rgba(255,255,255,0.02);
-}
-
-.key-value {
-  font-family: 'SF Mono', Monaco, monospace;
-  font-size: 13px;
-  background: var(--out-v);
-  padding: 4px 8px;
-  border-radius: 6px;
-  display: inline-block;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.key-type-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 10px;
-  border-radius: 20px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.key-type-badge.demo {
-  background: var(--t-c);
-  color: var(--t);
-}
-
-.key-type-badge.global {
-  background: var(--p-c);
-  color: var(--p);
-}
-
-.key-status {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.key-status.active {
-  color: var(--ok);
-}
-
-.key-status.inactive {
-  color: var(--err);
-}
-
-.key-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.key-actions button {
-  width: 32px;
-  height: 32px;
-  border: none;
-  background: var(--out-v);
-  border-radius: 8px;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.2s;
-}
-
-.key-actions button:hover {
-  background: var(--p-c);
-  color: var(--p);
-}
-
-.key-actions button.delete:hover {
-  background: var(--err-c);
-  color: var(--err);
-}
+/* Row actions */
+.row-actions { display: flex; gap: 4px; }
+.icon-btn { width: 30px; height: 30px; border: none; background: var(--out-v); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; color: var(--on-surf); }
+.icon-btn:hover { background: var(--p-c); color: var(--p); }
+.icon-btn.red:hover { background: var(--demo-red-bg); color: var(--demo-red); }
+.icon-btn .ms { font-size: 16px; }
 
 /* Modal */
-.admin-modal {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0,0,0,0.5);
-  display: none;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
+.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 500; backdrop-filter: blur(4px); }
+.modal-overlay.show { display: flex; }
+.modal-box { background: var(--surf); border-radius: 24px; padding: 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; box-shadow: var(--sh3); animation: pop .2s ease; }
+@keyframes pop { from { transform: scale(.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+.modal-head h3 { font-size: 19px; font-weight: 700; margin: 0; }
+.modal-close { width: 36px; height: 36px; border: none; background: var(--out-v); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+.form-stack { display: flex; flex-direction: column; gap: 14px; }
+.form-group { display: flex; flex-direction: column; gap: 5px; }
+.form-group label { font-size: 12px; font-weight: 600; color: var(--out); }
+.form-group input, .form-group select, .form-group textarea {
+  padding: 10px 14px; border: 1.5px solid var(--out-v); border-radius: 10px;
+  font-size: 14px; background: var(--surf); color: var(--on-surf); transition: border-color .15s;
+  font-family: inherit;
 }
+.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--p); }
+.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.modal-actions { display: flex; gap: 10px; margin-top: 6px; }
+.modal-actions button { flex: 1; padding: 11px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; }
+.btn-primary { background: var(--p); color: #fff; }
+.btn-primary:hover { filter: brightness(1.1); }
+.btn-danger { background: var(--demo-red-bg); color: var(--demo-red); }
+.btn-danger:hover { background: var(--demo-red); color: #fff; }
+.btn-secondary { background: var(--out-v); color: var(--on-surf); }
+.btn-secondary:hover { background: var(--out-v2); }
 
-.admin-modal.show {
-  display: flex;
-}
-
-.modal-content {
-  background: var(--surf);
-  border-radius: 24px;
-  padding: 24px;
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--sh3);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 20px;
-}
-
-.modal-header h3 {
-  font-size: 20px;
-  font-weight: 700;
-  margin: 0;
-}
-
-.modal-close {
-  width: 36px;
-  height: 36px;
-  border: none;
-  background: var(--out-v);
-  border-radius: 50%;
-  cursor: pointer;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.modal-form {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.form-group label {
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--out);
-}
-
-.form-group input,
-.form-group select {
-  padding: 12px 16px;
-  border: 1px solid var(--out-v);
-  border-radius: 12px;
-  font-size: 14px;
-  background: var(--surf);
-  color: var(--on-surf);
-  transition: border-color 0.2s;
-}
-
-.form-group input:focus,
-.form-group select:focus {
-  outline: none;
-  border-color: var(--p);
-}
-
-.form-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 12px;
-}
-
-.modal-actions {
-  display: flex;
-  gap: 12px;
-  margin-top: 8px;
-}
-
-.modal-actions button {
-  flex: 1;
-  padding: 12px 20px;
-  border: none;
-  border-radius: 12px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-}
-
-.btn-primary {
-  background: var(--p);
-  color: #fff;
-}
-
-.btn-primary:hover {
-  filter: brightness(1.1);
-}
-
-.btn-secondary {
-  background: var(--out-v);
-  color: var(--on-surf);
-}
-
-.btn-secondary:hover {
-  background: var(--out-v2);
-}
-
-/* Empty State */
-.empty-state {
-  text-align: center;
-  padding: 48px 24px;
-  color: var(--out);
-}
-
-.empty-state .ms {
-  font-size: 48px;
-  margin-bottom: 16px;
-  opacity: 0.5;
-}
-
-.empty-state p {
-  font-size: 14px;
-}
-
-/* Loading */
-.loading-spinner {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 48px;
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--out-v);
-  border-top-color: var(--p);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
+/* Empty / Loading */
+.state-center { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; color: var(--out); gap: 10px; }
+.state-center .ms { font-size: 44px; opacity: .4; }
+.state-center p { font-size: 14px; margin: 0; }
+.spinner { width: 36px; height: 36px; border: 3px solid var(--out-v); border-top-color: var(--p); border-radius: 50%; animation: spin .9s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
 
 /* Toast */
-.admin-toast {
-  position: fixed;
-  bottom: 24px;
-  right: 24px;
-  padding: 12px 20px;
-  background: var(--surf);
-  border: 1px solid var(--admin-border);
-  border-radius: 12px;
-  box-shadow: var(--sh2);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  font-size: 14px;
-  font-weight: 500;
-  transform: translateY(100px);
-  opacity: 0;
-  transition: all 0.3s ease;
-  z-index: 1001;
+.toast {
+  position: fixed; bottom: 24px; right: 24px;
+  padding: 11px 18px; background: var(--surf); border: 1px solid var(--admin-border);
+  border-radius: 12px; box-shadow: var(--sh2); display: flex; align-items: center; gap: 9px;
+  font-size: 13px; font-weight: 500;
+  transform: translateY(120px); opacity: 0; transition: all .3s; z-index: 999;
 }
-
-.admin-toast.show {
-  transform: translateY(0);
-  opacity: 1;
-}
-
-.admin-toast.success {
-  border-color: var(--ok);
-}
-
-.admin-toast.success .ms {
-  color: var(--ok);
-}
-
-.admin-toast.error {
-  border-color: var(--err);
-}
-
-.admin-toast.error .ms {
-  color: var(--err);
-}
+.toast.show { transform: translateY(0); opacity: 1; }
+.toast.success { border-color: var(--demo-green); }
+.toast.success .ms { color: var(--demo-green); }
+.toast.error { border-color: var(--demo-red); }
+.toast.error .ms { color: var(--demo-red); }
 
 /* Responsive */
 @media (max-width: 768px) {
-  .admin-container {
-    padding: 16px;
-  }
-  
-  .admin-header {
-    flex-direction: column;
-    gap: 16px;
-    text-align: center;
-  }
-  
-  .keys-table {
-    display: block;
-    overflow-x: auto;
-  }
-  
-  .form-row {
-    grid-template-columns: 1fr;
-  }
+  .admin-sidebar { display: none; }
+  .stat-grid { grid-template-columns: 1fr 1fr; padding: 12px 14px; }
+  .section-wrap { padding: 0 14px 20px; }
+  .admin-topbar { padding: 14px 14px 0; }
+  .chart-section { padding: 0 14px 14px; }
 }
+
+/* Section pages */
+.page { display: none; flex-direction: column; }
+.page.active { display: flex; }
 </style>
 </head>
 <body>
 
-<m3e-theme id="app" color-scheme="light" style="display:flex; min-height:100vh;">
+<m3e-theme id="app" color-scheme="light" style="display:flex; min-height:100vh; background:var(--bg);">
 
-<!-- Sidebar with Login Section -->
-<aside id="admin-sidebar" style="width:260px; min-width:260px; border-right:1px solid var(--out-v); display:flex; flex-direction:column; background:var(--surf);">
-<div style="padding:20px; border-bottom:1px solid var(--out-v);">
-<div style="display:flex; align-items:center; gap:12px;">
-<div class="w-logo" style="width:42px;height:42px;min-width:42px; border-radius:12px;"><span class="ms fill" style="font-size:24px;">admin_panel_settings</span></div>
-<div style="display:flex; flex-direction:column;">
-<div style="font-size:18px; font-weight:800; line-height:1.2;">Admin Panel</div>
-<div style="font-size:11px; color:var(--out); margin-top:2px;">OrchidLLM Dashboard</div>
-</div>
-</div>
-</div>
-
-<!-- Navigation -->
-<nav style="padding:12px; flex:1;">
-<div class="nav-section" style="font-size:11px; font-weight:600; color:var(--out); text-transform:uppercase; letter-spacing:0.05em; padding:8px 12px;">Management</div>
-<a href="#keys" class="nav-item active" style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; color:var(--on-surf); text-decoration:none; background:var(--p-c);">
-<span class="ms" style="color:var(--p);">vpn_key</span>
-<span style="font-weight:600;">API Keys</span>
-</a>
-<a href="#usage" class="nav-item" style="display:flex; align-items:center; gap:10px; padding:10px 12px; border-radius:12px; color:var(--on-surf); text-decoration:none;">
-<span class="ms">analytics</span>
-<span style="font-weight:600;">Usage Logs</span>
-</a>
-</nav>
-
-<!-- Login Section at Bottom -->
-<div class="side-foot" style="padding:16px; border-top:1px solid var(--out-v); margin-top:auto;">
-<!-- Not logged in state -->
-<div id="login-section" style="display:flex; align-items:center; gap:10px;">
-<div class="user-avatar" style="width:36px;height:36px;border-radius:50%;background:linear-gradient(145deg, var(--p), var(--t));color:#fff;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;box-shadow:var(--sh1);">
-<span class="ms sm">person</span>
-</div>
-<div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
-<a href="/api/auth/github" style="text-decoration:none; color:var(--on-surf);">
-<span style="font-size:13px; font-weight:700; white-space:nowrap; text-overflow:ellipsis; overflow:hidden; color:var(--on-surf)">Sign in with GitHub</span>
-</a>
-<span style="font-size:11px; color:var(--out);">Admin access required</span>
-</div>
-</div>
-<!-- Logged in state -->
-<div id="user-section" style="display:none; align-items:center; gap:10px;">
-<img id="sidebar-avatar" src="" alt="Avatar" style="width:36px;height:36px;border-radius:50%;object-fit:cover;box-shadow:var(--sh1);">
-<div style="flex:1; display:flex; flex-direction:column; overflow:hidden;">
-<span id="sidebar-username" style="font-size:13px; font-weight:700; white-space:nowrap; text-overflow:ellipsis; overflow:hidden;">User</span>
-<span style="font-size:11px; color:var(--p); font-weight:600;">Admin</span>
-</div>
-<button onclick="logout()" style="width:32px;height:32px;border:none;background:var(--out-v);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;" title="Logout">
-<span class="ms sm" style="color:var(--out);">logout</span>
-</button>
-</div>
-</div>
-</aside>
-
-<div class="admin-container">
-<!-- Header -->
-<header class="admin-header">
-<div class="admin-title">
-<span class="ms">vpn_key</span>
-<h1>API Key Management</h1>
-</div>
-<div class="admin-header-actions">
-<m3e-button variant="filled" id="add-key-btn">
-<m3e-icon slot="icon" name="add"></m3e-icon>
-<span>Add Key</span>
-</m3e-button>
-</div>
-</header>
-
-  <!-- Stats -->
-  <div class="admin-stats" id="admin-stats">
-    <div class="stat-card">
-      <div class="stat-icon"><span class="ms">vpn_key</span></div>
-      <div class="stat-value" id="stat-active-keys">-</div>
-      <div class="stat-label">Active Keys</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon"><span class="ms">bolt</span></div>
-      <div class="stat-value" id="stat-demo-keys">-</div>
-      <div class="stat-label">Demo Keys</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon"><span class="ms">public</span></div>
-      <div class="stat-value" id="stat-global-keys">-</div>
-      <div class="stat-label">Global Keys</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon"><span class="ms">today</span></div>
-      <div class="stat-value" id="stat-requests-today">-</div>
-      <div class="stat-label">Requests Today</div>
-    </div>
-    <div class="stat-card">
-      <div class="stat-icon"><span class="ms">token</span></div>
-      <div class="stat-value" id="stat-total-tokens">-</div>
-      <div class="stat-label">Total Tokens</div>
+<!-- Sidebar -->
+<aside class="admin-sidebar" id="admin-sidebar">
+  <div class="sidebar-logo">
+    <div class="sidebar-logo-inner">
+      <div class="sidebar-logo-icon"><span class="ms fill" style="color:var(--p);font-size:22px;">admin_panel_settings</span></div>
+      <div>
+        <div class="sidebar-logo-text">Admin Panel</div>
+        <div class="sidebar-logo-sub">OneLLM Dashboard</div>
+      </div>
     </div>
   </div>
 
-  <!-- Keys Section -->
-<div class="keys-section" id="keys-section">
-<div id="keys-loading" class="loading-spinner">
-<div class="spinner"></div>
-</div>
+  <nav class="sidebar-nav">
+    <div class="nav-group-label">Overview</div>
+    <button class="nav-item active" id="nav-overview" onclick="switchPage('overview')">
+      <span class="ms">dashboard</span> Overview
+    </button>
 
-<table class="keys-table" id="keys-table" style="display:none;">
-<thead>
-<tr>
-          <th>Key</th>
-          <th>Name</th>
-          <th>Type</th>
-          <th>Status</th>
-          <th>RPM/RPD</th>
-          <th>Usage</th>
-          <th>Created</th>
-          <th>Actions</th>
-        </tr>
-      </thead>
-      <tbody id="keys-tbody">
-      </tbody>
-    </table>
-    
-    <div id="keys-empty" class="empty-state" style="display:none;">
-      <span class="ms">vpn_key_off</span>
-      <p>No API keys found. Create one to get started.</p>
-    </div>
-  </div>
+    <div class="nav-group-label" style="margin-top:8px;">Management</div>
+    <button class="nav-item" id="nav-keys" onclick="switchPage('keys')">
+      <span class="ms">vpn_key</span> API Keys
+    </button>
+    <button class="nav-item" id="nav-demo" onclick="switchPage('demo')">
+      <span class="ms">person_play</span> Demo Sessions
+      <span class="nav-badge" id="demo-badge" style="display:none;">0</span>
+    </button>
+    <button class="nav-item" id="nav-usage" onclick="switchPage('usage')">
+      <span class="ms">analytics</span> Usage Logs
+    </button>
+  </nav>
 
-  <!-- Usage Section (hidden by default) -->
-  <div class="keys-section" id="usage-section" style="display:none;">
-    <div class="keys-header">
-      <h2><span class="ms">analytics</span> Recent Usage</h2>
+  <div class="sidebar-foot">
+    <div id="login-section" class="user-row">
+      <div class="user-avatar-icon"><span class="ms sm">person</span></div>
+      <div style="flex:1;">
+        <a href="/api/auth/github" style="text-decoration:none;">
+          <div class="user-name" style="color:var(--on-surf);">Sign in with GitHub</div>
+        </a>
+        <div style="font-size:11px;color:var(--out);">Admin access required</div>
+      </div>
     </div>
-    <div id="usage-loading" class="loading-spinner">
-      <div class="spinner"></div>
-    </div>
-    <table class="keys-table" id="usage-table" style="display:none;">
-      <thead>
-        <tr>
-          <th>Identifier</th>
-          <th>Endpoint</th>
-          <th>Model</th>
-          <th>Input Tokens</th>
-          <th>Output Tokens</th>
-          <th>Time</th>
-        </tr>
-      </thead>
-      <tbody id="usage-tbody">
-      </tbody>
-    </table>
-  </div>
-</div>
-
-<!-- Add/Edit Key Modal -->
-<div class="admin-modal" id="key-modal">
-  <div class="modal-content">
-    <div class="modal-header">
-      <h3 id="modal-title">Add New Key</h3>
-      <button class="modal-close" onclick="closeModal()">
-        <span class="ms">close</span>
+    <div id="user-section" class="user-row" style="display:none;">
+      <img id="sidebar-avatar" src="" alt="Avatar" class="user-avatar-sm">
+      <div style="flex:1;overflow:hidden;">
+        <div class="user-name" id="sidebar-username">User</div>
+        <div class="user-role">Admin</div>
+      </div>
+      <button class="logout-btn" onclick="logout()" title="Logout">
+        <span class="ms sm" style="color:var(--out);">logout</span>
       </button>
     </div>
-    <form class="modal-form" id="key-form">
+  </div>
+</aside>
+
+<!-- Main -->
+<main class="admin-main">
+
+  <!-- ══ PAGE: OVERVIEW ══════════════════════════════════════════════════════ -->
+  <div class="page active" id="page-overview">
+    <div class="admin-topbar">
+      <div class="admin-title"><span class="ms">dashboard</span> Overview</div>
+      <button class="icon-btn" onclick="reloadAll()" title="Refresh" style="width:38px;height:38px;border-radius:10px;">
+        <span class="ms">refresh</span>
+      </button>
+    </div>
+
+    <div class="stat-grid" id="stat-grid">
+      <div class="stat-card">
+        <div class="stat-icon blue"><span class="ms">vpn_key</span></div>
+        <div class="stat-value" id="s-active-keys">—</div>
+        <div class="stat-label">Active API Keys</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon green"><span class="ms">person_play</span></div>
+        <div class="stat-value" id="s-demo-sessions">—</div>
+        <div class="stat-label">Demo Sessions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple"><span class="ms">groups</span></div>
+        <div class="stat-value" id="s-active-24h">—</div>
+        <div class="stat-label">Active (24h)</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon amber"><span class="ms">today</span></div>
+        <div class="stat-value" id="s-requests-today">—</div>
+        <div class="stat-label">Requests Today</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon p"><span class="ms">token</span></div>
+        <div class="stat-value" id="s-total-tokens">—</div>
+        <div class="stat-label">Total Tokens</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red"><span class="ms">block</span></div>
+        <div class="stat-value" id="s-blocked">—</div>
+        <div class="stat-label">Blocked Sessions</div>
+      </div>
+    </div>
+
+    <!-- Chart -->
+    <div class="chart-section">
+      <div class="chart-card">
+        <div class="chart-title"><span class="ms" style="color:var(--p);">bar_chart</span> Requests — Last 14 Days</div>
+        <div class="chart-bars" id="chart-bars">
+          <div class="state-center" style="padding:0;flex:1;"><div class="spinner"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Recent usage quick-view -->
+    <div class="section-wrap">
+      <div class="section-card">
+        <div class="section-head">
+          <div class="section-head-title"><span class="ms">history</span> Recent Usage</div>
+          <button class="chip active" onclick="switchPage('usage')">View All</button>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Identifier</th><th>Model</th><th>Input</th><th>Output</th><th>Time</th>
+            </tr></thead>
+            <tbody id="overview-usage-tbody">
+              <tr><td colspan="5"><div class="state-center" style="padding:16px;"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: API KEYS ══════════════════════════════════════════════════════ -->
+  <div class="page" id="page-keys">
+    <div class="admin-topbar">
+      <div class="admin-title"><span class="ms">vpn_key</span> API Keys</div>
+      <m3e-button variant="filled" id="add-key-btn">
+        <m3e-icon slot="icon" name="add"></m3e-icon>
+        <span>New Key</span>
+      </m3e-button>
+    </div>
+
+    <div class="section-wrap" style="margin-top:20px;">
+      <div class="section-card">
+        <div class="section-head">
+          <div class="section-head-title"><span class="ms">list_alt</span> All Keys</div>
+          <div class="filter-chips">
+            <button class="chip active" id="kf-all" onclick="filterKeys('all')">All</button>
+            <button class="chip" id="kf-demo" onclick="filterKeys('demo')">Demo</button>
+            <button class="chip" id="kf-global" onclick="filterKeys('global')">Global</button>
+            <button class="chip" id="kf-inactive" onclick="filterKeys('inactive')">Inactive</button>
+          </div>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Key</th><th>Name</th><th>Type</th><th>Status</th><th>RPM/RPD</th><th>Usage</th><th>Tokens</th><th>Created</th><th>Actions</th>
+            </tr></thead>
+            <tbody id="keys-tbody">
+              <tr><td colspan="9"><div class="state-center" style="padding:20px;"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: DEMO SESSIONS ════════════════════════════════════════════════ -->
+  <div class="page" id="page-demo">
+    <div class="admin-topbar">
+      <div class="admin-title"><span class="ms">person_play</span> Demo Sessions</div>
+    </div>
+
+    <!-- Mini stats row -->
+    <div class="stat-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px,1fr));" id="demo-stat-grid">
+      <div class="stat-card">
+        <div class="stat-icon green"><span class="ms">check_circle</span></div>
+        <div class="stat-value" id="ds-active">—</div>
+        <div class="stat-label">Active Sessions</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon blue"><span class="ms">person</span></div>
+        <div class="stat-value" id="ds-24h">—</div>
+        <div class="stat-label">Active 24h</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon purple"><span class="ms">calendar_month</span></div>
+        <div class="stat-value" id="ds-7d">—</div>
+        <div class="stat-label">Active 7 days</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-icon red"><span class="ms">block</span></div>
+        <div class="stat-value" id="ds-blocked">—</div>
+        <div class="stat-label">Blocked</div>
+      </div>
+    </div>
+
+    <div class="section-wrap">
+      <div class="section-card">
+        <div class="section-head">
+          <div class="section-head-title"><span class="ms">table_rows</span> Session List</div>
+          <div class="section-head-actions">
+            <div class="filter-chips">
+              <button class="chip active" id="df-all"     onclick="filterDemo('all')">All</button>
+              <button class="chip"        id="df-active"  onclick="filterDemo('active')">Active</button>
+              <button class="chip"        id="df-blocked" onclick="filterDemo('blocked')">Blocked</button>
+              <button class="chip"        id="df-expired" onclick="filterDemo('expired')">Expiring</button>
+            </div>
+          </div>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>ID</th>
+              <th>API Key</th>
+              <th>Fingerprint</th>
+              <th>IP</th>
+              <th>First Seen</th>
+              <th>Last Active</th>
+              <th>Inactive</th>
+              <th>Requests</th>
+              <th>Tokens</th>
+              <th>Status</th>
+              <th>Actions</th>
+            </tr></thead>
+            <tbody id="demo-tbody">
+              <tr><td colspan="11"><div class="state-center" style="padding:20px;"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ══ PAGE: USAGE LOGS ═══════════════════════════════════════════════════ -->
+  <div class="page" id="page-usage">
+    <div class="admin-topbar">
+      <div class="admin-title"><span class="ms">analytics</span> Usage Logs</div>
+    </div>
+    <div class="section-wrap" style="margin-top:20px;">
+      <div class="section-card">
+        <div class="section-head">
+          <div class="section-head-title"><span class="ms">receipt_long</span> Recent Requests</div>
+          <span style="font-size:12px;color:var(--out);">Last 100 entries</span>
+        </div>
+        <div class="data-table-wrap">
+          <table class="data-table">
+            <thead><tr>
+              <th>Identifier</th><th>Endpoint</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>IP</th><th>Fingerprint</th><th>Time</th>
+            </tr></thead>
+            <tbody id="usage-tbody">
+              <tr><td colspan="8"><div class="state-center" style="padding:20px;"><div class="spinner"></div></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</main>
+</m3e-theme>
+
+<!-- ══ KEY MODAL ══════════════════════════════════════════════════════════ -->
+<div class="modal-overlay" id="key-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3 id="key-modal-title">New API Key</h3>
+      <button class="modal-close" onclick="closeKeyModal()"><span class="ms">close</span></button>
+    </div>
+    <form class="form-stack" id="key-form">
       <input type="hidden" id="key-id">
-      
       <div class="form-group">
         <label for="key-name">Name</label>
-        <input type="text" id="key-name" placeholder="e.g., Production Key" required>
+        <input type="text" id="key-name" placeholder="e.g. Production Key" required>
       </div>
-      
       <div class="form-row">
         <div class="form-group">
-          <label for="key-rpm">Requests per Minute</label>
-          <input type="number" id="key-rpm" value="5" min="1" max="100">
+          <label for="key-rpm">Requests / Min</label>
+          <input type="number" id="key-rpm" value="5" min="1" max="1000">
         </div>
         <div class="form-group">
-          <label for="key-rpd">Requests per Day</label>
-          <input type="number" id="key-rpd" value="20" min="1" max="1000">
+          <label for="key-rpd">Requests / Day</label>
+          <input type="number" id="key-rpd" value="20" min="1" max="100000">
         </div>
       </div>
-      
       <div class="form-row">
         <div class="form-group">
-          <label for="key-input-limit">Input Token Limit</label>
+          <label for="key-input-limit">Input Token Limit (-1=∞)</label>
           <input type="number" id="key-input-limit" value="10000" min="-1">
         </div>
         <div class="form-group">
-          <label for="key-output-limit">Output Token Limit (-1 = unlimited)</label>
+          <label for="key-output-limit">Output Token Limit (-1=∞)</label>
           <input type="number" id="key-output-limit" value="-1" min="-1">
         </div>
       </div>
-      
       <div class="form-group">
-        <label for="key-priority">Queue Priority</label>
-        <input type="number" id="key-priority" value="0" min="0" max="10">
+        <label for="key-priority">Queue Priority (0 = lowest)</label>
+        <input type="number" id="key-priority" value="0" min="0" max="100">
       </div>
-      
       <div class="form-group">
-        <label for="key-expires">Expires in (days, leave empty for no expiry)</label>
+        <label for="key-expires">Expires in days (leave blank = never)</label>
         <input type="number" id="key-expires" placeholder="Never" min="1">
       </div>
-      
       <div class="modal-actions">
-        <button type="button" class="btn-secondary" onclick="closeModal()">Cancel</button>
+        <button type="button" class="btn-secondary" onclick="closeKeyModal()">Cancel</button>
         <button type="submit" class="btn-primary">Save Key</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- Toast -->
-<div class="admin-toast" id="admin-toast">
-  <span class="ms">check_circle</span>
-  <span id="toast-message">Success!</span>
+<!-- ══ DEMO SESSION DETAIL MODAL ══════════════════════════════════════════ -->
+<div class="modal-overlay" id="demo-modal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <h3>Demo Session #<span id="dm-id"></span></h3>
+      <button class="modal-close" onclick="closeDemoModal()"><span class="ms">close</span></button>
+    </div>
+    <div class="form-stack">
+      <div class="form-group">
+        <label>API Key</label>
+        <input type="text" id="dm-key" readonly style="font-family:monospace;font-size:12px;">
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>IP Address</label>
+          <input type="text" id="dm-ip" readonly>
+        </div>
+        <div class="form-group">
+          <label>Requests</label>
+          <input type="text" id="dm-requests" readonly>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>First Seen</label>
+          <input type="text" id="dm-first" readonly>
+        </div>
+        <div class="form-group">
+          <label>Last Active</label>
+          <input type="text" id="dm-last" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>User Agent</label>
+        <textarea id="dm-ua" readonly rows="2" style="resize:none;font-size:12px;"></textarea>
+      </div>
+      <div class="form-group">
+        <label>Composite Hash</label>
+        <input type="text" id="dm-hash" readonly style="font-family:monospace;font-size:11px;">
+      </div>
+      <div class="form-group">
+        <label>Fingerprint Hash</label>
+        <input type="text" id="dm-fp" readonly style="font-family:monospace;font-size:11px;">
+      </div>
+    </div>
+    <div class="modal-actions" style="margin-top:16px;">
+      <button type="button" class="btn-secondary" onclick="closeDemoModal()">Close</button>
+      <button type="button" id="dm-block-btn" class="btn-danger" onclick="toggleDemoBlock()">Block Session</button>
+      <button type="button" class="btn-danger" style="max-width:120px;" onclick="deleteDemoSession()">Delete</button>
+    </div>
+  </div>
 </div>
 
-</m3e-theme>
+<!-- ══ TOAST ══════════════════════════════════════════════════════════════ -->
+<div class="toast" id="toast">
+  <span class="ms">check_circle</span>
+  <span id="toast-msg"></span>
+</div>
 
 <script>
-// Admin Dashboard Logic
-let currentSession = null;
+// ─── State ───────────────────────────────────────────────────────────────────
+let dashData = null;          // full payload from /api/admin/dashboard
 let allKeys = [];
+let allDemoSessions = [];
+let allUsage = [];
+let currentKeyFilter = 'all';
+let currentDemoFilter = 'all';
+let activeDemoSession = null; // for the detail modal
 
-// Check session on load
+// ─── Navigation ──────────────────────────────────────────────────────────────
+function switchPage(name) {
+    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+    document.getElementById('page-' + name).classList.add('active');
+    document.getElementById('nav-' + name).classList.add('active');
+}
+
+// ─── Session check ────────────────────────────────────────────────────────────
 async function checkSession() {
-try {
-const res = await fetch('/api/auth/session');
-const data = await res.json();
-
-if (!data.authenticated || !data.isAdmin) {
-// Show login section, hide user section
-document.getElementById('login-section').style.display = 'flex';
-document.getElementById('user-section').style.display = 'none';
-// Redirect to home after a delay
-setTimeout(() => { window.location.href = '/'; }, 2000);
-return false;
+    try {
+        const res = await fetch('/api/auth/session');
+        const data = await res.json();
+        if (!data.authenticated || !data.isAdmin) {
+            showLogin();
+            setTimeout(() => { window.location.href = '/'; }, 2500);
+            return false;
+        }
+        document.getElementById('sidebar-username').textContent = data.user.username;
+        document.getElementById('sidebar-avatar').src = data.user.avatar;
+        document.getElementById('user-section').style.display = 'flex';
+        document.getElementById('login-section').style.display = 'none';
+        return true;
+    } catch {
+        showLogin();
+        setTimeout(() => { window.location.href = '/'; }, 2500);
+        return false;
+    }
 }
-
-currentSession = data;
-// Update sidebar user info
-document.getElementById('sidebar-username').textContent = data.user.username;
-document.getElementById('sidebar-avatar').src = data.user.avatar;
-// Show user section, hide login section
-document.getElementById('user-section').style.display = 'flex';
-document.getElementById('login-section').style.display = 'none';
-return true;
-} catch (error) {
-console.error('Session check failed:', error);
-document.getElementById('login-section').style.display = 'flex';
-document.getElementById('user-section').style.display = 'none';
-setTimeout(() => { window.location.href = '/'; }, 2000);
-return false;
+function showLogin() {
+    document.getElementById('login-section').style.display = 'flex';
+    document.getElementById('user-section').style.display = 'none';
 }
-}
-
-// Logout
 async function logout() {
-try {
-await fetch('/api/auth/logout', { method: 'POST' });
-window.location.href = '/';
-} catch (error) {
-console.error('Logout failed:', error);
-}
+    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
+    window.location.href = '/';
 }
 
-// Load dashboard data
+// ─── Load dashboard data ──────────────────────────────────────────────────────
 async function loadDashboard() {
-  try {
-    const res = await fetch('/api/admin/dashboard');
-    if (!res.ok) throw new Error('Failed to load dashboard');
-    
-    const data = await res.json();
-    
-    // Update stats
-    const stats = data.stats || {};
-    document.getElementById('stat-active-keys').textContent = stats.ACTIVE_KEYS || 0;
-    document.getElementById('stat-demo-keys').textContent = stats.DEMO_KEYS || 0;
-    document.getElementById('stat-global-keys').textContent = stats.GLOBAL_KEYS || 0;
-    document.getElementById('stat-requests-today').textContent = stats.REQUESTS_TODAY || 0;
-    document.getElementById('stat-total-tokens').textContent = formatNumber(stats.TOTAL_TOKENS || 0);
-    
-    // Store keys
-    allKeys = data.keys || [];
+    try {
+        const res = await fetch('/api/admin/dashboard');
+        if (!res.ok) throw new Error('Failed to load dashboard');
+        dashData = await res.json();
+
+        updateStats(dashData.stats);
+        allKeys = dashData.keys || [];
+        allDemoSessions = dashData.demoSessions || [];
+        allUsage = dashData.recentUsage || [];
+
+        renderChart(dashData.chartData || []);
+        renderOverviewUsage(allUsage.slice(0, 8));
+        renderKeys(allKeys);
+        renderDemoSessions(allDemoSessions);
+        renderUsage(allUsage);
+
+        // Demo badge
+        const activeDemos = (dashData.stats.ACTIVE_DEMO_SESSIONS || 0);
+        if (activeDemos > 0) {
+            const badge = document.getElementById('demo-badge');
+            badge.textContent = formatNum(activeDemos);
+            badge.style.display = '';
+        }
+    } catch (err) {
+        console.error('Dashboard load failed:', err);
+        showToast('Failed to load dashboard', 'error');
+    }
+}
+
+function reloadAll() { loadDashboard(); }
+
+// ─── Stats ────────────────────────────────────────────────────────────────────
+function updateStats(s) {
+    const g = id => document.getElementById(id);
+    g('s-active-keys').textContent     = formatNum(s.ACTIVE_KEYS || 0);
+    g('s-demo-sessions').textContent   = formatNum(s.ACTIVE_DEMO_SESSIONS || 0);
+    g('s-active-24h').textContent      = formatNum(s.DEMO_ACTIVE_24H || 0);
+    g('s-requests-today').textContent  = formatNum(s.REQUESTS_TODAY || 0);
+    g('s-total-tokens').textContent    = formatNum(s.TOTAL_TOKENS || 0);
+    g('s-blocked').textContent         = formatNum(s.BLOCKED_SESSIONS || 0);
+    // Demo page mini stats
+    g('ds-active').textContent   = formatNum(s.ACTIVE_DEMO_SESSIONS || 0);
+    g('ds-24h').textContent      = formatNum(s.DEMO_ACTIVE_24H || 0);
+    g('ds-7d').textContent       = formatNum(s.DEMO_ACTIVE_7D || 0);
+    g('ds-blocked').textContent  = formatNum(s.BLOCKED_SESSIONS || 0);
+}
+
+// ─── Chart ────────────────────────────────────────────────────────────────────
+function renderChart(data) {
+    const wrap = document.getElementById('chart-bars');
+    if (!data || data.length === 0) {
+        wrap.innerHTML = `<div class="state-center" style="flex:1;padding:0;"><span class="ms">bar_chart</span><p>No data yet</p></div>`;
+        return;
+    }
+    const maxReqs = Math.max(...data.map(d => d.REQUESTS || 0), 1);
+    wrap.innerHTML = data.map(d => {
+        const pct = Math.max(((d.REQUESTS || 0) / maxReqs) * 100, 2);
+        const label = d.DAY ? new Date(d.DAY).toLocaleDateString('en', { month:'short', day:'numeric' }) : '';
+        return `<div class="chart-bar-wrap" title="${d.REQUESTS || 0} requests on ${label}">
+          <div class="chart-bar" style="height:${pct}%;"></div>
+          <div class="chart-label">${label}</div>
+        </div>`;
+    }).join('');
+}
+
+// ─── Overview usage ───────────────────────────────────────────────────────────
+function renderOverviewUsage(rows) {
+    const tbody = document.getElementById('overview-usage-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="5"><div class="state-center" style="padding:16px;"><span class="ms">receipt_long</span><p>No usage yet</p></div></td></tr>`;
+        return;
+    }
+    tbody.innerHTML = rows.map(r => `<tr>
+      <td><span class="mono" title="${r.IDENTIFIER || ''}">${truncate(r.IDENTIFIER, 24)}</span></td>
+      <td><span class="badge grey">${r.MODEL || '-'}</span></td>
+      <td>${formatNum(r.INPUT_TOKENS || 0)}</td>
+      <td>${formatNum(r.OUTPUT_TOKENS || 0)}</td>
+      <td style="white-space:nowrap;">${formatDate(r.CREATED_AT)}</td>
+    </tr>`).join('');
+}
+
+// ─── Keys table ───────────────────────────────────────────────────────────────
+function filterKeys(f) {
+    currentKeyFilter = f;
+    ['all','demo','global','inactive'].forEach(k => document.getElementById('kf-'+k).classList.toggle('active', k===f));
     renderKeys(allKeys);
-    
-    // Render usage
-    renderUsage(data.recentUsage || []);
-    
-  } catch (error) {
-    console.error('Load dashboard failed:', error);
-    showToast('Failed to load dashboard data', 'error');
-  } finally {
-    document.getElementById('keys-loading').style.display = 'none';
-  }
 }
 
-// Render keys table
 function renderKeys(keys) {
-  const tbody = document.getElementById('keys-tbody');
-  const table = document.getElementById('keys-table');
-  const empty = document.getElementById('keys-empty');
-  
-  if (keys.length === 0) {
-    table.style.display = 'none';
-    empty.style.display = 'block';
-    return;
-  }
-  
-  table.style.display = 'table';
-  empty.style.display = 'none';
-  
-  tbody.innerHTML = keys.map(key => {
-    const isActive = key.IS_ACTIVE === 1;
-    const isDemo = key.KEY_TYPE === 'demo';
-    const keyDisplay = key.KEY ? key.KEY.substring(0, 20) + '...' : '-';
-    
-    return `
-      <tr>
-        <td><span class="key-value" title="${key.KEY}">${keyDisplay}</span></td>
-        <td>${key.NAME || '-'}</td>
-        <td><span class="key-type-badge ${isDemo ? 'demo' : 'global'}">${isDemo ? 'Demo' : 'Global'}</span></td>
-        <td><span class="key-status ${isActive ? 'active' : 'inactive'}"><span class="ms sm">${isActive ? 'check_circle' : 'cancel'}</span>${isActive ? 'Active' : 'Inactive'}</span></td>
-        <td>${key.RPM || 5}/${key.RPD || 20}</td>
-        <td>${formatNumber(key.USAGE_COUNT || 0)} req</td>
-        <td>${formatDate(key.CREATED_AT)}</td>
-        <td>
-          <div class="key-actions">
-            <button onclick="editKey('${key.ID}')" title="Edit"><span class="ms sm">edit</span></button>
-            <button class="delete" onclick="deleteKey('${key.ID}')" title="Delete"><span class="ms sm">delete</span></button>
-          </div>
-        </td>
-      </tr>
-    `;
-  }).join('');
-}
+    let rows = keys;
+    if (currentKeyFilter === 'demo')     rows = keys.filter(k => k.KEY_TYPE === 'demo');
+    if (currentKeyFilter === 'global')   rows = keys.filter(k => k.KEY_TYPE === 'global');
+    if (currentKeyFilter === 'inactive') rows = keys.filter(k => !k.IS_ACTIVE);
 
-// Render usage table
-function renderUsage(usage) {
-  const tbody = document.getElementById('usage-tbody');
-  const loading = document.getElementById('usage-loading');
-  const table = document.getElementById('usage-table');
-  
-  loading.style.display = 'none';
-  
-  if (usage.length === 0) {
-    return;
-  }
-  
-  table.style.display = 'table';
-  
-  tbody.innerHTML = usage.map(log => `
-    <tr>
-      <td>${log.IDENTIFIER || '-'}</td>
-      <td>${log.ENDPOINT || '-'}</td>
-      <td>${log.MODEL || '-'}</td>
-      <td>${formatNumber(log.INPUT_TOKENS || 0)}</td>
-      <td>${formatNumber(log.OUTPUT_TOKENS || 0)}</td>
-      <td>${formatDate(log.CREATED_AT)}</td>
-    </tr>
-  `).join('');
-}
-
-// Sidebar navigation
-document.querySelectorAll('.nav-item').forEach(item => {
-item.addEventListener('click', (e) => {
-e.preventDefault();
-document.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
-item.classList.add('active');
-
-const href = item.getAttribute('href');
-if (href === '#keys') {
-document.getElementById('keys-section').style.display = 'block';
-document.getElementById('usage-section').style.display = 'none';
-} else if (href === '#usage') {
-document.getElementById('keys-section').style.display = 'none';
-document.getElementById('usage-section').style.display = 'block';
-}
-});
-});
-
-// Add key button
-document.getElementById('add-key-btn').addEventListener('click', () => {
-  document.getElementById('modal-title').textContent = 'Add New Key';
-  document.getElementById('key-form').reset();
-  document.getElementById('key-id').value = '';
-  document.getElementById('key-modal').classList.add('show');
-});
-
-// Edit key
-function editKey(keyId) {
-  const key = allKeys.find(k => k.ID == keyId);
-  if (!key) return;
-  
-  document.getElementById('modal-title').textContent = 'Edit Key';
-  document.getElementById('key-id').value = key.ID;
-  document.getElementById('key-name').value = key.NAME || '';
-  document.getElementById('key-rpm').value = key.RPM || 5;
-  document.getElementById('key-rpd').value = key.RPD || 20;
-  document.getElementById('key-input-limit').value = key.INPUT_TOKEN_LIMIT || 10000;
-  document.getElementById('key-output-limit').value = key.OUTPUT_TOKEN_LIMIT || -1;
-  document.getElementById('key-priority').value = key.QUEUE_PRIORITY || 0;
-  
-  document.getElementById('key-modal').classList.add('show');
-}
-
-// Delete key
-async function deleteKey(keyId) {
-  if (!confirm('Are you sure you want to delete this key?')) return;
-  
-  try {
-    const res = await fetch(`/api/admin/keys?keyId=${keyId}`, { method: 'DELETE' });
-    if (!res.ok) throw new Error('Failed to delete key');
-    
-    showToast('Key deleted successfully', 'success');
-    loadDashboard();
-  } catch (error) {
-    console.error('Delete failed:', error);
-    showToast('Failed to delete key', 'error');
-  }
-}
-
-// Close modal
-function closeModal() {
-  document.getElementById('key-modal').classList.remove('show');
-}
-
-// Form submit
-document.getElementById('key-form').addEventListener('submit', async (e) => {
-  e.preventDefault();
-  
-  const keyId = document.getElementById('key-id').value;
-  const isEdit = !!keyId;
-  
-  const data = {
-    name: document.getElementById('key-name').value,
-    rpm: parseInt(document.getElementById('key-rpm').value),
-    rpd: parseInt(document.getElementById('key-rpd').value),
-    inputTokenLimit: parseInt(document.getElementById('key-input-limit').value),
-    outputTokenLimit: parseInt(document.getElementById('key-output-limit').value),
-    queuePriority: parseInt(document.getElementById('key-priority').value),
-    expiresInDays: parseInt(document.getElementById('key-expires').value) || null
-  };
-  
-  try {
-    let res;
-    if (isEdit) {
-      data.keyId = parseInt(keyId);
-      res = await fetch('/api/admin/keys', {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
-    } else {
-      res = await fetch('/api/admin/keys', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(data)
-      });
+    const tbody = document.getElementById('keys-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="9"><div class="state-center" style="padding:20px;"><span class="ms">vpn_key_off</span><p>No keys found</p></div></td></tr>`;
+        return;
     }
-    
-    if (!res.ok) throw new Error('Failed to save key');
-    
-    const result = await res.json();
-    closeModal();
-    
-    if (!isEdit && result.key) {
-      showToast(`Key created: ${result.key}`, 'success');
-    } else {
-      showToast('Key updated successfully', 'success');
+    tbody.innerHTML = rows.map(k => {
+        const active  = k.IS_ACTIVE === 1;
+        const isDemo  = k.KEY_TYPE === 'demo';
+        const tokens  = formatNum((k.TOTAL_INPUT_TOKENS || 0) + (k.TOTAL_OUTPUT_TOKENS || 0));
+        return `<tr>
+          <td><span class="mono" title="${k.KEY || ''}">${(k.KEY||'').substring(0,22)}…</span></td>
+          <td style="font-weight:600;">${k.NAME || '-'}</td>
+          <td><span class="badge ${isDemo ? 'purple' : 'blue'}">${isDemo ? 'Demo' : 'Global'}</span></td>
+          <td><span class="badge ${active ? 'green' : 'red'}"><span class="ms sm">${active ? 'check_circle' : 'cancel'}</span>${active ? 'Active' : 'Off'}</span></td>
+          <td>${k.RPM || 5}/${k.RPD || 20}</td>
+          <td>${formatNum(k.USAGE_COUNT || 0)}</td>
+          <td>${tokens}</td>
+          <td style="white-space:nowrap;">${formatDate(k.CREATED_AT)}</td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" onclick="editKey('${k.ID}')" title="Edit"><span class="ms">edit</span></button>
+              <button class="icon-btn red" onclick="deleteKey('${k.ID}')" title="Deactivate"><span class="ms">block</span></button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
+}
+
+// ─── Demo sessions table ──────────────────────────────────────────────────────
+function filterDemo(f) {
+    currentDemoFilter = f;
+    ['all','active','blocked','expired'].forEach(k => document.getElementById('df-'+k).classList.toggle('active', k===f));
+    renderDemoSessions(allDemoSessions);
+}
+
+function renderDemoSessions(sessions) {
+    let rows = sessions;
+    if (currentDemoFilter === 'active')  rows = sessions.filter(s => !s.IS_BLOCKED && s.KEY_IS_ACTIVE !== 0);
+    if (currentDemoFilter === 'blocked') rows = sessions.filter(s => s.IS_BLOCKED);
+    if (currentDemoFilter === 'expired') rows = sessions.filter(s => (s.DAYS_INACTIVE || 0) >= 10 && !s.IS_BLOCKED);
+
+    const tbody = document.getElementById('demo-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="11"><div class="state-center" style="padding:20px;"><span class="ms">person_play</span><p>No sessions found</p></div></td></tr>`;
+        return;
     }
-    
-    loadDashboard();
-  } catch (error) {
-    console.error('Save failed:', error);
-    showToast('Failed to save key', 'error');
-  }
-});
 
-// Toast notification
-function showToast(message, type = 'success') {
-  const toast = document.getElementById('admin-toast');
-  const msgEl = document.getElementById('toast-message');
-  const icon = toast.querySelector('.ms');
-  
-  msgEl.textContent = message;
-  toast.className = 'admin-toast show ' + type;
-  icon.textContent = type === 'success' ? 'check_circle' : 'error';
-  
-  setTimeout(() => {
-    toast.classList.remove('show');
-  }, 3000);
+    tbody.innerHTML = rows.map(s => {
+        const blocked   = s.IS_BLOCKED;
+        const inactive  = s.DAYS_INACTIVE || 0;
+        const expiring  = !blocked && inactive >= 10;
+        const expired   = !blocked && inactive >= 15;
+        const tokens    = formatNum((s.TOTAL_INPUT_TOKENS || 0) + (s.TOTAL_OUTPUT_TOKENS || 0));
+
+        let statusBadge;
+        if (blocked)      statusBadge = `<span class="badge red"><span class="ms sm">block</span>Blocked</span>`;
+        else if (expired) statusBadge = `<span class="badge amber"><span class="ms sm">schedule</span>Expiring</span>`;
+        else              statusBadge = `<span class="badge green"><span class="ms sm">check_circle</span>Active</span>`;
+
+        let inactiveBadge;
+        if (inactive === 0)       inactiveBadge = `<span class="badge blue">Today</span>`;
+        else if (inactive <= 1)   inactiveBadge = `<span class="badge green">1 day</span>`;
+        else if (expiring)        inactiveBadge = `<span class="badge amber">${inactive}d</span>`;
+        else                      inactiveBadge = `<span class="badge grey">${inactive}d</span>`;
+
+        return `<tr style="${blocked ? 'opacity:.6;' : ''}">
+          <td style="font-weight:700;">#${s.ID}</td>
+          <td><span class="mono" title="${s.API_KEY || ''}">${truncate(s.API_KEY, 20)}</span></td>
+          <td><span class="mono" title="${s.FINGERPRINT_HASH || ''}">${truncate(s.FINGERPRINT_HASH, 12)}</span></td>
+          <td style="font-size:12px;">${s.IP_ADDRESS || '—'}</td>
+          <td style="white-space:nowrap;font-size:12px;">${formatDate(s.FIRST_SEEN)}</td>
+          <td style="white-space:nowrap;font-size:12px;">${formatDate(s.LAST_SEEN)}</td>
+          <td>${inactiveBadge}</td>
+          <td>${formatNum(s.REQUEST_COUNT || 0)}</td>
+          <td>${tokens}</td>
+          <td>${statusBadge}</td>
+          <td>
+            <div class="row-actions">
+              <button class="icon-btn" onclick="openDemoModal(${s.ID})" title="Details"><span class="ms">open_in_full</span></button>
+              <button class="icon-btn ${blocked ? '' : 'red'}" onclick="quickToggleBlock(${s.ID},${blocked ? 0 : 1})" title="${blocked ? 'Unblock' : 'Block'}">
+                <span class="ms">${blocked ? 'lock_open' : 'block'}</span>
+              </button>
+            </div>
+          </td>
+        </tr>`;
+    }).join('');
 }
 
-// Utility functions
-function formatNumber(num) {
-  if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M';
-  if (num >= 1000) return (num / 1000).toFixed(1) + 'K';
-  return num.toString();
+// ─── Demo session detail modal ────────────────────────────────────────────────
+function openDemoModal(sessionId) {
+    activeDemoSession = allDemoSessions.find(s => s.ID === sessionId) || null;
+    if (!activeDemoSession) return;
+    const s = activeDemoSession;
+    document.getElementById('dm-id').textContent = s.ID;
+    document.getElementById('dm-key').value = s.API_KEY || '—';
+    document.getElementById('dm-ip').value = s.IP_ADDRESS || '—';
+    document.getElementById('dm-requests').value = s.REQUEST_COUNT || 0;
+    document.getElementById('dm-first').value = formatDate(s.FIRST_SEEN);
+    document.getElementById('dm-last').value = formatDate(s.LAST_SEEN);
+    document.getElementById('dm-ua').value = s.USER_AGENT || '—';
+    document.getElementById('dm-hash').value = s.COMPOSITE_HASH || '—';
+    document.getElementById('dm-fp').value = s.FINGERPRINT_HASH || '—';
+    const btn = document.getElementById('dm-block-btn');
+    btn.textContent = s.IS_BLOCKED ? 'Unblock Session' : 'Block Session';
+    btn.className = s.IS_BLOCKED ? 'btn-secondary' : 'btn-danger';
+    document.getElementById('demo-modal').classList.add('show');
+}
+function closeDemoModal() {
+    document.getElementById('demo-modal').classList.remove('show');
+    activeDemoSession = null;
 }
 
-function formatDate(dateStr) {
-  if (!dateStr) return '-';
-  const date = new Date(dateStr);
-  return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
-}
-
-// Initialize
-(async function init() {
-  const valid = await checkSession();
-  if (valid) {
+async function toggleDemoBlock() {
+    if (!activeDemoSession) return;
+    const nowBlocked = !activeDemoSession.IS_BLOCKED;
+    await patchDemoSession(activeDemoSession.ID, nowBlocked, true);
+    closeDemoModal();
     await loadDashboard();
-  }
+}
+
+async function quickToggleBlock(sessionId, block) {
+    await patchDemoSession(sessionId, !!block, false);
+    await loadDashboard();
+}
+
+async function patchDemoSession(sessionId, isBlocked, blockKey) {
+    try {
+        const res = await fetch('/api/admin/demo-sessions', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ sessionId, isBlocked, blockKey })
+        });
+        if (!res.ok) throw new Error('Failed to update session');
+        showToast(isBlocked ? 'Session blocked' : 'Session unblocked', isBlocked ? 'error' : 'success');
+    } catch (err) {
+        console.error(err);
+        showToast('Update failed', 'error');
+    }
+}
+
+async function deleteDemoSession() {
+    if (!activeDemoSession) return;
+    if (!confirm(`Delete session #${activeDemoSession.ID}? This cannot be undone.`)) return;
+    try {
+        const res = await fetch(`/api/admin/demo-sessions?sessionId=${activeDemoSession.ID}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        showToast('Session deleted', 'success');
+        closeDemoModal();
+        await loadDashboard();
+    } catch {
+        showToast('Delete failed', 'error');
+    }
+}
+
+// ─── Usage table ─────────────────────────────────────────────────────────────
+function renderUsage(rows) {
+    const tbody = document.getElementById('usage-tbody');
+    if (!rows.length) {
+        tbody.innerHTML = `<tr><td colspan="8"><div class="state-center" style="padding:20px;"><span class="ms">analytics</span><p>No usage logs</p></div></td></tr>`;
+        return;
+    }
+    tbody.innerHTML = rows.map(r => `<tr>
+      <td><span class="mono" title="${r.IDENTIFIER||''}">${truncate(r.IDENTIFIER, 22)}</span></td>
+      <td style="font-size:12px;">${r.ENDPOINT || '-'}</td>
+      <td><span class="badge grey">${r.MODEL || '-'}</span></td>
+      <td>${formatNum(r.INPUT_TOKENS || 0)}</td>
+      <td>${formatNum(r.OUTPUT_TOKENS || 0)}</td>
+      <td style="font-size:12px;">${r.IP_ADDRESS || '—'}</td>
+      <td><span class="mono" title="${r.FINGERPRINT_HASH||''}">${truncate(r.FINGERPRINT_HASH, 10)}</span></td>
+      <td style="white-space:nowrap;font-size:12px;">${formatDate(r.CREATED_AT)}</td>
+    </tr>`).join('');
+}
+
+// ─── Key CRUD ─────────────────────────────────────────────────────────────────
+function openKeyModal() {
+    document.getElementById('key-modal-title').textContent = 'New API Key';
+    document.getElementById('key-form').reset();
+    document.getElementById('key-id').value = '';
+    document.getElementById('key-modal').classList.add('show');
+}
+function closeKeyModal() { document.getElementById('key-modal').classList.remove('show'); }
+
+function editKey(keyId) {
+    const k = allKeys.find(k => String(k.ID) === String(keyId));
+    if (!k) return;
+    document.getElementById('key-modal-title').textContent = 'Edit Key';
+    document.getElementById('key-id').value = k.ID;
+    document.getElementById('key-name').value = k.NAME || '';
+    document.getElementById('key-rpm').value = k.RPM ?? 5;
+    document.getElementById('key-rpd').value = k.RPD ?? 20;
+    document.getElementById('key-input-limit').value = k.INPUT_TOKEN_LIMIT ?? 10000;
+    document.getElementById('key-output-limit').value = k.OUTPUT_TOKEN_LIMIT ?? -1;
+    document.getElementById('key-priority').value = k.QUEUE_PRIORITY ?? 0;
+    document.getElementById('key-modal').classList.add('show');
+}
+
+async function deleteKey(keyId) {
+    if (!confirm('Deactivate this key? It will be soft-deleted (is_active=0).')) return;
+    try {
+        const res = await fetch(`/api/admin/keys?keyId=${keyId}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error();
+        showToast('Key deactivated', 'success');
+        await loadDashboard();
+    } catch { showToast('Failed to deactivate key', 'error'); }
+}
+
+document.getElementById('key-form').addEventListener('submit', async e => {
+    e.preventDefault();
+    const keyId  = document.getElementById('key-id').value;
+    const isEdit = !!keyId;
+    const payload = {
+        name:             document.getElementById('key-name').value,
+        rpm:              parseInt(document.getElementById('key-rpm').value),
+        rpd:              parseInt(document.getElementById('key-rpd').value),
+        inputTokenLimit:  parseInt(document.getElementById('key-input-limit').value),
+        outputTokenLimit: parseInt(document.getElementById('key-output-limit').value),
+        queuePriority:    parseInt(document.getElementById('key-priority').value),
+        expiresInDays:    parseInt(document.getElementById('key-expires').value) || null
+    };
+    if (isEdit) payload.keyId = parseInt(keyId);
+    try {
+        const res = await fetch('/api/admin/keys', {
+            method: isEdit ? 'PUT' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error();
+        const result = await res.json();
+        closeKeyModal();
+        showToast(isEdit ? 'Key updated' : `Created: ${result.key}`, 'success');
+        await loadDashboard();
+    } catch { showToast('Failed to save key', 'error'); }
+});
+
+document.getElementById('add-key-btn').addEventListener('click', openKeyModal);
+
+// ─── Toast ────────────────────────────────────────────────────────────────────
+let toastTimer;
+function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    const icon = t.querySelector('.ms');
+    document.getElementById('toast-msg').textContent = msg;
+    t.className = `toast show ${type}`;
+    icon.textContent = type === 'success' ? 'check_circle' : 'error';
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+}
+
+// ─── Utilities ────────────────────────────────────────────────────────────────
+function formatNum(n) {
+    if (n == null || isNaN(n)) return '0';
+    if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
+    if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
+    if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
+    return String(n);
+}
+function formatDate(d) {
+    if (!d) return '—';
+    const dt = new Date(d);
+    if (isNaN(dt)) return '—';
+    const now = new Date();
+    const diff = now - dt;
+    if (diff < 60000) return 'Just now';
+    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
+    if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
+    return dt.toLocaleDateString('en', { month:'short', day:'numeric', year:'numeric' });
+}
+function truncate(s, n) {
+    if (!s) return '—';
+    return s.length > n ? s.substring(0, n) + '…' : s;
+}
+
+// ─── Init ────────────────────────────────────────────────────────────────────
+(async function init() {
+    const ok = await checkSession();
+    if (ok) await loadDashboard();
 })();
 </script>
 

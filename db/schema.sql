@@ -101,27 +101,47 @@ CREATE INDEX idx_sessions_expires ON sessions(expires_at);
 
 -- ============================================
 -- Table: DEMO_SESSIONS
--- Anti-abuse tracking for demo users
+-- Tracks anonymous demo users by composite hash
+-- (fingerprint + IP + date) with fallback to
+-- fingerprint_hash for VPN / new-day reconnection.
+--
+-- Keys expire after 15 days of inactivity
+-- (enforced in app logic, not a DB constraint).
 -- ============================================
 
 CREATE TABLE demo_sessions (
     id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    -- Primary identity: fingerprint + IP + date combined hash
     composite_hash VARCHAR2(64) NOT NULL UNIQUE,
-    fingerprint_hash VARCHAR2(64) NOT NULL,
+    -- Device fingerprint without IP/date — used for VPN reconnection
+    fingerprint_hash VARCHAR2(64),
     ip_address VARCHAR2(45),
     user_agent VARCHAR2(500),
     api_key_id NUMBER,
     first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    -- Updated on every request; NULL until first use after creation
     last_seen TIMESTAMP,
     request_count NUMBER DEFAULT 0,
     is_blocked NUMBER DEFAULT 0,
-    
+
     CONSTRAINT fk_demo_api_key FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
 );
 
+-- Exact-match lookup (primary path)
 CREATE INDEX idx_demo_composite ON demo_sessions(composite_hash);
-CREATE INDEX idx_demo_fingerprint ON demo_sessions(fingerprint_hash);
+-- Fallback lookup by device fingerprint (VPN / new-day reconnection)
+CREATE INDEX idx_demo_fingerprint ON demo_sessions(fingerprint_hash, is_blocked);
+-- Inactivity expiry scan
+CREATE INDEX idx_demo_last_seen ON demo_sessions(last_seen);
 CREATE INDEX idx_demo_blocked ON demo_sessions(is_blocked);
+
+-- ============================================
+-- Existing DB migration (run once if upgrading)
+-- Only needed if demo_sessions already exists.
+-- ============================================
+-- ALTER TABLE demo_sessions MODIFY fingerprint_hash VARCHAR2(64);
+-- CREATE INDEX idx_demo_last_seen ON demo_sessions(last_seen);
+-- CREATE INDEX idx_demo_fingerprint2 ON demo_sessions(fingerprint_hash, is_blocked);
 
 -- ============================================
 -- Insert default demo key (optional)
