@@ -18,6 +18,21 @@ import { closePool } from '../../lib/oracle.js';
 
 const POLLINATIONS_BASE = 'https://gen.pollinations.ai/v1';
 const NVIDIA_BASE = 'https://integrate.api.nvidia.com/v1';
+const UPSTREAM_FETCH_TIMEOUT_MS = Number(process.env.UPSTREAM_FETCH_TIMEOUT_MS || 45000);
+
+async function fetchWithTimeout(url, options = {}, timeoutMs = UPSTREAM_FETCH_TIMEOUT_MS) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
+    try {
+        return await fetch(url, {
+            ...options,
+            signal: controller.signal
+        });
+    } finally {
+        clearTimeout(timeout);
+    }
+}
 
 export default async function handler(req, res) {
     // Only allow POST requests
@@ -181,7 +196,7 @@ export default async function handler(req, res) {
         }
         
         // Forward request to target API
-        const response = await fetch(`${targetUrl}/chat/completions`, {
+        const response = await fetchWithTimeout(`${targetUrl}/chat/completions`, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
