@@ -340,6 +340,10 @@ a:hover { text-decoration: underline; }
   --m3e-icon-button-icon-color: var(--on-surf);
   --m3e-icon-button-container-color: transparent !important;
 }
+m3e-icon-button#settings-btn button,
+m3e-icon-button#rail-settings-btn button {
+  padding-right: 0 !important;
+}
 
 /* Global M3E component overrides for high-contrast accessibility in all states */
 m3e-icon-button {
