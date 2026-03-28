@@ -1,22 +1,19 @@
 /**
- * /api/auth/github - GitHub OAuth Initiation & Callback
+ * /api/auth/callback/github - GitHub OAuth Callback
  * 
- * Handles both:
- * - GET without code: Redirects to GitHub for authentication
- * - GET with code: Handles OAuth callback from GitHub
+ * Handles the OAuth callback from GitHub
+ * Only allows admin users to sign in
  */
 
 import { 
-    generateState, 
-    getGitHubAuthUrl,
     exchangeCodeForToken, 
     getGitHubUser, 
     isAdmin, 
     createSession,
     setSessionCookie,
     clearSessionCookie
-} from '../../lib/auth.js';
-import { closePool } from '../../lib/oracle.js';
+} from '../../../lib/auth.js';
+import { closePool } from '../../../lib/oracle.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -25,35 +22,11 @@ export default async function handler(req, res) {
     
     const { code, state } = req.query;
     
-    // If no code, this is an initiation request
+    // Validate required parameters
     if (!code) {
-        try {
-            // Generate state for CSRF protection
-            const state = generateState();
-            
-            // Store state in a cookie for validation
-            res.setHeader('Set-Cookie', [
-                `oauth_state=${state}`,
-                'Path=/',
-                'HttpOnly',
-                'Secure',
-                'SameSite=Lax',
-                'Max-Age=600' // 10 minutes
-            ].join('; '));
-            
-            // Redirect to GitHub
-            const authUrl = getGitHubAuthUrl(state);
-            res.redirect(authUrl);
-        } catch (error) {
-            console.error('GitHub auth error:', error);
-            res.status(500).json({ error: 'Internal server error', message: error.message });
-        } finally {
-            await closePool();
-        }
-        return;
+        return res.redirect('/?error=no_code');
     }
     
-    // If code is present, this is a callback
     // Validate state (CSRF protection)
     const cookies = req.headers.cookie || '';
     const stateMatch = cookies.match(/oauth_state=([^;]+)/);
