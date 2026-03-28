@@ -33,7 +33,7 @@
     { "src": "/api/ping", "dest": "/api/ping.js" },
     { "src": "/api/images/(.*)", "dest": "/api/images/$1.js" },
     { "src": "/api/admin/(.*)", "dest": "/api/admin/$1.js" },
-    { "src": "/admin", "dest": "/index.html" },
+    { "src": "/admin", "dest": "/admin.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "crons": [

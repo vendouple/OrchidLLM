@@ -1,11 +1,10 @@
 /**
  * /api/auth/logout - Logout
  * 
- * Clears the session cookie and deletes session from DB
+ * Clears the stateless HMAC session cookie.
  */
 
 import { deleteSession, getSessionFromCookie, clearSessionCookie } from '../../lib/auth.js';
-import { closePool } from '../../lib/oracle.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'POST') {
@@ -13,10 +12,8 @@ export default async function handler(req, res) {
     }
     
     try {
-        // Get session from cookie
+        // Get session from cookie (no-op for stateless sessions)
         const sessionId = getSessionFromCookie(req);
-        
-        // Delete session from database
         if (sessionId) {
             await deleteSession(sessionId);
         }
@@ -28,7 +25,5 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('Logout error:', error);
         res.status(500).json({ error: 'Internal server error', message: error.message });
-    } finally {
-        await closePool();
     }
 }

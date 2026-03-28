@@ -2133,7 +2133,121 @@ Object.assign(window, {
   randomizePalette,
   removeAttach,
   showComingSoon,
+  logout,
+  toggleAuthDropup,
 });
+
+/* ══════════════════════════════════════════════
+   AUTH — Session check & dropup UI
+══════════════════════════════════════════════ */
+let _authDropupOpen = false;
+
+function setAuthUi(session) {
+  const trigger = document.getElementById('auth-trigger');
+  const authName = document.getElementById('auth-name');
+  const authSub = document.getElementById('auth-sub');
+  const authIcon = document.getElementById('auth-avatar-icon');
+  const authImg = document.getElementById('auth-avatar-img');
+  const loggedOut = document.getElementById('dropup-loggedout');
+  const loggedIn = document.getElementById('dropup-loggedin');
+
+  if (session && session.authenticated) {
+    const u = session.user;
+    // Trigger row
+    if (authName) authName.textContent = u.username;
+    if (authSub) authSub.textContent = session.isAdmin ? 'Admin' : 'Member';
+    if (authIcon) authIcon.style.display = 'none';
+    if (authImg) {
+      authImg.src = u.avatar;
+      authImg.style.display = 'block';
+      authImg.style.position = 'static';
+    }
+    // Dropup panels
+    if (loggedOut) loggedOut.style.display = 'none';
+    if (loggedIn) {
+      loggedIn.style.display = 'flex';
+      const du = document.getElementById('dropup-username');
+      const da = document.getElementById('dropup-avatar');
+      const dr = document.getElementById('dropup-role');
+      const dal = document.getElementById('dropup-admin-link');
+      if (du) du.textContent = u.username;
+      if (da) da.src = u.avatar;
+      if (dr) dr.textContent = session.isAdmin ? 'Admin' : 'Member';
+      if (dal) dal.style.display = session.isAdmin ? 'flex' : 'none';
+    }
+    if (trigger) trigger.setAttribute('aria-expanded', 'false');
+  } else {
+    // Logged out
+    if (authName) authName.textContent = 'Sign in with GitHub';
+    if (authSub) authSub.textContent = 'Click to sign in';
+    if (authIcon) authIcon.style.display = '';
+    if (authImg) authImg.style.display = 'none';
+    if (loggedOut) loggedOut.style.display = 'flex';
+    if (loggedIn) loggedIn.style.display = 'none';
+  }
+}
+
+async function checkAuth() {
+  try {
+    const res = await fetch('/api/auth/session');
+    if (!res.ok) return;
+    const data = await res.json();
+    setAuthUi(data);
+  } catch (e) {
+    // Network error — silently stay logged-out UI
+  }
+}
+
+function toggleAuthDropup() {
+  const panel = document.getElementById('auth-dropup');
+  const trigger = document.getElementById('auth-trigger');
+  if (!panel) return;
+  _authDropupOpen = !_authDropupOpen;
+  panel.style.display = _authDropupOpen ? 'block' : 'none';
+  if (trigger) trigger.setAttribute('aria-expanded', String(_authDropupOpen));
+  if (_authDropupOpen) {
+    setTimeout(() => {
+      function outsideClick(e) {
+        if (!panel.contains(e.target) && !trigger.contains(e.target)) {
+          _authDropupOpen = false;
+          panel.style.display = 'none';
+          if (trigger) trigger.setAttribute('aria-expanded', 'false');
+          document.removeEventListener('click', outsideClick);
+        }
+      }
+      document.addEventListener('click', outsideClick);
+    }, 0);
+  }
+}
+
+async function logout() {
+  try {
+    await fetch('/api/auth/logout', { method: 'POST' });
+  } catch (e) { /* ignore */ }
+  _authDropupOpen = false;
+  const panel = document.getElementById('auth-dropup');
+  if (panel) panel.style.display = 'none';
+  setAuthUi(null);
+  toast('Signed out', 'logout');
+}
+
+function checkAuthError() {
+  const params = new URLSearchParams(window.location.search);
+  const err = params.get('error');
+  if (!err) return;
+  // Remove param from URL without reload
+  const clean = window.location.pathname + (window.location.hash || '');
+  history.replaceState(null, '', clean);
+  if (err === 'signin_unavailable') {
+    toast('Sign in for standard users is not allowed at this time', 'block');
+  } else if (err === 'invalid_state') {
+    toast('Sign in failed: session mismatch. Please try again.', 'error');
+  } else if (err) {
+    toast(`Sign in failed: ${err}`, 'error');
+  }
+}
+
+
 
 /* ══════════════════════════════════════════════
    INIT
@@ -2141,6 +2255,10 @@ Object.assign(window, {
 async function init() {
   loadState();
   applyTheme(S.theme);
+
+  // Auth: check session and handle error query params
+  checkAuthError();
+  checkAuth(); // async — non-blocking, updates UI when resolved
 
   // Force check without relying on state change
   const isNowMobile = window.innerWidth <= SIDEBAR_BREAKPOINT;
