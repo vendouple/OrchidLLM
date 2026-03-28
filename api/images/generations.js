@@ -1,26 +1,29 @@
 /**
  * /api/images/generations - Image Generation Proxy
- * 
- * Handles image generation requests through Pollinations API.
- * BYOP mode is a zero-DB fast path.
- * Demo mode uses DB with timeout fallback (fail open).
+ *
+ * Same DB-guard pattern as /api/chat/completions:
+ *  - isDbConfigured() checked synchronously up front — no oracledb hang.
+ *  - BYOP: zero DB, direct passthrough.
+ *  - Demo without DB: allowed anonymously (no tracking).
  */
 
 import { detectKeyType, validateApiKey, getPollinationsServerKey } from '../../lib/keys.js';
 import { checkRateLimit, logUsage, checkDemoSession } from '../../lib/usage.js';
 import { generateCompositeHash } from '../../lib/fingerprint.js';
-import { closePool } from '../../lib/oracle.js';
+import { closePool, isDbConfigured } from '../../lib/oracle.js';
 
 const POLLINATIONS_BASE = 'https://gen.pollinations.ai/v1';
-const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 12000);
+const DB_TIMEOUT_MS     = Number(process.env.DB_TIMEOUT_MS || 8000);
 
-async function withDbTimeout(promise, fallback, label = 'DB operation') {
+function withDbTimeout(promise, fallback, label = 'DB') {
     return Promise.race([
         promise,
-        new Promise((resolve) => setTimeout(() => {
-            console.warn(`${label} timed out after ${DB_TIMEOUT_MS}ms — using fallback`);
-            resolve(fallback);
-        }, DB_TIMEOUT_MS))
+        new Promise(resolve =>
+            setTimeout(() => {
+                console.warn(`[generations] ${label} timed out after ${DB_TIMEOUT_MS}ms — using fallback`);
+                resolve(fallback);
+            }, DB_TIMEOUT_MS)
+        )
     ]);
 }
 
@@ -28,142 +31,137 @@ export default async function handler(req, res) {
     if (req.method !== 'POST') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    
-    const authHeader = req.headers['authorization'];
-    const apiKey = authHeader?.replace('Bearer ', '').trim();
-    const clientIP = req.headers['x-forwarded-for']?.split(',')[0].trim() || req.connection?.remoteAddress || 'unknown';
+
+    const authHeader     = req.headers['authorization'];
+    const rawKey         = authHeader?.replace('Bearer ', '').trim() || '';
+    const clientIP       = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
+                           || req.connection?.remoteAddress || 'unknown';
     const fingerprintStr = req.headers['x-fingerprint'];
-    const userAgent = req.headers['user-agent'] || 'unknown';
-    
+    const userAgent      = req.headers['user-agent'] || 'unknown';
+
+    const dbAvailable = isDbConfigured();
     let usedDb = false;
 
     try {
-        let keyInfo = null;
+        let keyInfo    = null;
         let identifier = null;
-        
-        if (apiKey) {
-            const keyType = detectKeyType(apiKey);
-            
+
+        if (rawKey) {
+            const keyType = detectKeyType(rawKey);
+
             if (keyType.type === 'byop') {
-                // ── BYOP FAST PATH: zero DB ──
-                keyInfo = {
-                    type: 'byop',
-                    actualKey: keyType.actualKey,
-                    bypassLimits: true
-                };
-                identifier = `byop:${apiKey.substring(0, 20)}`;
+                keyInfo    = { type: 'byop', actualKey: keyType.actualKey, bypassLimits: true };
+                identifier = `byop:${rawKey.substring(0, 20)}`;
 
             } else if (keyType.needsDbValidation) {
+                if (!dbAvailable) {
+                    return res.status(503).json({
+                        error: 'Database unavailable',
+                        message: 'API key validation requires a database. Use BYOP mode or try again later.'
+                    });
+                }
                 usedDb = true;
-                const validated = await withDbTimeout(
-                    validateApiKey(apiKey),
-                    null,
-                    'validateApiKey'
-                );
+                const validated = await withDbTimeout(validateApiKey(rawKey), null, 'validateApiKey');
                 if (!validated) {
                     return res.status(401).json({ error: 'Invalid API key' });
                 }
-                keyInfo = validated;
-                identifier = `key:${apiKey}`;
+                keyInfo    = validated;
+                identifier = `key:${rawKey}`;
+
             } else {
                 return res.status(401).json({ error: 'Unknown key format' });
             }
-        } else {
-            // Demo mode
-            const fingerprint = fingerprintStr ? (() => { try { return JSON.parse(fingerprintStr); } catch { return {}; } })() : {};
-            const compositeHash = generateCompositeHash(fingerprint, clientIP, userAgent);
-            
-            usedDb = true;
-            const demoSession = await withDbTimeout(
-                checkDemoSession(compositeHash, fingerprint, clientIP, userAgent),
-                { isBlocked: false, apiKeyId: null, key: null },
-                'checkDemoSession'
-            );
 
-            if (demoSession.isBlocked) {
-                return res.status(429).json({ error: 'Session blocked' });
+        } else {
+            // Demo / anonymous
+            let fingerprint = {};
+            if (fingerprintStr) {
+                try { fingerprint = JSON.parse(fingerprintStr); } catch { /* ignore */ }
             }
-            
-            keyInfo = {
-                type: 'demo',
-                id: demoSession.apiKeyId,
-                rpm: 5,
-                rpd: 20,
-                bypassLimits: false
-            };
+            const compositeHash = generateCompositeHash(fingerprint, clientIP, userAgent);
+
+            if (dbAvailable) {
+                usedDb = true;
+                const demoSession = await withDbTimeout(
+                    checkDemoSession(compositeHash, fingerprint, clientIP, userAgent),
+                    { isBlocked: false, apiKeyId: null, key: null },
+                    'checkDemoSession'
+                );
+                if (demoSession.isBlocked) {
+                    return res.status(429).json({ error: 'Session blocked' });
+                }
+                keyInfo = {
+                    type: 'demo', id: demoSession.apiKeyId,
+                    rpm: 5, rpd: 20, bypassLimits: false
+                };
+            } else {
+                keyInfo = { type: 'demo', id: null, rpm: 5, rpd: 20, bypassLimits: false };
+            }
             identifier = `demo:${compositeHash}`;
         }
-        
+
+        // Rate limit (only when DB was used)
         if (!keyInfo.bypassLimits && usedDb) {
-            const rateLimitResult = await withDbTimeout(
+            const rl = await withDbTimeout(
                 checkRateLimit(identifier, keyInfo.rpm, keyInfo.rpd),
                 { allowed: true, remaining: -1 },
                 'checkRateLimit'
             );
-            if (!rateLimitResult.allowed) {
-                return res.status(429).json({
-                    error: 'Rate limit exceeded',
-                    resetAt: rateLimitResult.resetAt
-                });
+            if (!rl.allowed) {
+                return res.status(429).json({ error: 'Rate limit exceeded', resetAt: rl.resetAt });
             }
         }
-        
-        const body = req.body;
+
+        const body    = req.body;
         const { prompt, model } = body;
-        
+
         if (!prompt) {
             return res.status(400).json({ error: 'Missing prompt' });
         }
-        
-        const targetKey = keyInfo.type === 'byop' 
-            ? keyInfo.actualKey 
+
+        const targetKey = keyInfo.type === 'byop'
+            ? keyInfo.actualKey
             : getPollinationsServerKey();
 
-        if (!targetKey || (typeof targetKey === 'string' && !targetKey.trim())) {
+        if (!targetKey || !String(targetKey).trim()) {
             return res.status(500).json({
                 error: 'Server misconfiguration',
-                message: 'Missing Pollinations API key. Set POLLINATIONS_API_KEY in Vercel environment variables.'
+                message: 'Missing POLLINATIONS_API_KEY env var.'
             });
         }
-        
-        const response = await fetch(`${POLLINATIONS_BASE}/images/generations`, {
-            method: 'POST',
+
+        const upstream = await fetch(`${POLLINATIONS_BASE}/images/generations`, {
+            method:  'POST',
             headers: {
-                'Content-Type': 'application/json',
+                'Content-Type':  'application/json',
                 'Authorization': `Bearer ${targetKey}`
             },
             body: JSON.stringify(body)
         });
-        
-        if (!response.ok) {
-            const errorData = await response.json().catch(() => ({}));
-            return res.status(response.status).json({
-                error: 'Upstream API error',
-                message: errorData.error?.message || errorData.message || 'Unknown error'
+
+        if (!upstream.ok) {
+            const errBody = await upstream.json().catch(() => ({}));
+            return res.status(upstream.status).json({
+                error:   'Upstream API error',
+                message: errBody.error?.message || errBody.message || 'Unknown error'
             });
         }
-        
-        const data = await response.json();
-        
-        // Log usage best-effort
+
+        const data = await upstream.json();
+
         if (usedDb) {
             logUsage({
-                identifier,
-                apiKeyId: keyInfo.id,
-                endpoint: '/images/generations',
-                model: model || 'default',
-                inputTokens: 0,
-                outputTokens: 0,
-                ip: clientIP,
-                userAgent
+                identifier, apiKeyId: keyInfo.id, endpoint: '/images/generations',
+                model: model || 'default', inputTokens: 0, outputTokens: 0,
+                ip: clientIP, userAgent
             }).catch(() => {});
         }
-        
+
         res.status(200).json(data);
-        
-    } catch (error) {
-        console.error('Image generations error:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
+
+    } catch (err) {
+        console.error('[generations] handler error:', err);
+        res.status(500).json({ error: 'Internal server error', message: err.message });
     } finally {
         if (usedDb) {
             await closePool();

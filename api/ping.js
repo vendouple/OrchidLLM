@@ -1,27 +1,33 @@
 /**
  * /api/ping - Keep DB Awake + Cleanup
  * 
- * This endpoint is called daily by Vercel cron to:
+ * Called daily by Vercel cron to:
  * 1. Keep Oracle DB connection alive
  * 2. Clean up unused demo keys (30+ days inactive)
+ * 
+ * Returns 503 immediately if Oracle is not configured — no hang.
  */
 
-import { executeQuery, closePool } from '../lib/oracle.js';
+import { executeQuery, closePool, isDbConfigured } from '../lib/oracle.js';
 
 export default async function handler(req, res) {
-    // Only allow GET requests
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
     }
-    
+
+    // Bail out immediately if Oracle isn't configured — avoids a 300 s hang
+    if (!isDbConfigured()) {
+        return res.status(503).json({
+            status: 'no-db',
+            message: 'Oracle database is not configured. Set ORACLE_DB_USER, ORACLE_DB_PASSWORD, and ORACLE_DB_CONNECTION_STRING.'
+        });
+    }
+
     try {
         // Simple query to keep connection alive
-        const result = await executeQuery(
-            'SELECT 1 AS alive FROM DUAL'
-        );
+        const result = await executeQuery('SELECT 1 AS alive FROM DUAL');
         
-        // Cleanup: Delete demo keys unused for 30+ days
-        // Only removes keys with no usage logs (never used)
+        // Cleanup: Delete demo keys unused for 30+ days with no usage logs
         let deletedKeys = 0;
         try {
             const cleanupResult = await executeQuery(
@@ -34,24 +40,18 @@ export default async function handler(req, res) {
             deletedKeys = cleanupResult.rowsAffected;
         } catch (cleanupError) {
             console.error('Cleanup error:', cleanupError);
-            // Don't fail the request if cleanup fails
         }
         
         // Cleanup orphaned demo sessions
         try {
-            await executeQuery(
-                `DELETE FROM demo_sessions 
-                 WHERE last_seen < SYSDATE - 30`
-            );
+            await executeQuery(`DELETE FROM demo_sessions WHERE last_seen < SYSDATE - 30`);
         } catch (sessionCleanupError) {
             console.error('Session cleanup error:', sessionCleanupError);
         }
         
         // Cleanup expired sessions
         try {
-            await executeQuery(
-                `DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP`
-            );
+            await executeQuery(`DELETE FROM sessions WHERE expires_at < CURRENT_TIMESTAMP`);
         } catch (sessionExpireError) {
             console.error('Session expire cleanup error:', sessionExpireError);
         }
@@ -60,10 +60,9 @@ export default async function handler(req, res) {
             status: 'ok',
             timestamp: new Date().toISOString(),
             db: result.rows[0],
-            cleanup: {
-                deletedKeys
-            }
+            cleanup: { deletedKeys }
         });
+
     } catch (error) {
         console.error('Ping error:', error);
         res.status(500).json({ 
@@ -71,7 +70,6 @@ export default async function handler(req, res) {
             message: error.message 
         });
     } finally {
-        // Close pool to free resources
         await closePool();
     }
 }
