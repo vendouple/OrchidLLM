@@ -1,8 +1,9 @@
 /**
  * /api/auth/callback - GitHub OAuth Callback
  * 
- * Handles the OAuth callback from GitHub
- * Only allows @vendouple to sign in
+ * Handles the OAuth callback from GitHub.
+ * Only allows @vendouple to sign in.
+ * Uses stateless HMAC-signed session cookies — no DB required.
  */
 
 import { 
@@ -14,7 +15,6 @@ import {
     clearSessionCookie,
     sendRedirect
 } from '../../lib/auth.js';
-import { closePool } from '../../lib/oracle.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -31,31 +31,46 @@ export default async function handler(req, res) {
     // Validate state (CSRF protection)
     const cookies = req.headers.cookie || '';
     const stateMatch = cookies.match(/oauth_state=([^;]+)/);
-    const storedState = stateMatch ? stateMatch[1] : null;
+    const storedState = stateMatch ? decodeURIComponent(stateMatch[1]) : null;
     
     if (!storedState || storedState !== state) {
+        console.error('State mismatch:', { storedState, receivedState: state });
         return sendRedirect(res, '/?error=invalid_state');
     }
     
+    // Clear the oauth_state cookie immediately
+    res.setHeader('Set-Cookie', [
+        'oauth_state=',
+        'Path=/',
+        'HttpOnly',
+        'Secure',
+        'SameSite=Lax',
+        'Max-Age=0'
+    ].join('; '));
+
     try {
         // Exchange code for access token
         const tokenData = await exchangeCodeForToken(code);
         
         if (tokenData.error) {
-            return sendRedirect(res, `/?error=${tokenData.error}`);
+            console.error('Token exchange error:', tokenData.error, tokenData.error_description);
+            return sendRedirect(res, `/?error=${encodeURIComponent(tokenData.error)}`);
         }
         
+        if (!tokenData.access_token) {
+            return sendRedirect(res, '/?error=no_access_token');
+        }
+
         // Get user info
         const user = await getGitHubUser(tokenData.access_token);
         
         // Check if user is admin (only vendouple allowed)
         if (!isAdmin(user.login)) {
-            // Not authorized - sign out immediately
             clearSessionCookie(res);
             return sendRedirect(res, '/?error=signin_unavailable');
         }
         
-        // Create session
+        // Create stateless session token (no DB needed)
         const { sessionId, expiresAt } = await createSession(user);
         
         // Set session cookie
@@ -66,7 +81,5 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('OAuth callback error:', error);
         sendRedirect(res, `/?error=${encodeURIComponent(error.message)}`);
-    } finally {
-        await closePool();
     }
 }

@@ -10,11 +10,7 @@
       "use": "@vercel/static"
     },
     {
-      "src": "*.js",
-      "use": "@vercel/static"
-    },
-    {
-      "src": "*.css",
+      "src": "styles.css",
       "use": "@vercel/static"
     },
     {
@@ -23,7 +19,16 @@
     }
   ],
   "routes": [
-    { "src": "/api/(.*)", "dest": "/api/$1.js" },
+    { "src": "/api/auth/callback/github", "dest": "/api/auth/callback/github.js" },
+    { "src": "/api/auth/callback", "dest": "/api/auth/callback.js" },
+    { "src": "/api/auth/github", "dest": "/api/auth/github.js" },
+    { "src": "/api/auth/session", "dest": "/api/auth/session.js" },
+    { "src": "/api/auth/logout", "dest": "/api/auth/logout.js" },
+    { "src": "/api/chat/completions", "dest": "/api/chat/completions.js" },
+    { "src": "/api/models", "dest": "/api/models.js" },
+    { "src": "/api/ping", "dest": "/api/ping.js" },
+    { "src": "/api/images/(.*)", "dest": "/api/images/$1.js" },
+    { "src": "/api/admin/(.*)", "dest": "/api/admin/$1.js" },
     { "src": "/admin", "dest": "/index.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ],

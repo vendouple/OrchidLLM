@@ -1,11 +1,11 @@
 /**
  * /api/auth/session - Session Check
  * 
- * Returns current session info if authenticated
+ * Returns current session info if authenticated.
+ * Validates the HMAC-signed session cookie — no DB required.
  */
 
 import { validateSession, getSessionFromCookie } from '../../lib/auth.js';
-import { closePool } from '../../lib/oracle.js';
 
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
@@ -23,7 +23,7 @@ export default async function handler(req, res) {
             });
         }
         
-        // Validate session
+        // Validate session (stateless — no DB lookup)
         const session = await validateSession(sessionId);
         
         if (!session) {
@@ -45,7 +45,5 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('Session check error:', error);
         res.status(500).json({ error: 'Internal server error', message: error.message });
-    } finally {
-        await closePool();
     }
 }
