@@ -9,7 +9,7 @@
     "deploy:preview": "vercel"
   },
   "dependencies": {
-    "oracledb": "^6.7.0",
+    "oracledb": "^6.10.0",
     "tiktoken": "^1.0.22"
   },
   "devDependencies": {
