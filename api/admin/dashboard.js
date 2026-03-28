@@ -76,8 +76,8 @@ export default async function handler(req, res) {
                 ak.key AS api_key, ak.id AS api_key_id,
                 ak.usage_count AS key_usage_count,
                 ak.total_input_tokens, ak.total_output_tokens,
-                -- Days since last activity
-                ROUND(SYSDATE - NVL(ds.last_seen, ds.first_seen)) AS days_inactive
+                -- Days since last activity (TRUNC both sides → plain NUMBER, avoids ORA-00932)
+                TRUNC(SYSDATE) - TRUNC(NVL(ds.last_seen, ds.first_seen)) AS days_inactive
             FROM demo_sessions ds
             LEFT JOIN api_keys ak ON ds.api_key_id = ak.id
             ORDER BY NVL(ds.last_seen, ds.first_seen) DESC NULLS LAST
