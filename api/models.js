@@ -5,6 +5,7 @@
  */
 
 import { closePool } from '../lib/oracle.js';
+import { getBaseUrl } from '../lib/auth.js';
 
 const POLLINATIONS_BASE = 'https://gen.pollinations.ai/v1';
 const NVIDIA_BASE = 'https://integrate.api.nvidia.com/v1';
@@ -18,7 +19,8 @@ export default async function handler(req, res) {
         // Try to fetch local models.json first
         let localModels = { categories: {} };
         try {
-            const localResponse = await fetch(`${process.env.VERCEL_URL ? 'https://' + process.env.VERCEL_URL : ''}/models.json`);
+            const baseUrl = getBaseUrl(req);
+            const localResponse = await fetch(`${baseUrl}/models.json`);
             if (localResponse.ok) {
                 localModels = await localResponse.json();
             }

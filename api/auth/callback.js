@@ -11,7 +11,8 @@ import {
     isAdmin, 
     createSession,
     setSessionCookie,
-    clearSessionCookie
+    clearSessionCookie,
+    sendRedirect
 } from '../../lib/auth.js';
 import { closePool } from '../../lib/oracle.js';
 
@@ -24,7 +25,7 @@ export default async function handler(req, res) {
     
     // Validate required parameters
     if (!code) {
-        return res.redirect('/?error=no_code');
+        return sendRedirect(res, '/?error=no_code');
     }
     
     // Validate state (CSRF protection)
@@ -33,7 +34,7 @@ export default async function handler(req, res) {
     const storedState = stateMatch ? stateMatch[1] : null;
     
     if (!storedState || storedState !== state) {
-        return res.redirect('/?error=invalid_state');
+        return sendRedirect(res, '/?error=invalid_state');
     }
     
     try {
@@ -41,7 +42,7 @@ export default async function handler(req, res) {
         const tokenData = await exchangeCodeForToken(code);
         
         if (tokenData.error) {
-            return res.redirect(`/?error=${tokenData.error}`);
+            return sendRedirect(res, `/?error=${tokenData.error}`);
         }
         
         // Get user info
@@ -51,7 +52,7 @@ export default async function handler(req, res) {
         if (!isAdmin(user.login)) {
             // Not authorized - sign out immediately
             clearSessionCookie(res);
-            return res.redirect('/?error=signin_unavailable');
+            return sendRedirect(res, '/?error=signin_unavailable');
         }
         
         // Create session
@@ -61,10 +62,10 @@ export default async function handler(req, res) {
         setSessionCookie(res, sessionId, expiresAt);
         
         // Redirect to home
-        res.redirect('/');
+        sendRedirect(res, '/');
     } catch (error) {
         console.error('OAuth callback error:', error);
-        res.redirect(`/?error=${encodeURIComponent(error.message)}`);
+        sendRedirect(res, `/?error=${encodeURIComponent(error.message)}`);
     } finally {
         await closePool();
     }
