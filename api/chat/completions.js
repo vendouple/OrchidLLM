@@ -10,7 +10,7 @@
  * - Request proxying to Pollinations/NVIDIA
  */
 
-import { detectKeyType, validateApiKey, isModelAllowed, isProviderAllowed } from '../../lib/keys.js';
+import { detectKeyType, validateApiKey, isModelAllowed, isProviderAllowed, getPollinationsServerKey } from '../../lib/keys.js';
 import { checkRateLimit, logUsage, checkDemoSession, checkTokenLimits } from '../../lib/usage.js';
 import { countMessagesTokens, estimateOutputTokens } from '../../lib/tokenizer.js';
 import { generateCompositeHash } from '../../lib/fingerprint.js';
@@ -168,7 +168,16 @@ export default async function handler(req, res) {
             targetUrl = POLLINATIONS_BASE;
             targetKey = keyInfo.type === 'byop' 
                 ? keyInfo.actualKey 
-                : process.env.POLLINATIONS_API_KEY;
+                : getPollinationsServerKey();
+        }
+
+        if (!targetKey || (typeof targetKey === 'string' && !targetKey.trim())) {
+            return res.status(500).json({
+                error: 'Server misconfiguration',
+                message: model.startsWith('nvidia/')
+                    ? 'Missing NVIDIA API key. Set NVIDIA_API_KEY in Vercel environment variables.'
+                    : 'Missing Pollinations API key. Set POLLINATIONS_API_KEY in Vercel environment variables.'
+            });
         }
         
         // Forward request to target API

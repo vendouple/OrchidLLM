@@ -4,7 +4,7 @@
  * Handles image generation requests through Pollinations API
  */
 
-import { detectKeyType, validateApiKey } from '../../lib/keys.js';
+import { detectKeyType, validateApiKey, getPollinationsServerKey } from '../../lib/keys.js';
 import { checkRateLimit, logUsage, checkDemoSession } from '../../lib/usage.js';
 import { generateCompositeHash } from '../../lib/fingerprint.js';
 import { closePool } from '../../lib/oracle.js';
@@ -84,7 +84,14 @@ export default async function handler(req, res) {
         
         const targetKey = keyInfo.type === 'byop' 
             ? keyInfo.actualKey 
-            : process.env.POLLINATIONS_API_KEY;
+            : getPollinationsServerKey();
+
+        if (!targetKey || (typeof targetKey === 'string' && !targetKey.trim())) {
+            return res.status(500).json({
+                error: 'Server misconfiguration',
+                message: 'Missing Pollinations API key. Set POLLINATIONS_API_KEY in Vercel environment variables.'
+            });
+        }
         
         const response = await fetch(`${POLLINATIONS_BASE}/images/generations`, {
             method: 'POST',

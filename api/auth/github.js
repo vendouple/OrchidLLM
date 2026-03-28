@@ -42,7 +42,7 @@ export default async function handler(req, res) {
             ].join('; '));
             
             // Redirect to GitHub
-            const authUrl = getGitHubAuthUrl(state);
+            const authUrl = getGitHubAuthUrl(state, req);
             res.redirect(authUrl);
         } catch (error) {
             console.error('GitHub auth error:', error);
