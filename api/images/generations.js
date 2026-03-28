@@ -12,8 +12,9 @@ import { checkRateLimit, logUsage, checkDemoSession } from '../../lib/usage.js';
 import { generateCompositeHash } from '../../lib/fingerprint.js';
 import { closePool, isDbConfigured } from '../../lib/oracle.js';
 
-const POLLINATIONS_BASE = 'https://gen.pollinations.ai/v1';
-const DB_TIMEOUT_MS     = Number(process.env.DB_TIMEOUT_MS || 8000);
+const POLLINATIONS_BASE  = 'https://gen.pollinations.ai/v1';
+const DB_TIMEOUT_MS      = Number(process.env.DB_TIMEOUT_MS || 8000);
+const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_FETCH_TIMEOUT_MS || 60000);
 
 function withDbTimeout(promise, fallback, label = 'DB') {
     return Promise.race([
@@ -41,6 +42,13 @@ export default async function handler(req, res) {
 
     const dbAvailable = isDbConfigured();
     let usedDb = false;
+
+    // Single abort controller covers full upstream round-trip (connect + body)
+    const upstreamCtrl  = new AbortController();
+    const upstreamTimer = setTimeout(() => {
+        upstreamCtrl.abort();
+        console.error('[generations] Upstream timeout after', UPSTREAM_TIMEOUT_MS, 'ms');
+    }, UPSTREAM_TIMEOUT_MS);
 
     try {
         let keyInfo    = null;
@@ -136,7 +144,8 @@ export default async function handler(req, res) {
                 'Content-Type':  'application/json',
                 'Authorization': `Bearer ${targetKey}`
             },
-            body: JSON.stringify(body)
+            body: JSON.stringify(body),
+            signal: upstreamCtrl.signal   // covers connect + headers + body
         });
 
         if (!upstream.ok) {
@@ -147,7 +156,19 @@ export default async function handler(req, res) {
             });
         }
 
-        const data = await upstream.json();
+        // Body read is also covered by upstreamCtrl.signal
+        let data;
+        try {
+            data = await upstream.json();
+        } catch (readErr) {
+            if (readErr.name === 'AbortError') {
+                return res.status(504).json({
+                    error:   'Gateway timeout',
+                    message: `Upstream body stalled after ${UPSTREAM_TIMEOUT_MS / 1000}s`
+                });
+            }
+            throw readErr;
+        }
 
         if (usedDb) {
             logUsage({
@@ -160,9 +181,16 @@ export default async function handler(req, res) {
         res.status(200).json(data);
 
     } catch (err) {
-        console.error('[generations] handler error:', err);
-        res.status(500).json({ error: 'Internal server error', message: err.message });
+        console.error('[generations] handler error:', err.name, err.message);
+        if (!res.headersSent) {
+            if (err.name === 'AbortError') {
+                res.status(504).json({ error: 'Gateway timeout', message: `Request aborted after ${UPSTREAM_TIMEOUT_MS / 1000}s` });
+            } else {
+                res.status(500).json({ error: 'Internal server error', message: err.message });
+            }
+        }
     } finally {
+        clearTimeout(upstreamTimer);
         if (usedDb) {
             await closePool();
         }
