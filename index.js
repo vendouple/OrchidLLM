@@ -1088,12 +1088,6 @@ async function sendMessage() {
     if (mobileTitle) mobileTitle.textContent = title;
   }
 
-  // Demo count
-  if (S.demoMode) {
-    S.demoCount++;
-    updateDemoBanner();
-    saveState();
-  }
 
   showTyping();
   try {
@@ -1223,6 +1217,8 @@ async function callTextAPI(chatId, userText, userMsg) {
   const aiMsg = { role:'assistant', content: text.trim(), time: ts(), model: S.selectedModel.name };
   addMessage(chatId, aiMsg);
   addMsgToView(aiMsg);
+  // Increment demo count on success
+  if (S.demoMode) { S.demoCount++; updateDemoBanner(); saveState(); }
 }
 
 async function callImageAPI(chatId, prompt) {
@@ -1239,6 +1235,8 @@ async function callImageAPI(chatId, prompt) {
   };
   addMessage(chatId, aiMsg);
   addMsgToView(aiMsg);
+  // Increment demo count on success
+  if (S.demoMode) { S.demoCount++; updateDemoBanner(); saveState(); }
 }
 
 async function callVideoAPI(chatId, prompt) {
@@ -1260,6 +1258,8 @@ async function callVideoAPI(chatId, prompt) {
   const aiMsg = { role:'assistant', videoUrl: url, time: ts(), model: S.selectedModel.name };
   addMessage(chatId, aiMsg);
   addMsgToView(aiMsg);
+  // Increment demo count on success
+  if (S.demoMode) { S.demoCount++; updateDemoBanner(); saveState(); }
 }
 
 async function callAudioOutAPI(chatId, text) {
@@ -1287,6 +1287,8 @@ async function callAudioOutAPI(chatId, text) {
   };
   addMessage(chatId, aiMsg);
   addMsgToView(aiMsg);
+  // Increment demo count on success
+  if (S.demoMode) { S.demoCount++; updateDemoBanner(); saveState(); }
 }
 
 async function callTranscriptionAPI(chatId, attachments) {
@@ -1308,6 +1310,8 @@ async function callTranscriptionAPI(chatId, attachments) {
   const aiMsg = { role: 'assistant', content: transcript, time: ts(), model: S.selectedModel.name };
   addMessage(chatId, aiMsg);
   addMsgToView(aiMsg);
+  // Increment demo count on success
+  if (S.demoMode) { S.demoCount++; updateDemoBanner(); saveState(); }
 }
 
 async function simulateResponse(chatId, text) {

@@ -4,7 +4,6 @@
  * Returns available models from local catalog and NVIDIA NIM
  */
 
-import { closePool } from '../lib/oracle.js';
 import { getBaseUrl } from '../lib/auth.js';
 
 const POLLINATIONS_BASE = 'https://gen.pollinations.ai/v1';
@@ -63,7 +62,5 @@ export default async function handler(req, res) {
     } catch (error) {
         console.error('Models error:', error);
         res.status(500).json({ error: 'Internal server error', message: error.message });
-    } finally {
-        await closePool();
     }
 }
