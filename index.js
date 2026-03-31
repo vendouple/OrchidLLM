@@ -201,6 +201,13 @@ function getCatInfo(catId) { return CATS.find(c=>c.id===catId)||CATS[0]; }
 function isTextCat(catId) { return catId==='text'; }
 function demoRemaining() { return Math.max(0, 20 - S.demoCount); }
 
+function formatDeprecationDate(value) {
+  if (!value) return 'Soon';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return 'Soon';
+  return date.toLocaleDateString([], { month:'short', day:'numeric', year:'numeric' });
+}
+
 async function loadLocalModelCatalog() {
   try {
     const payload = await fetchModelCatalog();
@@ -215,6 +222,11 @@ async function loadLocalModelCatalog() {
       pro: Boolean(entry.pro),
       caching: Boolean(entry.caching),
       disabled: Boolean(entry.disabled),
+      providers: Array.isArray(entry.providers) ? entry.providers : [],
+      tags: Array.isArray(entry.tags) ? entry.tags : [],
+      timeoutMs: Number.isFinite(Number(entry.timeoutMs)) ? Number(entry.timeoutMs) : null,
+      deprecatesAt: entry.deprecatesAt || null,
+      deprecationNote: entry.deprecationNote || null,
     });
 
     Object.keys(MODELS).forEach((category) => {
@@ -965,6 +977,16 @@ function renderModelList(filter='') {
     const metaParts = [];
     if (m.context) metaParts.push(`<span class="cap-chip"><span class="ms">data_object</span>${escHtml(String(m.context))}</span>`);
     if (m.caching) metaParts.push(`<span class="cap-chip"><span class="ms">memory</span>Caching</span>`);
+    if (m.timeoutMs) metaParts.push(`<span class="cap-chip"><span class="ms">timer</span>${Math.round(m.timeoutMs / 1000)}s timeout</span>`);
+    if (Array.isArray(m.providers) && m.providers.length) {
+      metaParts.push(`<span class="cap-chip"><span class="ms">hub</span>${escHtml(m.providers.join(', '))}</span>`);
+    }
+    if (Array.isArray(m.tags) && m.tags.length) {
+      metaParts.push(`<span class="cap-chip"><span class="ms">sell</span>${escHtml(m.tags.join(', '))}</span>`);
+    }
+    if (m.deprecatesAt) {
+      metaParts.push(`<span class="cap-chip" style="color:var(--t)"><span class="ms">event_busy</span>Deprecates ${escHtml(formatDeprecationDate(m.deprecatesAt))}</span>`);
+    }
     const meta = metaParts.join('');
     const disabled = (m.disabled || isProBlocked) ? 'style="opacity:.45;pointer-events:none;filter:grayscale(0.25)"' : '';
     const lockLine = isProBlocked ? `<div class="mi-desc" style="color:var(--t)">Pro model unavailable in Demo Mode</div>` : '';

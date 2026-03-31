@@ -136,12 +136,48 @@ CREATE INDEX idx_demo_last_seen ON demo_sessions(last_seen);
 CREATE INDEX idx_demo_blocked ON demo_sessions(is_blocked);
 
 -- ============================================
--- Existing DB migration (run once if upgrading)
--- Only needed if demo_sessions already exists.
+-- Table: MODEL_CATALOG
+-- Admin-managed model metadata and availability
 -- ============================================
--- ALTER TABLE demo_sessions MODIFY fingerprint_hash VARCHAR2(64);
--- CREATE INDEX idx_demo_last_seen ON demo_sessions(last_seen);
--- CREATE INDEX idx_demo_fingerprint2 ON demo_sessions(fingerprint_hash, is_blocked);
+
+CREATE TABLE model_catalog (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    category VARCHAR2(40) NOT NULL,
+    model_id VARCHAR2(255) NOT NULL,
+    display_name VARCHAR2(255) NOT NULL,
+    description VARCHAR2(1000),
+    context_window VARCHAR2(64),
+
+    -- JSON arrays
+    capabilities_json VARCHAR2(4000),
+    tags_json VARCHAR2(4000),
+    compatible_providers_json VARCHAR2(4000),
+
+    -- Runtime/deprecation metadata
+    timeout_ms NUMBER DEFAULT 60000,
+    deprecates_at TIMESTAMP,
+    deprecation_note VARCHAR2(500),
+
+    -- Flags
+    is_pro NUMBER DEFAULT 0,
+    supports_caching NUMBER DEFAULT 0,
+    is_active NUMBER DEFAULT 1,
+
+    -- Audit
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR2(255),
+    updated_by VARCHAR2(255),
+
+    CONSTRAINT uq_model_catalog_cat_model UNIQUE (category, model_id)
+);
+
+CREATE INDEX idx_model_catalog_cat_active ON model_catalog(category, is_active);
+CREATE INDEX idx_model_catalog_deprecates ON model_catalog(deprecates_at);
+
+-- NOTE:
+-- Provider key pool, provider usage logs, request queue, and model catalog
+-- are created in db/migrate_provider_queue.sql.
 
 -- ============================================
 -- Insert default demo key (optional)

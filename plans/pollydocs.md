@@ -2,9 +2,9 @@
 
 > Generate text, images, video, and audio with a single API. OpenAI-compatible — use any OpenAI SDK by changing the base URL.
 
-Base URL: https://gen.pollinations.ai
-API Keys: https://enter.pollinations.ai
-Docs: https://gen.pollinations.ai/api/docs
+Base URL: <https://gen.pollinations.ai>
+API Keys: <https://enter.pollinations.ai>
+Docs: <https://gen.pollinations.ai/api/docs>
 
 ## Quick Start
 
@@ -51,9 +51,11 @@ Key types: `sk_` (secret, server-side) | `pk_` (publishable, client-side, rate l
 ## Endpoints
 
 ### POST /v1/chat/completions
-OpenAI-compatible chat completions. Use any OpenAI SDK with base_url="https://gen.pollinations.ai".
+
+OpenAI-compatible chat completions. Use any OpenAI SDK with base_url="<https://gen.pollinations.ai>".
 
 Request body (JSON):
+
 - model (string, default: "openai"): Model ID
 - messages (array, required): [{role: "user"|"assistant"|"system", content: "..."}]
 - stream (boolean, default: false): SSE streaming
@@ -62,13 +64,16 @@ Request body (JSON):
 - response_format ({type: "json_object"}): Force JSON output
 
 ### GET /text/{prompt}
+
 Simple text generation. Returns plain text.
 Query params: model, seed, system, json, temperature, stream
 
 ### GET /image/{prompt}
+
 Generate image or video. Returns binary (image/jpeg or video/mp4).
 
 Query params:
+
 - model (string, default: "zimage"): Image or video model
 - width (int, default: 1024), height (int, default: 1024)
 - seed (int, default: 0): Works with flux, zimage, seedream, klein, seedance. -1 for random
@@ -83,9 +88,11 @@ Query params:
 - audio (boolean, default: false): Video audio. wan always has audio
 
 ### POST /v1/images/generations
+
 OpenAI-compatible image generation. Use any OpenAI SDK with `base_url="https://gen.pollinations.ai/v1"`.
 
 Request body (JSON):
+
 - prompt (string, required): Text description of the image
 - model (string, default: "flux"): Image model
 - size (string, default: "1024x1024"): WIDTHxHEIGHT
@@ -93,27 +100,34 @@ Request body (JSON):
 - quality, seed, nologo, enhance, safe: Same as GET /image/{prompt}
 
 ### POST /v1/images/edits
+
 OpenAI-compatible image editing. Accepts JSON with image URLs or multipart/form-data file uploads.
 
 Request body (JSON or multipart):
+
 - prompt (string, required): Description of the edit
 - image (string or array): Source image URL(s)
 - model (string, default: "flux"): Image model
 
 ### GET /audio/{text}
+
 Text-to-speech or music generation. Returns audio/mpeg.
 Query params: voice, model (elevenlabs|elevenmusic), duration
 
 ### POST /v1/audio/speech
+
 OpenAI-compatible TTS. Body: {input, voice, model}
 
 ### POST /v1/audio/transcriptions
+
 Speech-to-text. Multipart: file (audio), model (whisper-large-v3|scribe)
 
 ### GET /v1/models
+
 List text models (OpenAI format). No auth required.
 
 ### GET /image/models
+
 List image/video models with metadata. No auth required.
 
 ## Text Models
@@ -194,8 +208,257 @@ alloy, echo, fable, onyx, nova, shimmer, ash, ballad, coral, sage, verse, rachel
 ## Errors
 
 JSON: {status, success: false, error: {code, message}}
+
 - 400: Invalid parameters
 - 401: Missing/invalid API key
 - 402: Insufficient balance
 - 403: Permission denied
 - 500: Server error
+
+LILMITS COUNTED BY POLLINATIONS:
+
+- prepaid credit system. $1 ≈ 1 Pollen
+- CURRENTLY THE ACCOUNT has 0.4 pollen/hr
+- RATE LIMIT PER MINUTE IS 5 RPM.
+- SUPPORTS NON PAID MODELS. FROM THE PROVIDER STANDPOINT FOR "USEPAIDMODELS" set to false
+
+FOR POLLINATIONS YOU CAN POLL THIS
+
+List Image & Video Models​Copy link
+Returns all available image and video generation models with pricing, capabilities, and metadata. Video models are included here — check the outputModalities field to distinguish image vs video models. When authenticated: models are filtered by API key permissions, and paid_only models are hidden if the account has no paid balance.
+
+Responses
+
+200
+Success
+application/json
+
+500
+Oh snap, something went wrong on our end. We're on it!
+application/json
+Request Example forget/image/models
+cURL
+curl <https://gen.pollinations.ai/image/models>
+
+Test Request
+(get /image/models)
+Status:200
+Status:500
+[]
+
+Success
+
+List Text Models (Detailed)​Copy link
+Returns all available text generation models with pricing, capabilities, and metadata including context window size, supported modalities, and tool support. When authenticated: models are filtered by API key permissions, and paid_only models are hidden if the account has no paid balance.
+
+Responses
+
+200
+Success
+application/json
+
+500
+Oh snap, something went wrong on our end. We're on it!
+application/json
+Request Example forget/text/models
+cURL
+curl <https://gen.pollinations.ai/text/models>
+
+Test Request
+(get /text/models)
+Status:200
+Status:500
+[]
+
+Success
+
+List Audio Models​Copy link
+Returns all available audio models (text-to-speech, music generation, and transcription) with pricing, capabilities, and metadata. When authenticated: models are filtered by API key permissions, and paid_only models are hidden if the account has no paid balance.
+
+Responses
+
+200
+Success
+application/json
+
+500
+Oh snap, something went wrong on our end. We're on it!
+application/json
+Request Example forget/audio/models
+cURL
+curl <https://gen.pollinations.ai/audio/models>
+
+Test Request
+(get /audio/models)
+Status:200
+Status:500
+[]
+
+Success
+
+TO SEND:
+[
+  {
+    "name": "elevenlabs",
+    "aliases": [
+      "tts",
+      "text-to-speech",
+      "eleven",
+      "tts-1",
+      "tts-1-hd"
+    ],
+    "pricing": {
+      "currency": "pollen",
+      "completionAudioTokens": "0.00018"
+    },
+    "description": "ElevenLabs v3 TTS - Expressive voices with emotions & audio tags",
+    "input_modalities": [
+      "text"
+    ],
+    "output_modalities": [
+      "audio"
+    ],
+    "voices": [
+
+        [
+  {
+    "name": "openai",
+    "aliases": [],
+    "pricing": {
+      "currency": "pollen",
+      "promptTextTokens": "0.00000015",
+      "promptCachedTokens": "0.00000004",
+      "completionTextTokens": "0.0000006"
+    },
+    "description": "OpenAI GPT-5 Mini - Fast & Balanced",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "tools": true,
+    "context_length": 400000,
+    "is_specialized": false
+  },
+  {
+    "name": "openai-fast",
+    "aliases": [
+      "gpt-5-nano",
+      "gpt-5-nano-2025-08-07"
+    ],
+    "pricing": {
+      "currency": "pollen",
+      "promptTextTokens": "0.00000006",
+      "promptCachedTokens": "0.00000001",
+      "completionTextTokens": "0.00000044"
+    },
+    "description": "OpenAI GPT-5 Nano - Ultra Fast & Affordable",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "text"
+    ],
+    "tools": true,
+    "context_length": 400000,
+    "is_specialized": false
+  },
+  {
+    "name": "openai-large",
+    "aliases": [
+
+        [
+  {
+    "name": "kontext",
+    "aliases": [],
+    "pricing": {
+      "currency": "pollen",
+      "completionImageTokens": "0.04"
+    },
+    "description": "FLUX.1 Kontext - In-context editing & generation",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "paid_only": true
+  },
+  {
+    "name": "nanobanana",
+    "aliases": [],
+    "pricing": {
+      "currency": "pollen",
+      "promptTextTokens": "0.0000003",
+      "promptImageTokens": "0.0000003",
+      "completionImageTokens": "0.00003"
+    },
+    "description": "NanoBanana - Gemini 2.5 Flash Image",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "paid_only": true
+  },
+  {
+    "name": "nanobanana-2",
+    "aliases": [
+      "nanobanana2"
+    ],
+    "pricing": {
+      "currency": "pollen",
+      "promptTextTokens": "0.0000005",
+      "promptImageTokens": "0.0000005",
+      "completionImageTokens": "0.00006"
+    },
+    "description": "NanoBanana 2 - Gemini 3.1 Flash Image",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "paid_only": true
+  },
+  {
+    "name": "nanobanana-pro",
+    "aliases": [],
+    "pricing": {
+      "currency": "pollen",
+      "promptTextTokens": "0.00000125",
+      "promptImageTokens": "0.00000125",
+      "completionImageTokens": "0.00012"
+    },
+    "description": "NanoBanana Pro - Gemini 3 Pro Image (4K, Thinking)",
+    "input_modalities": [
+      "text",
+      "image"
+    ],
+    "output_modalities": [
+      "image"
+    ],
+    "paid_only": true
+  },
+  {
+    "name": "seedream5",
+
+EXAMPLES. SO PRICING CAN BE CALCULATED AND AUTOMATICALLY DISABLED.
+👤 Account (Collapsed)​Copy link
+Manage your account, check your pollen balance, and view usage history. All endpoints require authentication.
+
+Endpoint Description
+GET /account/profile Name, email, tier, creation date
+GET /account/balance Current pollen balance
+GET /account/usage Per-request history with costs
+GET /account/usage/daily Daily aggregated usage for dashboards
+GET /account/key API key validity, type, and permissions
+When using API keys, specific permissions may be required (e.g., account:balance, account:usage).
+OR YOU CAN GET THE /account/balance for the current pollen balance. etc

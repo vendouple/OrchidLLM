@@ -1,31 +1,63 @@
 /**
  * /api/images/generations - Image Generation Proxy
  *
- * Same DB-guard pattern as /api/chat/completions:
- *  - isDbConfigured() checked synchronously up front — no oracledb hang.
- *  - BYOP: zero DB, direct passthrough.
- *  - Demo without DB: allowed anonymously (no tracking).
+ * Refactored to support:
+ * - Provider registry routing for OpenAI-compatible image endpoints.
+ * - Multiple upstream keys per provider with per-key usage counters.
+ * - Priority queue scheduling before dispatching to providers.
  */
 
-import { detectKeyType, validateApiKey, getPollinationsServerKey } from '../../lib/keys.js';
+import {
+    detectKeyType,
+    validateApiKey,
+    isModelAllowed
+} from '../../lib/keys.js';
 import { checkRateLimit, logUsage, checkDemoSession } from '../../lib/usage.js';
 import { generateCompositeHash } from '../../lib/fingerprint.js';
 import { closePool, isDbConfigured } from '../../lib/oracle.js';
+import {
+    buildProviderCandidates,
+    PROVIDER_ENDPOINTS
+} from '../../lib/provider-registry.js';
+import { recordProviderUsage } from '../../lib/provider-keys.js';
+import {
+    executeProviderImageGeneration,
+    extractProviderUsage
+} from '../../lib/providers.js';
+import {
+    normalizeQueuePriority,
+    enqueueRequest,
+    completeQueueItem,
+    cancelQueueItem,
+    getQueueStatus
+} from '../../lib/queue.js';
+import {
+    filterCandidatesByKeyAccess,
+    buildRoutableCandidates,
+    waitForQueueTurn,
+    orderCandidatesForExecution,
+    endpointModelLabel
+} from '../../providers/distributor.js';
 
-const POLLINATIONS_BASE  = 'https://gen.pollinations.ai/v1';
-const DB_TIMEOUT_MS      = Number(process.env.DB_TIMEOUT_MS || 8000);
+const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 8000);
 const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_FETCH_TIMEOUT_MS || 60000);
 
 function withDbTimeout(promise, fallback, label = 'DB') {
+    let timeoutId;
+
     return Promise.race([
         promise,
         new Promise(resolve =>
-            setTimeout(() => {
+            timeoutId = setTimeout(() => {
                 console.warn(`[generations] ${label} timed out after ${DB_TIMEOUT_MS}ms — using fallback`);
                 resolve(fallback);
             }, DB_TIMEOUT_MS)
         )
-    ]);
+    ]).finally(() => {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    });
 }
 
 export default async function handler(req, res) {
@@ -49,6 +81,9 @@ export default async function handler(req, res) {
         upstreamCtrl.abort();
         console.error('[generations] Upstream timeout after', UPSTREAM_TIMEOUT_MS, 'ms');
     }, UPSTREAM_TIMEOUT_MS);
+
+    let queueId = null;
+    let selectedCandidate = null;
 
     try {
         let keyInfo    = null;
@@ -120,68 +155,235 @@ export default async function handler(req, res) {
             }
         }
 
-        const body    = req.body;
-        const { prompt, model } = body;
+        const body = req.body || {};
+        const { prompt, model, provider: requestedProvider } = body;
+        const isByopFastTrack = keyInfo.type === 'byop';
+        const effectiveRequestedProvider = isByopFastTrack ? 'pollinations' : requestedProvider;
 
         if (!prompt) {
             return res.status(400).json({ error: 'Missing prompt' });
         }
 
-        const targetKey = keyInfo.type === 'byop'
-            ? keyInfo.actualKey
-            : getPollinationsServerKey();
-
-        if (!targetKey || !String(targetKey).trim()) {
-            return res.status(500).json({
-                error: 'Server misconfiguration',
-                message: 'Missing POLLINATIONS_API_KEY env var.'
+        if (model && !keyInfo.bypassLimits && keyInfo.type !== 'demo' && !isModelAllowed(keyInfo, model)) {
+            return res.status(403).json({
+                error: 'Model not allowed',
+                message: `No access to ${model}`
             });
         }
 
-        const upstream = await fetch(`${POLLINATIONS_BASE}/images/generations`, {
-            method:  'POST',
-            headers: {
-                'Content-Type':  'application/json',
-                'Authorization': `Bearer ${targetKey}`
-            },
-            body: JSON.stringify(body),
-            signal: upstreamCtrl.signal   // covers connect + headers + body
+        const allowedProviders = Array.isArray(keyInfo.providers)
+            ? keyInfo.providers
+            : [];
+
+        const providerCandidates = buildProviderCandidates({
+            model,
+            requestedProvider: effectiveRequestedProvider,
+            allowedProviders,
+            endpointKey: PROVIDER_ENDPOINTS.IMAGE_GENERATIONS
         });
 
-        if (!upstream.ok) {
-            const errBody = await upstream.json().catch(() => ({}));
-            return res.status(upstream.status).json({
-                error:   'Upstream API error',
-                message: errBody.error?.message || errBody.message || 'Unknown error'
+        if (providerCandidates.length === 0) {
+            return res.status(403).json({
+                error: 'Provider not allowed',
+                message: 'No provider is allowed by this key for the requested model/provider'
             });
         }
 
-        // Body read is also covered by upstreamCtrl.signal
-        let data;
-        try {
-            data = await upstream.json();
-        } catch (readErr) {
-            if (readErr.name === 'AbortError') {
-                return res.status(504).json({
-                    error:   'Gateway timeout',
-                    message: `Upstream body stalled after ${UPSTREAM_TIMEOUT_MS / 1000}s`
+        const accessibleCandidates = filterCandidatesByKeyAccess(providerCandidates, keyInfo);
+
+        if (accessibleCandidates.length === 0) {
+            return res.status(403).json({
+                error: 'Provider not allowed',
+                message: 'No provider is allowed by this key for the requested model/provider'
+            });
+        }
+
+        const routableCandidates = await buildRoutableCandidates({
+            providerCandidates: accessibleCandidates,
+            keyInfo,
+            allowDb: dbAvailable,
+            endpointKey: PROVIDER_ENDPOINTS.IMAGE_GENERATIONS
+        });
+
+        if (routableCandidates.length === 0) {
+            return res.status(503).json({
+                error: 'No upstream provider available',
+                message: 'No provider key is currently available for image generation'
+            });
+        }
+
+        if (isByopFastTrack) {
+            selectedCandidate = routableCandidates.find(candidate => candidate.providerId === 'pollinations') || null;
+            res.setHeader('x-provider-fasttrack', 'byop-pollinations');
+        } else {
+            const queuePriority = normalizeQueuePriority(
+                keyInfo.queuePriority !== undefined
+                    ? keyInfo.queuePriority
+                    : 0
+            );
+
+            const queueEntry = await enqueueRequest({
+                endpoint: '/images/generations',
+                identifier,
+                apiKeyId: keyInfo.id,
+                model: model || null,
+                priority: queuePriority
+            });
+
+            queueId = queueEntry.id;
+            if (queueId) {
+                res.setHeader('x-queue-id', queueId);
+            }
+
+            selectedCandidate = await waitForQueueTurn({
+                queueId,
+                endpoint: '/images/generations',
+                candidates: routableCandidates
+            });
+        }
+
+        if (!selectedCandidate) {
+            const queueStatus = queueId ? await getQueueStatus(queueId) : null;
+            if (queueId) {
+                await cancelQueueItem(queueId, 'queue_wait_timeout');
+            }
+
+            return res.status(503).json({
+                error: 'All providers are busy',
+                message: 'Queue timeout reached before a provider slot was available',
+                queueId,
+                queueStatus
+            });
+        }
+
+        const { provider: _requestedProvider, ...forwardBody } = body;
+
+        const candidatesInAttemptOrder = isByopFastTrack
+            ? [selectedCandidate]
+            : orderCandidatesForExecution(selectedCandidate, routableCandidates);
+
+        let providerResult = null;
+        let lastProviderError = null;
+
+        for (const candidate of candidatesInAttemptOrder) {
+            const requestBody = { ...forwardBody };
+            if (candidate.upstreamModel) {
+                requestBody.model = candidate.upstreamModel;
+            }
+
+            try {
+                providerResult = await executeProviderImageGeneration({
+                    providerId: candidate.providerId,
+                    upstreamModel: candidate.upstreamModel,
+                    requestBody,
+                    credential: candidate.credential,
+                    signal: upstreamCtrl.signal
+                });
+
+                selectedCandidate = candidate;
+                break;
+            } catch (providerError) {
+                lastProviderError = providerError;
+
+                const counterType = candidate.credential?.usageCounterType ||
+                    candidate.providerDefinition?.usageCounterType ||
+                    'tokens';
+
+                await recordProviderUsage({
+                    providerId: candidate.providerId,
+                    credential: candidate.credential,
+                    endpoint: '/images/generations',
+                    model: candidate.upstreamModel,
+                    statusCode: providerError.status || 502,
+                    usage: {
+                        counterType,
+                        promptTokens: 0,
+                        completionTokens: 0,
+                        totalTokens: 0,
+                        providerUnits: counterType === 'requests' ? 1 : 0,
+                        rateLimitSnapshot: null
+                    },
+                    errorMessage: providerError.message,
+                    identifier,
+                    apiKeyId: keyInfo.id
                 });
             }
-            throw readErr;
         }
+
+        if (!providerResult) {
+            const status = Number(lastProviderError?.status || 503);
+
+            if (queueId) {
+                await completeQueueItem({
+                    queueId,
+                    status: 'error',
+                    statusCode: status,
+                    errorMessage: lastProviderError?.message || 'No upstream provider available'
+                });
+            }
+
+            return res.status(status).json({
+                error: 'No upstream provider available',
+                status,
+                message: lastProviderError?.message || 'All configured providers failed to process this request'
+            });
+        }
+
+        const data = providerResult.normalizedData || {};
 
         if (usedDb) {
             logUsage({
                 identifier, apiKeyId: keyInfo.id, endpoint: '/images/generations',
-                model: model || 'default', inputTokens: 0, outputTokens: 0,
-                ip: clientIP, userAgent
+                model: endpointModelLabel(selectedCandidate),
+                inputTokens: 0,
+                outputTokens: 0,
+                ip: clientIP,
+                fingerprintHash: identifier.startsWith('demo:') ? identifier.replace('demo:', '') : null,
+                userAgent
             }).catch(() => {});
+        }
+
+        await recordProviderUsage({
+            providerId: selectedCandidate.providerId,
+            credential: selectedCandidate.credential,
+            endpoint: '/images/generations',
+            model: selectedCandidate.upstreamModel,
+            statusCode: providerResult.response.status,
+            usage: extractProviderUsage({
+                providerId: selectedCandidate.providerId,
+                providerDefinition: selectedCandidate.providerDefinition,
+                credential: selectedCandidate.credential,
+                responseHeaders: providerResult.response.headers,
+                responseData: data,
+                fallbackPromptTokens: 0,
+                fallbackCompletionTokens: 0
+            }),
+            identifier,
+            apiKeyId: keyInfo.id
+        });
+
+        if (queueId) {
+            await completeQueueItem({
+                queueId,
+                status: 'done',
+                statusCode: 200
+            });
         }
 
         res.status(200).json(data);
 
     } catch (err) {
         console.error('[generations] handler error:', err.name, err.message);
+
+        if (queueId) {
+            await completeQueueItem({
+                queueId,
+                status: 'error',
+                statusCode: err.name === 'AbortError' ? 504 : 500,
+                errorMessage: err.message
+            });
+        }
+
         if (!res.headersSent) {
             if (err.name === 'AbortError') {
                 res.status(504).json({ error: 'Gateway timeout', message: `Request aborted after ${UPSTREAM_TIMEOUT_MS / 1000}s` });

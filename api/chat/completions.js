@@ -1,23 +1,45 @@
 /**
  * /api/chat/completions - Chat Completions Proxy
  *
- * Key design decisions:
- *  - isDbConfigured() is checked FIRST (sync, no oracledb calls).
- *  - BYOP keys skip DB entirely (fast path).
- *  - A SINGLE AbortController + timeout covers the full upstream
- *    round-trip (fetch headers AND body read), not just the connect.
- *    This prevents a 300 s Vercel hang when Pollinations sends headers
- *    quickly but stalls the response body.
+ * Refactored to support:
+ * - Provider registry with OpenAI-compatible and non-compatible adapters.
+ * - Multiple upstream keys per provider with per-key usage counters.
+ * - Priority queue scheduling before dispatching to providers.
+ * - Response normalization for providers that do not return OpenAI shape.
  */
 
-import { detectKeyType, validateApiKey, isModelAllowed, isProviderAllowed, getPollinationsServerKey } from '../../lib/keys.js';
+import {
+    detectKeyType,
+    validateApiKey,
+    isModelAllowed
+} from '../../lib/keys.js';
 import { checkRateLimit, logUsage, checkDemoSession, checkTokenLimits } from '../../lib/usage.js';
 import { countMessagesTokens, estimateOutputTokens } from '../../lib/tokenizer.js';
 import { generateCompositeHash } from '../../lib/fingerprint.js';
 import { closePool, isDbConfigured } from '../../lib/oracle.js';
-
-const POLLINATIONS_BASE = 'https://gen.pollinations.ai/v1';
-const NVIDIA_BASE       = 'https://integrate.api.nvidia.com/v1';
+import {
+    buildProviderCandidates,
+    PROVIDER_ENDPOINTS
+} from '../../lib/provider-registry.js';
+import { recordProviderUsage } from '../../lib/provider-keys.js';
+import {
+    executeProviderChatCompletion,
+    extractProviderUsage
+} from '../../lib/providers.js';
+import {
+    normalizeQueuePriority,
+    enqueueRequest,
+    completeQueueItem,
+    cancelQueueItem,
+    getQueueStatus
+} from '../../lib/queue.js';
+import {
+    filterCandidatesByKeyAccess,
+    buildRoutableCandidates,
+    waitForQueueTurn,
+    orderCandidatesForExecution,
+    endpointModelLabel
+} from '../../providers/distributor.js';
 
 // Hard wall for the entire upstream round-trip (connect + headers + full body).
 // Keep well below Vercel's 300 s function limit.
@@ -31,15 +53,21 @@ const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 8000);
  * Race a DB promise against a hard timeout; resolve to fallback on timeout.
  */
 function withDbTimeout(promise, fallback, label = 'DB') {
+    let timeoutId;
+
     return Promise.race([
         promise,
         new Promise(resolve =>
-            setTimeout(() => {
+            timeoutId = setTimeout(() => {
                 console.warn(`[completions] ${label} timed out after ${DB_TIMEOUT_MS}ms — fail open`);
                 resolve(fallback);
             }, DB_TIMEOUT_MS)
         )
-    ]);
+    ]).finally(() => {
+        if (timeoutId) {
+            clearTimeout(timeoutId);
+        }
+    });
 }
 
 // ─── handler ──────────────────────────────────────────────────────────────────
@@ -67,6 +95,9 @@ export default async function handler(req, res) {
         upstreamCtrl.abort();
         console.error('[completions] Upstream timeout — aborting after', UPSTREAM_TIMEOUT_MS, 'ms');
     }, UPSTREAM_TIMEOUT_MS);
+
+    let queueId = null;
+    let selectedCandidate = null;
 
     try {
         // ── Key / session resolution ─────────────────────────────────────────
@@ -155,7 +186,9 @@ export default async function handler(req, res) {
 
         // ── Parse body ───────────────────────────────────────────────────────
         const body = req.body;
-        const { model, messages, stream } = body;
+        const { model, messages, stream, provider: requestedProvider } = body;
+        const isByopFastTrack = keyInfo.type === 'byop';
+        const effectiveRequestedProvider = isByopFastTrack ? 'pollinations' : requestedProvider;
 
         if (!model || !messages) {
             return res.status(400).json({
@@ -164,15 +197,12 @@ export default async function handler(req, res) {
             });
         }
 
-        // ── Provider / model access (global keys only) ───────────────────────
-        if (!keyInfo.bypassLimits && keyInfo.type !== 'demo') {
-            const provider = model.startsWith('nvidia/') ? 'nvidia' : 'pollinations';
-            if (!isProviderAllowed(keyInfo, provider)) {
-                return res.status(403).json({ error: 'Provider not allowed', message: `No access to ${provider}` });
-            }
-            if (!isModelAllowed(keyInfo, model)) {
-                return res.status(403).json({ error: 'Model not allowed', message: `No access to ${model}` });
-            }
+        // ── Model access (global keys only) ───────────────────────────────────
+        if (!keyInfo.bypassLimits && keyInfo.type !== 'demo' && !isModelAllowed(keyInfo, model)) {
+            return res.status(403).json({
+                error: 'Model not allowed',
+                message: `No access to ${model}`
+            });
         }
 
         // ── Token limits ─────────────────────────────────────────────────────
@@ -186,87 +216,193 @@ export default async function handler(req, res) {
             }
         }
 
-        // ── Select upstream target ───────────────────────────────────────────
-        let targetUrl, targetKey;
-        const requestBody = { ...body };
+        // ── Build provider candidates ────────────────────────────────────────
+        const allowedProviders = Array.isArray(keyInfo.providers)
+            ? keyInfo.providers
+            : [];
 
-        if (model.startsWith('nvidia/')) {
-            targetUrl         = NVIDIA_BASE;
-            targetKey         = process.env.NVIDIA_API_KEY;
-            requestBody.model = model.replace('nvidia/', '');
+        const providerCandidates = buildProviderCandidates({
+            model,
+            requestedProvider: effectiveRequestedProvider,
+            allowedProviders,
+            endpointKey: PROVIDER_ENDPOINTS.CHAT_COMPLETIONS
+        });
+
+        if (providerCandidates.length === 0) {
+            return res.status(403).json({
+                error: 'Provider not allowed',
+                message: 'No provider is allowed by this key for the requested model/provider'
+            });
+        }
+
+        const accessibleCandidates = filterCandidatesByKeyAccess(providerCandidates, keyInfo);
+
+        if (accessibleCandidates.length === 0) {
+            return res.status(403).json({
+                error: 'Provider not allowed',
+                message: 'No provider is allowed by this key for the requested model/provider'
+            });
+        }
+
+        const routableCandidates = await buildRoutableCandidates({
+            providerCandidates: accessibleCandidates,
+            keyInfo,
+            allowDb: dbAvailable,
+            endpointKey: PROVIDER_ENDPOINTS.CHAT_COMPLETIONS
+        });
+
+        if (routableCandidates.length === 0) {
+            return res.status(503).json({
+                error: 'No upstream provider available',
+                message: 'No provider key is currently available for this request'
+            });
+        }
+
+        // ── Queue scheduling (skip entirely for BYOP fast-track) ────────────
+        if (isByopFastTrack) {
+            selectedCandidate = routableCandidates.find(candidate => candidate.providerId === 'pollinations') || null;
+            res.setHeader('x-provider-fasttrack', 'byop-pollinations');
         } else {
-            targetUrl = POLLINATIONS_BASE;
-            targetKey = keyInfo.type === 'byop'
-                ? keyInfo.actualKey
-                : getPollinationsServerKey();
-        }
+            const queuePriority = normalizeQueuePriority(
+                keyInfo.queuePriority !== undefined
+                    ? keyInfo.queuePriority
+                    : 0
+            );
 
-        if (!targetKey || !String(targetKey).trim()) {
-            return res.status(500).json({
-                error: 'Server misconfiguration',
-                message: model.startsWith('nvidia/')
-                    ? 'Missing NVIDIA_API_KEY env var.'
-                    : 'Missing POLLINATIONS_API_KEY env var.'
+            const queueEntry = await enqueueRequest({
+                endpoint: '/chat/completions',
+                identifier,
+                apiKeyId: keyInfo.id,
+                model,
+                priority: queuePriority
+            });
+
+            queueId = queueEntry.id;
+            if (queueId) {
+                res.setHeader('x-queue-id', queueId);
+            }
+
+            selectedCandidate = await waitForQueueTurn({
+                queueId,
+                endpoint: '/chat/completions',
+                candidates: routableCandidates
             });
         }
 
-        // ── Forward to Pollinations / NVIDIA ─────────────────────────────────
-        // NOTE: upstreamCtrl.signal is shared between the fetch() call AND the
-        // subsequent body read (upstream.json / reader.read). This means the
-        // abort fires on the full round-trip, not just connection establishment.
-        let upstream;
-        try {
-            upstream = await fetch(`${targetUrl}/chat/completions`, {
-                method:  'POST',
-                headers: {
-                    'Content-Type':  'application/json',
-                    'Authorization': `Bearer ${targetKey}`
-                },
-                body: JSON.stringify(requestBody),
-                signal: upstreamCtrl.signal   // ← covers connect + headers
+        if (!selectedCandidate) {
+            const queueStatus = queueId ? await getQueueStatus(queueId) : null;
+            if (queueId) {
+                await cancelQueueItem(queueId, 'queue_wait_timeout');
+            }
+
+            return res.status(503).json({
+                error: 'All providers are busy',
+                message: 'Queue timeout reached before a provider slot was available',
+                queueId,
+                queueStatus
             });
-        } catch (fetchErr) {
-            if (fetchErr.name === 'AbortError') {
-                return res.status(504).json({
-                    error: 'Gateway timeout',
-                    message: `Upstream did not respond within ${UPSTREAM_TIMEOUT_MS / 1000}s`
+        }
+
+        const { provider: _requestedProvider, ...forwardBody } = body;
+
+        const candidatesInAttemptOrder = isByopFastTrack
+            ? [selectedCandidate]
+            : orderCandidatesForExecution(selectedCandidate, routableCandidates);
+
+        let providerResult = null;
+        let lastProviderError = null;
+
+        for (const candidate of candidatesInAttemptOrder) {
+            const requestBody = { ...forwardBody, model: candidate.upstreamModel };
+
+            try {
+                providerResult = await executeProviderChatCompletion({
+                    providerId: candidate.providerId,
+                    upstreamModel: candidate.upstreamModel,
+                    requestBody,
+                    credential: candidate.credential,
+                    signal: upstreamCtrl.signal
+                });
+
+                selectedCandidate = candidate;
+                break;
+            } catch (providerError) {
+                lastProviderError = providerError;
+
+                await recordProviderUsage({
+                    providerId: candidate.providerId,
+                    credential: candidate.credential,
+                    endpoint: '/chat/completions',
+                    model: candidate.upstreamModel,
+                    statusCode: providerError.status || 502,
+                    usage: {
+                        counterType: candidate.credential?.usageCounterType || candidate.providerDefinition?.usageCounterType || 'tokens',
+                        promptTokens: 0,
+                        completionTokens: 0,
+                        totalTokens: 0,
+                        providerUnits: 0,
+                        rateLimitSnapshot: null
+                    },
+                    errorMessage: providerError.message,
+                    identifier,
+                    apiKeyId: keyInfo.id
                 });
             }
-            throw fetchErr;
         }
 
-        if (!upstream.ok) {
-            const errBody = await upstream.json().catch(() => ({}));
-            return res.status(upstream.status).json({
-                error:   'Upstream API error',
-                status:  upstream.status,
-                message: errBody.error?.message || errBody.message || upstream.statusText || 'Unknown error'
+        if (!providerResult) {
+            const status = Number(lastProviderError?.status || 503);
+
+            if (queueId) {
+                await completeQueueItem({
+                    queueId,
+                    status: 'error',
+                    statusCode: status,
+                    errorMessage: lastProviderError?.message || 'No upstream provider available'
+                });
+            }
+
+            return res.status(status).json({
+                error: 'No upstream provider available',
+                status,
+                message: lastProviderError?.message || 'All configured providers failed to process this request'
             });
         }
 
         // ── Consume response body (still under the same abort timer) ─────────
-        if (stream) {
+        if (stream && providerResult.mode === 'stream') {
             res.setHeader('Content-Type',  'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
             res.setHeader('Connection',    'keep-alive');
 
-            const reader = upstream.body.getReader();
+            const reader = providerResult.response.body.getReader();
+            const decoder = new TextDecoder();
             let outputTokens = 0;
+            let promptTokensFromStream = inputTokens;
+
             try {
                 while (true) {
-                    // reader.read() also respects upstreamCtrl.signal
                     const { done, value } = await reader.read();
                     if (done) break;
-                    const chunk = new TextDecoder().decode(value);
-                    const m = chunk.match(/"completion_tokens":\s*(\d+)/);
-                    if (m) outputTokens = parseInt(m[1]);
+
+                    const chunk = decoder.decode(value);
+
+                    const completionMatch = chunk.match(/"completion_tokens":\s*(\d+)/);
+                    if (completionMatch) {
+                        outputTokens = parseInt(completionMatch[1], 10);
+                    }
+
+                    const promptMatch = chunk.match(/"prompt_tokens":\s*(\d+)/);
+                    if (promptMatch) {
+                        promptTokensFromStream = parseInt(promptMatch[1], 10);
+                    }
+
                     res.write(value);
                 }
             } catch (readErr) {
                 if (readErr.name === 'AbortError') {
                     res.write('data: [DONE]\n\n');
                 }
-                // else re-throw handled by outer catch
             } finally {
                 res.end();
             }
@@ -274,26 +410,50 @@ export default async function handler(req, res) {
             if (usedDb) {
                 logUsage({
                     identifier, apiKeyId: keyInfo.id, endpoint: '/chat/completions',
-                    model, inputTokens, outputTokens, ip: clientIP,
+                    model: endpointModelLabel(selectedCandidate),
+                    inputTokens: promptTokensFromStream,
+                    outputTokens,
+                    ip: clientIP,
                     fingerprintHash: identifier.startsWith('demo:') ? identifier.replace('demo:', '') : null,
                     userAgent
                 }).catch(() => {});
             }
 
-        } else {
-            // Non-streaming: body read is covered by upstreamCtrl.signal
-            let data;
-            try {
-                data = await upstream.json();
-            } catch (readErr) {
-                if (readErr.name === 'AbortError') {
-                    return res.status(504).json({
-                        error: 'Gateway timeout',
-                        message: `Upstream body stalled after ${UPSTREAM_TIMEOUT_MS / 1000}s`
-                    });
-                }
-                throw readErr;
+            await recordProviderUsage({
+                providerId: selectedCandidate.providerId,
+                credential: selectedCandidate.credential,
+                endpoint: '/chat/completions',
+                model: selectedCandidate.upstreamModel,
+                statusCode: providerResult.response.status,
+                usage: extractProviderUsage({
+                    providerId: selectedCandidate.providerId,
+                    providerDefinition: selectedCandidate.providerDefinition,
+                    credential: selectedCandidate.credential,
+                    responseHeaders: providerResult.response.headers,
+                    responseData: {
+                        usage: {
+                            prompt_tokens: promptTokensFromStream,
+                            completion_tokens: outputTokens,
+                            total_tokens: promptTokensFromStream + outputTokens
+                        }
+                    },
+                    fallbackPromptTokens: promptTokensFromStream,
+                    fallbackCompletionTokens: outputTokens
+                }),
+                identifier,
+                apiKeyId: keyInfo.id
+            });
+
+            if (queueId) {
+                await completeQueueItem({
+                    queueId,
+                    status: 'done',
+                    statusCode: 200
+                });
             }
+
+        } else {
+            const data = providerResult.normalizedData || {};
 
             const outputTokens = data.usage?.completion_tokens || 0;
             const actualInput  = data.usage?.prompt_tokens || inputTokens;
@@ -301,10 +461,40 @@ export default async function handler(req, res) {
             if (usedDb) {
                 logUsage({
                     identifier, apiKeyId: keyInfo.id, endpoint: '/chat/completions',
-                    model, inputTokens: actualInput, outputTokens, ip: clientIP,
+                    model: endpointModelLabel(selectedCandidate),
+                    inputTokens: actualInput,
+                    outputTokens,
+                    ip: clientIP,
                     fingerprintHash: identifier.startsWith('demo:') ? identifier.replace('demo:', '') : null,
                     userAgent
                 }).catch(() => {});
+            }
+
+            await recordProviderUsage({
+                providerId: selectedCandidate.providerId,
+                credential: selectedCandidate.credential,
+                endpoint: '/chat/completions',
+                model: selectedCandidate.upstreamModel,
+                statusCode: providerResult.response.status,
+                usage: extractProviderUsage({
+                    providerId: selectedCandidate.providerId,
+                    providerDefinition: selectedCandidate.providerDefinition,
+                    credential: selectedCandidate.credential,
+                    responseHeaders: providerResult.response.headers,
+                    responseData: data,
+                    fallbackPromptTokens: actualInput,
+                    fallbackCompletionTokens: outputTokens
+                }),
+                identifier,
+                apiKeyId: keyInfo.id
+            });
+
+            if (queueId) {
+                await completeQueueItem({
+                    queueId,
+                    status: 'done',
+                    statusCode: 200
+                });
             }
 
             res.status(200).json(data);
@@ -312,6 +502,16 @@ export default async function handler(req, res) {
 
     } catch (err) {
         console.error('[completions] handler error:', err.name, err.message);
+
+        if (queueId) {
+            await completeQueueItem({
+                queueId,
+                status: err.name === 'AbortError' ? 'error' : 'error',
+                statusCode: err.name === 'AbortError' ? 504 : 500,
+                errorMessage: err.message
+            });
+        }
+
         if (!res.headersSent) {
             if (err.name === 'AbortError') {
                 res.status(504).json({ error: 'Gateway timeout', message: `Request aborted after ${UPSTREAM_TIMEOUT_MS / 1000}s` });

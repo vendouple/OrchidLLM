@@ -8,6 +8,11 @@
 import { validateSession, getSessionFromCookie } from '../../lib/auth.js';
 import { executeQuery, closePool } from '../../lib/oracle.js';
 
+function isMissingTableError(error) {
+    const message = String(error?.message || '').toLowerCase();
+    return message.includes('ora-00942') || message.includes('table or view does not exist');
+}
+
 export default async function handler(req, res) {
     if (req.method !== 'GET') {
         return res.status(405).json({ error: 'Method not allowed' });
@@ -96,12 +101,65 @@ export default async function handler(req, res) {
             ORDER BY day ASC
         `);
 
+        // ── Provider key capacity and usage overview (optional tables) ─────
+        let providerStats = [];
+        let providerRecentUsage = [];
+
+        try {
+            const providerStatsResult = await executeQuery(`
+                SELECT
+                    provider_name,
+                    COUNT(*) AS key_count,
+                    SUM(CASE WHEN is_active = 1 THEN 1 ELSE 0 END) AS active_keys,
+                    NVL(SUM(requests_today), 0) AS requests_today,
+                    NVL(SUM(tokens_today), 0) AS tokens_today,
+                    NVL(SUM(units_today), 0) AS units_today
+                FROM provider_keys
+                GROUP BY provider_name
+                ORDER BY provider_name ASC
+            `);
+            providerStats = providerStatsResult.rows;
+        } catch (error) {
+            if (!isMissingTableError(error)) {
+                throw error;
+            }
+        }
+
+        try {
+            const providerUsageResult = await executeQuery(`
+                SELECT
+                    provider_name,
+                    provider_key_id,
+                    key_name,
+                    endpoint,
+                    model,
+                    status_code,
+                    prompt_tokens,
+                    completion_tokens,
+                    total_tokens,
+                    usage_units,
+                    usage_counter_type,
+                    created_at,
+                    error_message
+                FROM provider_usage_logs
+                ORDER BY created_at DESC
+                FETCH FIRST 200 ROWS ONLY
+            `);
+            providerRecentUsage = providerUsageResult.rows;
+        } catch (error) {
+            if (!isMissingTableError(error)) {
+                throw error;
+            }
+        }
+
         res.status(200).json({
             stats:        statsResult.rows[0]     || {},
             keys:         keysResult.rows,
             recentUsage:  usageResult.rows,
             demoSessions: demoSessionsResult.rows,
-            chartData:    chartResult.rows
+            chartData:    chartResult.rows,
+            providerStats,
+            providerRecentUsage
         });
     } catch (error) {
         console.error('Dashboard error:', error);
