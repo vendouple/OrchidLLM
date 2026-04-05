@@ -389,11 +389,18 @@ export default async function handler(req, res) {
             });
         }
 
+        res.setHeader('x-provider-speed-tier', selectedCandidate?.providerDefinition?.speedTier ?? 3);
+        res.setHeader('x-provider-free-tier', selectedCandidate?.providerDefinition?.enableFreeTier ?? false);
+        res.setHeader('x-provider-env-keys', (selectedCandidate?.providerDefinition?.envKeyCandidates ?? []).join(','));
+
         const data = providerResult.normalizedData || {};
         const clientFacingModel = selectedCandidate?.globalModelId || requestedModelId;
 
         if (data && typeof data === 'object') {
             data.model = clientFacingModel;
+            data.provider_speed_tier = selectedCandidate?.providerDefinition?.speedTier ?? 3;
+            data.provider_free_tier = selectedCandidate?.providerDefinition?.enableFreeTier ?? false;
+            data.provider_env_keys = selectedCandidate?.providerDefinition?.envKeyCandidates ?? [];
         }
 
         if (usedDb) {

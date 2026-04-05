@@ -1,0 +1,3 @@
+- For database migrations currently up to date and online database is at #schema.db
+- If the user asks to merge "MIGRATION" > schema.db to reflect the current database do it
+- If not said create a new database migration sql file for the next migration. 

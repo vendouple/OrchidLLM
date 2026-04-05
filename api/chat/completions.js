@@ -433,6 +433,10 @@ export default async function handler(req, res) {
             });
         }
 
+        res.setHeader('x-provider-speed-tier', selectedCandidate?.providerDefinition?.speedTier ?? 3);
+        res.setHeader('x-provider-free-tier', selectedCandidate?.providerDefinition?.enableFreeTier ?? false);
+        res.setHeader('x-provider-env-keys', (selectedCandidate?.providerDefinition?.envKeyCandidates ?? []).join(','));
+
         // ── Consume response body (still under the same abort timer) ─────────
         if (stream && providerResult.mode === 'stream') {
             res.setHeader('Content-Type',  'text/event-stream');
@@ -523,6 +527,9 @@ export default async function handler(req, res) {
 
             if (data && typeof data === 'object') {
                 data.model = clientFacingModel;
+                data.provider_speed_tier = selectedCandidate?.providerDefinition?.speedTier ?? 3;
+                data.provider_free_tier = selectedCandidate?.providerDefinition?.enableFreeTier ?? false;
+                data.provider_env_keys = selectedCandidate?.providerDefinition?.envKeyCandidates ?? [];
             }
 
             const outputTokens = data.usage?.completion_tokens || 0;

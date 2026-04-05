@@ -4,1021 +4,1520 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Admin Dashboard - OneLLM</title>
-<meta name="description" content="Admin dashboard for managing API keys and demo sessions on OneLLM.">
+<meta name="description" content="Admin dashboard for managing API keys, providers, models, and queues on OneLLM.">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
-<link rel="stylesheet" href="./styles.css?v=2">
 <style>
-/* ── Admin Shell ────────────────────────────────────────────── */
+/* ── Design Tokens ── */
 :root {
-  --admin-card: rgba(255,255,255,0.82);
-  --admin-border: rgba(0,0,0,0.08);
-  --demo-green: #16a34a;
-  --demo-green-bg: #dcfce7;
-  --demo-red: #dc2626;
-  --demo-red-bg: #fee2e2;
-  --demo-amber: #d97706;
-  --demo-amber-bg: #fef3c7;
-  --demo-blue: #2563eb;
-  --demo-blue-bg: #dbeafe;
-  --demo-purple: #7c3aed;
-  --demo-purple-bg: #ede9fe;
+  --p:#8b5cf6; --p-dark:#7c3aed; --t:#06b6d4;
+  --bg:#f0f2f8; --surf:#ffffff; --surf2:#f7f8fc;
+  --on-surf:#1a1a2e; --out:#6b7280; --out-v:rgba(0,0,0,.06); --out-v2:rgba(0,0,0,.1);
+  --p-c:rgba(139,92,246,.12); --err:#dc2626; --err-c:rgba(220,38,38,.12);
+  --sh1:0 1px 3px rgba(0,0,0,.08); --sh2:0 4px 16px rgba(0,0,0,.1); --sh3:0 20px 48px rgba(0,0,0,.16);
+  --border:rgba(0,0,0,.08);
+  --g:rgba(22,163,74,1); --g-c:rgba(22,163,74,.12);
+  --a:rgba(217,119,6,1); --a-c:rgba(217,119,6,.12);
+  --b:rgba(37,99,235,1); --b-c:rgba(37,99,235,.12);
+  --r:rgba(220,38,38,1); --r-c:rgba(220,38,38,.12);
+  --m:rgba(124,58,237,1); --m-c:rgba(124,58,237,.12);
+  --tr:.15s ease;
 }
 [data-theme="dark"] {
-  --admin-card: rgba(28,28,32,0.85);
-  --admin-border: rgba(255,255,255,0.08);
-  --demo-green-bg: rgba(22,163,74,0.15);
-  --demo-red-bg: rgba(220,38,38,0.15);
-  --demo-amber-bg: rgba(217,119,6,0.15);
-  --demo-blue-bg: rgba(37,99,235,0.15);
-  --demo-purple-bg: rgba(124,58,237,0.15);
+  --bg:#0d0d14; --surf:#16161f; --surf2:#1e1e2a;
+  --on-surf:#e8eaf6; --out:#8b90a8; --out-v:rgba(255,255,255,.06); --out-v2:rgba(255,255,255,.1);
+  --p-c:rgba(139,92,246,.18);
+  --border:rgba(255,255,255,.08);
+  --g-c:rgba(22,163,74,.2); --a-c:rgba(217,119,6,.2);
+  --b-c:rgba(37,99,235,.2); --r-c:rgba(220,38,38,.2); --m-c:rgba(124,58,237,.2);
+  --sh1:0 1px 4px rgba(0,0,0,.3); --sh2:0 4px 20px rgba(0,0,0,.4); --sh3:0 20px 60px rgba(0,0,0,.6);
 }
 
-body { margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; }
+/* ── Reset ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Plus Jakarta Sans',sans-serif;background:var(--bg);color:var(--on-surf);min-height:100vh;display:flex}
 
-/* Sidebar */
-.admin-sidebar {
-  width: 256px; min-width: 256px;
-  border-right: 1px solid var(--admin-border);
-  display: flex; flex-direction: column;
-  background: var(--surf);
-  position: sticky; top: 0; height: 100vh; overflow-y: auto;
+/* ── Sidebar ── */
+.sidebar{width:240px;min-width:240px;background:var(--surf);border-right:1px solid var(--border);display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow-y:auto;z-index:10;transition:background var(--tr)}
+.sb-logo{padding:18px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px}
+.sb-logo-icon{width:38px;height:38px;min-width:38px;border-radius:10px;background:var(--p-c);display:flex;align-items:center;justify-content:center;color:var(--p)}
+.sb-logo-text{font-weight:800;font-size:15px;line-height:1.2}
+.sb-logo-sub{font-size:10px;color:var(--out);margin-top:2px}
+.sb-nav{padding:10px 8px;flex:1}
+.nav-grp{font-size:10px;font-weight:700;color:var(--out);text-transform:uppercase;letter-spacing:.08em;padding:10px 8px 4px}
+.nav-item{display:flex;align-items:center;gap:9px;padding:9px 10px;border-radius:10px;color:var(--on-surf);font-weight:600;font-size:13px;cursor:pointer;border:none;background:none;width:100%;text-align:left;transition:all var(--tr)}
+.nav-item:hover{background:var(--out-v)}
+.nav-item.active{background:var(--p-c);color:var(--p)}
+.nav-item .ms{font-size:18px;transition:inherit}
+.nav-badge{margin-left:auto;background:var(--p);color:#fff;font-size:10px;font-weight:700;padding:2px 6px;border-radius:20px;min-width:18px;text-align:center;display:none}
+.sb-foot{padding:12px;border-top:1px solid var(--border)}
+.user-row{display:flex;align-items:center;gap:8px}
+.av-sm{width:32px;height:32px;border-radius:50%;object-fit:cover}
+.av-icon{width:32px;height:32px;border-radius:50%;background:var(--p-c);color:var(--p);display:flex;align-items:center;justify-content:center}
+.user-name{font-size:12px;font-weight:700}
+.user-role{font-size:10px;color:var(--p);font-weight:600}
+.logout-btn{margin-left:auto;width:28px;height:28px;border:none;background:var(--out-v);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--out);transition:all var(--tr)}
+.logout-btn:hover{background:var(--r-c);color:var(--r)}
+
+/* ── Main ── */
+main{flex:1;display:flex;flex-direction:column;min-height:100vh;overflow:hidden}
+.topbar{display:flex;align-items:center;justify-content:space-between;padding:18px 22px 0;gap:12px}
+.page-title{font-size:20px;font-weight:800;display:flex;align-items:center;gap:8px}
+.page-title .ms{font-size:22px;color:var(--p)}
+.topbar-actions{display:flex;gap:8px;align-items:center}
+
+/* ── Pages ── */
+.page{display:none;flex-direction:column;flex:1}
+.page.active{display:flex}
+
+/* ── Stat grid ── */
+.stat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:12px;padding:16px 22px}
+.sc{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:16px;display:flex;flex-direction:column;gap:8px;backdrop-filter:blur(8px);transition:transform var(--tr),box-shadow var(--tr),background var(--tr)}
+.sc:hover{transform:translateY(-2px);box-shadow:var(--sh2)}
+.sc-icon{width:36px;height:36px;border-radius:9px;display:flex;align-items:center;justify-content:center}
+.sc-icon.b{background:var(--b-c);color:var(--b)} .sc-icon.g{background:var(--g-c);color:var(--g)}
+.sc-icon.m{background:var(--m-c);color:var(--m)} .sc-icon.a{background:var(--a-c);color:var(--a)}
+.sc-icon.r{background:var(--r-c);color:var(--r)} .sc-icon.p{background:var(--p-c);color:var(--p)}
+.sc-val{font-size:26px;font-weight:800;line-height:1}
+.sc-lbl{font-size:11px;color:var(--out);font-weight:500}
+
+/* ── Section card ── */
+.swrap{padding:0 22px 22px;flex:1}
+.swrap.mt{margin-top:16px}
+.scard{background:var(--surf);border:1px solid var(--border);border-radius:14px;overflow:hidden;backdrop-filter:blur(8px)}
+.shead{display:flex;align-items:center;justify-content:space-between;padding:12px 16px;border-bottom:1px solid var(--border);gap:10px;flex-wrap:wrap}
+.shead-title{font-size:14px;font-weight:700;display:flex;align-items:center;gap:6px}
+.shead-actions{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+
+/* ── Chart ── */
+.chart-wrap{padding:0 22px 16px}
+.chart-card{background:var(--surf);border:1px solid var(--border);border-radius:14px;padding:18px}
+.chart-title{font-size:13px;font-weight:700;margin-bottom:12px;display:flex;align-items:center;gap:6px;color:var(--on-surf)}
+.chart-bars{display:flex;align-items:flex-end;gap:3px;height:72px}
+.bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.bar{width:100%;background:var(--p-c);border-radius:3px 3px 0 0;transition:background .2s;min-height:2px;cursor:pointer}
+.bar:hover{background:var(--p)}
+.bar-lbl{font-size:8px;color:var(--out);font-weight:500;white-space:nowrap}
+
+/* ── Chips ── */
+.chips{display:flex;gap:5px;flex-wrap:wrap}
+.chip{padding:4px 10px;border-radius:20px;font-size:11px;font-weight:600;border:1.5px solid var(--border);background:none;cursor:pointer;color:var(--on-surf);transition:all var(--tr)}
+.chip:hover{background:var(--out-v)}
+.chip.active{background:var(--p);border-color:var(--p);color:#fff}
+
+/* ── Table ── */
+.tbl-wrap{overflow-x:auto}
+.tbl{width:100%;border-collapse:collapse;font-size:12.5px}
+.tbl th{padding:9px 12px;text-align:left;font-size:10px;font-weight:700;color:var(--out);text-transform:uppercase;letter-spacing:.06em;background:var(--surf2);border-bottom:1px solid var(--border);white-space:nowrap}
+.tbl td{padding:9px 12px;border-bottom:1px solid var(--border);vertical-align:middle}
+.tbl tr:last-child td{border-bottom:none}
+.tbl tr:hover td{background:var(--out-v)}
+
+/* ── Badges ── */
+.badge{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:10px;font-weight:700;white-space:nowrap}
+.badge.g{background:var(--g-c);color:var(--g)} .badge.r{background:var(--r-c);color:var(--r)}
+.badge.a{background:var(--a-c);color:var(--a)} .badge.b{background:var(--b-c);color:var(--b)}
+.badge.m{background:var(--m-c);color:var(--m)} .badge.grey{background:var(--out-v);color:var(--out)}
+.badge.p{background:var(--p-c);color:var(--p)}
+
+/* ── Mono ── */
+.mono{font-family:'SF Mono','Cascadia Code',monospace;font-size:11px;background:var(--out-v);padding:2px 5px;border-radius:4px;max-width:140px;overflow:hidden;text-overflow:ellipsis;display:inline-block;white-space:nowrap;vertical-align:middle;cursor:help}
+
+/* ── Icon btns ── */
+.row-acts{display:flex;gap:3px}
+.ib{width:28px;height:28px;border:none;background:var(--out-v);border-radius:7px;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all var(--tr);color:var(--on-surf)}
+.ib:hover{background:var(--p-c);color:var(--p)}
+.ib.del:hover{background:var(--r-c);color:var(--r)}
+.ib .ms{font-size:14px}
+
+/* ── Btn ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 14px;border:none;border-radius:9px;font-size:13px;font-weight:600;cursor:pointer;transition:all var(--tr);font-family:inherit}
+.btn.primary{background:var(--p);color:#fff}.btn.primary:hover{filter:brightness(1.1)}
+.btn.danger{background:var(--r-c);color:var(--r)}.btn.danger:hover{background:var(--r);color:#fff}
+.btn.secondary{background:var(--out-v);color:var(--on-surf)}.btn.secondary:hover{background:var(--out-v2)}
+.btn.sm{padding:5px 10px;font-size:12px}
+.btn .ms{font-size:16px}
+
+/* ── States ── */
+.state-c{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 20px;color:var(--out);gap:8px}
+.state-c .ms{font-size:40px;opacity:.35}
+.state-c p{font-size:13px;margin:0}
+.spin{width:32px;height:32px;border:3px solid var(--out-v);border-top-color:var(--p);border-radius:50%;animation:spin .9s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* ── Modal ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:500;backdrop-filter:blur(4px)}
+.overlay.show{display:flex}
+.mbox{background:var(--surf);border-radius:20px;padding:22px;width:100%;max-width:520px;max-height:92vh;overflow-y:auto;box-shadow:var(--sh3);animation:pop .18s ease}
+.mbox.lg{max-width:640px}
+@keyframes pop{from{transform:scale(.94);opacity:0}to{transform:scale(1);opacity:1}}
+.mhead{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px}
+.mhead h3{font-size:17px;font-weight:700;margin:0}
+.mclose{width:32px;height:32px;border:none;background:var(--out-v);border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--out);transition:all var(--tr)}
+.mclose:hover{background:var(--r-c);color:var(--r)}
+.fstack{display:flex;flex-direction:column;gap:12px}
+.fg{display:flex;flex-direction:column;gap:4px}
+.fg label{font-size:11px;font-weight:700;color:var(--out);text-transform:uppercase;letter-spacing:.04em}
+.fg input,.fg select,.fg textarea{padding:9px 12px;border:1.5px solid var(--border);border-radius:9px;font-size:13px;background:var(--surf);color:var(--on-surf);transition:border-color var(--tr);font-family:inherit;width:100%}
+.fg input:focus,.fg select:focus,.fg textarea:focus{outline:none;border-color:var(--p)}
+.frow{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.macts{display:flex;gap:8px;margin-top:4px}
+.macts .btn{flex:1;justify-content:center}
+
+/* ── Toggle switch ── */
+.toggle-wrap{display:flex;align-items:center;gap:8px}
+.toggle{width:40px;height:22px;background:var(--out-v2);border-radius:20px;position:relative;cursor:pointer;transition:background var(--tr);border:none;flex-shrink:0}
+.toggle.on{background:var(--p)}
+.toggle::after{content:'';width:16px;height:16px;background:#fff;border-radius:50%;position:absolute;top:3px;left:3px;transition:left var(--tr);box-shadow:0 1px 3px rgba(0,0,0,.2)}
+.toggle.on::after{left:21px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:22px;right:22px;padding:10px 16px;background:var(--surf);border:1px solid var(--border);border-radius:11px;box-shadow:var(--sh2);display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;transform:translateY(120px);opacity:0;transition:all .3s;z-index:999;max-width:320px}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.success{border-color:var(--g)}.toast.success .ms{color:var(--g)}
+.toast.error{border-color:var(--r)}.toast.error .ms{color:var(--r)}
+
+/* ── Dark mode toggle btn ── */
+.dm-btn{width:34px;height:34px;border:1px solid var(--border);background:var(--surf);border-radius:9px;cursor:pointer;display:flex;align-items:center;justify-content:center;color:var(--on-surf);transition:all var(--tr)}
+.dm-btn:hover{background:var(--out-v)}
+
+/* ── Provider usage color dot ── */
+.dot{width:8px;height:8px;border-radius:50%;display:inline-block;margin-right:4px}
+.dot.ok{background:var(--g)}.dot.err{background:var(--r)}.dot.warn{background:var(--a)}
+
+/* ── Divider ── */
+.hdiv{height:1px;background:var(--border);margin:4px 0}
+
+/* ── Material Symbols ── */
+.ms{font-family:'Material Symbols Rounded';font-weight:normal;font-style:normal;font-size:20px;line-height:1;letter-spacing:normal;text-transform:none;display:inline-block;white-space:nowrap;word-wrap:normal;direction:ltr;font-variation-settings:'FILL' 0,'wght' 400,'GRAD' 0,'opsz' 24;-webkit-font-smoothing:antialiased}
+
+/* ── Page Description Banner ── */
+.page-desc{padding:6px 22px 0;display:flex;align-items:center;gap:8px}
+.page-desc-text{font-size:12px;color:var(--out);background:var(--surf);border:1px solid var(--border);border-radius:8px;padding:6px 12px;display:flex;align-items:center;gap:6px;line-height:1.4}
+.page-desc-text .ms{font-size:14px;color:var(--p);flex-shrink:0;font-variation-settings:'FILL' 1,'wght' 400,'GRAD' 0,'opsz' 20}
+.page-desc-text strong{color:var(--on-surf);font-weight:600}
+
+/* ── Resp ── */
+@media(max-width:768px){
+  .sidebar{display:none}
+  .stat-grid{grid-template-columns:1fr 1fr;padding:10px 12px}
+  .swrap{padding:0 12px 16px}
+  .topbar{padding:12px 12px 0}
+  .chart-wrap{padding:0 12px 12px}
+  .page-desc{padding:6px 12px 0}
 }
-.sidebar-logo { padding: 20px; border-bottom: 1px solid var(--admin-border); }
-.sidebar-logo-inner { display: flex; align-items: center; gap: 12px; }
-.sidebar-logo-icon { width: 42px; height: 42px; min-width: 42px; border-radius: 12px; background: var(--p-c); display: flex; align-items: center; justify-content: center; }
-.sidebar-logo-text { font-size: 17px; font-weight: 800; line-height: 1.2; }
-.sidebar-logo-sub { font-size: 11px; color: var(--out); margin-top: 2px; }
-
-.sidebar-nav { padding: 12px; flex: 1; }
-.nav-group-label { font-size: 11px; font-weight: 600; color: var(--out); text-transform: uppercase; letter-spacing: .06em; padding: 8px 12px 4px; }
-.nav-item {
-  display: flex; align-items: center; gap: 10px;
-  padding: 10px 12px; border-radius: 12px;
-  color: var(--on-surf); text-decoration: none; font-weight: 600;
-  font-size: 14px; transition: all .18s; cursor: pointer;
-  border: none; background: none; width: 100%; text-align: left;
-}
-.nav-item:hover { background: var(--out-v); }
-.nav-item.active { background: var(--p-c); color: var(--p); }
-.nav-item .ms { font-size: 20px; transition: inherit; }
-.nav-item.active .ms { color: var(--p); }
-.nav-badge { margin-left: auto; background: var(--p); color: #fff; font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 20px; min-width: 20px; text-align: center; }
-
-.sidebar-foot { padding: 16px; border-top: 1px solid var(--admin-border); }
-.user-row { display: flex; align-items: center; gap: 10px; }
-.user-avatar-sm { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; box-shadow: var(--sh1); }
-.user-avatar-icon { width: 36px; height: 36px; border-radius: 50%; background: linear-gradient(145deg, var(--p), var(--t)); color: #fff; display: flex; align-items: center; justify-content: center; }
-.user-name { font-size: 13px; font-weight: 700; }
-.user-role { font-size: 11px; color: var(--p); font-weight: 600; }
-.logout-btn { margin-left: auto; width: 32px; height: 32px; border: none; background: var(--out-v); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: background .18s; }
-.logout-btn:hover { background: var(--err-c); }
-
-/* Main content */
-.admin-main { flex: 1; display: flex; flex-direction: column; min-height: 100vh; overflow: hidden; }
-.admin-topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; }
-.admin-title { font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px; }
-.admin-title .ms { font-size: 24px; color: var(--p); }
-
-/* Stat grid */
-.stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 14px; padding: 20px 24px; }
-.stat-card {
-  background: var(--admin-card);
-  border: 1px solid var(--admin-border);
-  border-radius: 16px; padding: 18px;
-  display: flex; flex-direction: column; gap: 10px;
-  backdrop-filter: blur(8px);
-  transition: transform .15s, box-shadow .15s;
-}
-.stat-card:hover { transform: translateY(-2px); box-shadow: var(--sh2); }
-.stat-icon { width: 38px; height: 38px; border-radius: 10px; display: flex; align-items: center; justify-content: center; }
-.stat-icon.blue   { background: var(--demo-blue-bg); color: var(--demo-blue); }
-.stat-icon.green  { background: var(--demo-green-bg); color: var(--demo-green); }
-.stat-icon.purple { background: var(--demo-purple-bg); color: var(--demo-purple); }
-.stat-icon.amber  { background: var(--demo-amber-bg); color: var(--demo-amber); }
-.stat-icon.red    { background: var(--demo-red-bg); color: var(--demo-red); }
-.stat-icon.p { background: var(--p-c); color: var(--p); }
-.stat-value { font-size: 28px; font-weight: 800; line-height: 1; }
-.stat-label { font-size: 12px; color: var(--out); font-weight: 500; }
-
-/* Chart */
-.chart-section { padding: 0 24px 20px; }
-.chart-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 16px; padding: 20px; }
-.chart-title { font-size: 14px; font-weight: 700; margin-bottom: 14px; display: flex; align-items: center; gap: 8px; }
-.chart-bars { display: flex; align-items: flex-end; gap: 4px; height: 80px; }
-.chart-bar-wrap { flex: 1; display: flex; flex-direction: column; align-items: center; gap: 4px; }
-.chart-bar { width: 100%; background: var(--p-c); border-radius: 4px 4px 0 0; transition: background .2s; min-height: 2px; cursor: pointer; }
-.chart-bar:hover { background: var(--p); }
-.chart-label { font-size: 9px; color: var(--out); font-weight: 500; white-space: nowrap; }
-
-/* Section */
-.section-wrap { padding: 0 24px 24px; flex: 1; }
-.section-card { background: var(--admin-card); border: 1px solid var(--admin-border); border-radius: 16px; overflow: hidden; backdrop-filter: blur(8px); }
-.section-head { display: flex; align-items: center; justify-content: space-between; padding: 14px 18px; border-bottom: 1px solid var(--admin-border); gap: 12px; flex-wrap: wrap; }
-.section-head-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
-.section-head-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
-
-/* Filter chips */
-.filter-chips { display: flex; gap: 6px; flex-wrap: wrap; }
-.chip {
-  padding: 5px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
-  border: 1.5px solid var(--admin-border); background: none; cursor: pointer;
-  color: var(--on-surf); transition: all .15s;
-}
-.chip:hover { background: var(--out-v); }
-.chip.active { background: var(--p); border-color: var(--p); color: #fff; }
-
-/* Table */
-.data-table-wrap { overflow-x: auto; }
-.data-table { width: 100%; border-collapse: collapse; }
-.data-table th {
-  padding: 10px 14px; text-align: left;
-  font-size: 11px; font-weight: 600; color: var(--out); text-transform: uppercase; letter-spacing: .06em;
-  background: rgba(0,0,0,0.025); border-bottom: 1px solid var(--admin-border); white-space: nowrap;
-}
-[data-theme="dark"] .data-table th { background: rgba(255,255,255,0.025); }
-.data-table td { padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--admin-border); vertical-align: middle; }
-.data-table tr:last-child td { border-bottom: none; }
-.data-table tr:hover td { background: rgba(0,0,0,0.015); }
-[data-theme="dark"] .data-table tr:hover td { background: rgba(255,255,255,0.015); }
-
-/* Badges */
-.badge { display: inline-flex; align-items: center; gap: 4px; padding: 3px 9px; border-radius: 20px; font-size: 11px; font-weight: 600; white-space: nowrap; }
-.badge.green  { background: var(--demo-green-bg); color: var(--demo-green); }
-.badge.red    { background: var(--demo-red-bg); color: var(--demo-red); }
-.badge.amber  { background: var(--demo-amber-bg); color: var(--demo-amber); }
-.badge.blue   { background: var(--demo-blue-bg); color: var(--demo-blue); }
-.badge.purple { background: var(--demo-purple-bg); color: var(--demo-purple); }
-.badge.grey   { background: var(--out-v); color: var(--out); }
-
-/* Mono text */
-.mono { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 12px; background: var(--out-v); padding: 2px 6px; border-radius: 5px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; display: inline-block; white-space: nowrap; vertical-align: middle; cursor: help; }
-
-/* Row actions */
-.row-actions { display: flex; gap: 4px; }
-.icon-btn { width: 30px; height: 30px; border: none; background: var(--out-v); border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center; transition: all .15s; color: var(--on-surf); }
-.icon-btn:hover { background: var(--p-c); color: var(--p); }
-.icon-btn.red:hover { background: var(--demo-red-bg); color: var(--demo-red); }
-.icon-btn .ms { font-size: 16px; }
-
-/* Modal */
-.modal-overlay { position: fixed; inset: 0; background: rgba(0,0,0,.45); display: none; align-items: center; justify-content: center; z-index: 500; backdrop-filter: blur(4px); }
-.modal-overlay.show { display: flex; }
-.modal-box { background: var(--surf); border-radius: 24px; padding: 24px; width: 100%; max-width: 480px; max-height: 90vh; overflow-y: auto; box-shadow: var(--sh3); animation: pop .2s ease; }
-@keyframes pop { from { transform: scale(.95); opacity: 0; } to { transform: scale(1); opacity: 1; } }
-.modal-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
-.modal-head h3 { font-size: 19px; font-weight: 700; margin: 0; }
-.modal-close { width: 36px; height: 36px; border: none; background: var(--out-v); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; }
-.form-stack { display: flex; flex-direction: column; gap: 14px; }
-.form-group { display: flex; flex-direction: column; gap: 5px; }
-.form-group label { font-size: 12px; font-weight: 600; color: var(--out); }
-.form-group input, .form-group select, .form-group textarea {
-  padding: 10px 14px; border: 1.5px solid var(--out-v); border-radius: 10px;
-  font-size: 14px; background: var(--surf); color: var(--on-surf); transition: border-color .15s;
-  font-family: inherit;
-}
-.form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--p); }
-.form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
-.modal-actions { display: flex; gap: 10px; margin-top: 6px; }
-.modal-actions button { flex: 1; padding: 11px; border: none; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; transition: all .15s; }
-.btn-primary { background: var(--p); color: #fff; }
-.btn-primary:hover { filter: brightness(1.1); }
-.btn-danger { background: var(--demo-red-bg); color: var(--demo-red); }
-.btn-danger:hover { background: var(--demo-red); color: #fff; }
-.btn-secondary { background: var(--out-v); color: var(--on-surf); }
-.btn-secondary:hover { background: var(--out-v2); }
-
-/* Empty / Loading */
-.state-center { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 24px; color: var(--out); gap: 10px; }
-.state-center .ms { font-size: 44px; opacity: .4; }
-.state-center p { font-size: 14px; margin: 0; }
-.spinner { width: 36px; height: 36px; border: 3px solid var(--out-v); border-top-color: var(--p); border-radius: 50%; animation: spin .9s linear infinite; }
-@keyframes spin { to { transform: rotate(360deg); } }
-
-/* Toast */
-.toast {
-  position: fixed; bottom: 24px; right: 24px;
-  padding: 11px 18px; background: var(--surf); border: 1px solid var(--admin-border);
-  border-radius: 12px; box-shadow: var(--sh2); display: flex; align-items: center; gap: 9px;
-  font-size: 13px; font-weight: 500;
-  transform: translateY(120px); opacity: 0; transition: all .3s; z-index: 999;
-}
-.toast.show { transform: translateY(0); opacity: 1; }
-.toast.success { border-color: var(--demo-green); }
-.toast.success .ms { color: var(--demo-green); }
-.toast.error { border-color: var(--demo-red); }
-.toast.error .ms { color: var(--demo-red); }
-
-/* Responsive */
-@media (max-width: 768px) {
-  .admin-sidebar { display: none; }
-  .stat-grid { grid-template-columns: 1fr 1fr; padding: 12px 14px; }
-  .section-wrap { padding: 0 14px 20px; }
-  .admin-topbar { padding: 14px 14px 0; }
-  .chart-section { padding: 0 14px 14px; }
-}
-
-/* Section pages */
-.page { display: none; flex-direction: column; }
-.page.active { display: flex; }
 </style>
 </head>
 <body>
 
-<m3e-theme id="app" color-scheme="light" style="display:flex; min-height:100vh; background:var(--bg);">
-
-<!-- Sidebar -->
-<aside class="admin-sidebar" id="admin-sidebar">
-  <div class="sidebar-logo">
-    <div class="sidebar-logo-inner">
-      <div class="sidebar-logo-icon"><span class="ms fill" style="color:var(--p);font-size:22px;">admin_panel_settings</span></div>
-      <div>
-        <div class="sidebar-logo-text">Admin Panel</div>
-        <div class="sidebar-logo-sub">OneLLM Dashboard</div>
-      </div>
+<!-- ══ SIDEBAR ══════════════════════════════════════════════════════════════ -->
+<aside class="sidebar" id="sidebar">
+  <div class="sb-logo">
+    <div class="sb-logo-icon"><span class="ms" style="font-size:20px;font-variation-settings:'FILL' 1">admin_panel_settings</span></div>
+    <div>
+      <div class="sb-logo-text">Admin Panel</div>
+      <div class="sb-logo-sub">OneLLM Dashboard</div>
     </div>
   </div>
 
-  <nav class="sidebar-nav">
-    <div class="nav-group-label">Overview</div>
-    <button class="nav-item active" id="nav-overview" onclick="switchPage('overview')">
-      <span class="ms">dashboard</span> Overview
+  <nav class="sb-nav">
+    <div class="nav-grp">Overview</div>
+    <button class="nav-item active" id="nav-overview" onclick="go('overview')">
+      <span class="ms">dashboard</span>Overview
     </button>
 
-    <div class="nav-group-label" style="margin-top:8px;">Management</div>
-    <button class="nav-item" id="nav-keys" onclick="switchPage('keys')">
-      <span class="ms">vpn_key</span> API Keys
+    <div class="nav-grp" style="margin-top:6px">Management</div>
+    <button class="nav-item" id="nav-keys" onclick="go('keys')">
+      <span class="ms">vpn_key</span>API Keys
     </button>
-    <button class="nav-item" id="nav-demo" onclick="switchPage('demo')">
-      <span class="ms">person_play</span> Demo Sessions
-      <span class="nav-badge" id="demo-badge" style="display:none;">0</span>
+    <button class="nav-item" id="nav-demo" onclick="go('demo')">
+      <span class="ms">person_play</span>Demo Sessions
+      <span class="nav-badge" id="demo-badge">0</span>
     </button>
-    <button class="nav-item" id="nav-usage" onclick="switchPage('usage')">
-      <span class="ms">analytics</span> Usage Logs
+    <button class="nav-item" id="nav-usage" onclick="go('usage')">
+      <span class="ms">analytics</span>Usage Logs
+    </button>
+
+    <div class="nav-grp" style="margin-top:6px">Providers</div>
+    <button class="nav-item" id="nav-provkeys" onclick="go('provkeys')">
+      <span class="ms">key</span>Provider Keys
+    </button>
+    <button class="nav-item" id="nav-provusage" onclick="go('provusage')">
+      <span class="ms">monitoring</span>Provider Usage
+    </button>
+
+    <div class="nav-grp" style="margin-top:6px">Catalog</div>
+    <button class="nav-item" id="nav-models" onclick="go('models')">
+      <span class="ms">model_training</span>Model Catalog
+    </button>
+    <button class="nav-item" id="nav-mappings" onclick="go('mappings')">
+      <span class="ms">account_tree</span>Model Mappings
+    </button>
+
+    <div class="nav-grp" style="margin-top:6px">System</div>
+    <button class="nav-item" id="nav-queue" onclick="go('queue')">
+      <span class="ms">queue</span>Request Queue
+      <span class="nav-badge" id="queue-badge">0</span>
     </button>
   </nav>
 
-  <div class="sidebar-foot">
+  <div class="sb-foot">
     <div id="login-section" class="user-row">
-      <div class="user-avatar-icon"><span class="ms sm">person</span></div>
-      <div style="flex:1;">
-        <a href="/api/auth/github" style="text-decoration:none;">
-          <div class="user-name" style="color:var(--on-surf);">Sign in with GitHub</div>
+      <div class="av-icon"><span class="ms" style="font-size:18px">person</span></div>
+      <div style="flex:1">
+        <a href="/api/auth/github" style="text-decoration:none">
+          <div class="user-name" style="color:var(--on-surf)">Sign in with GitHub</div>
         </a>
-        <div style="font-size:11px;color:var(--out);">Admin access required</div>
+        <div style="font-size:10px;color:var(--out)">Admin access required</div>
       </div>
     </div>
-    <div id="user-section" class="user-row" style="display:none;">
-      <img id="sidebar-avatar" src="" alt="Avatar" class="user-avatar-sm">
-      <div style="flex:1;overflow:hidden;">
+    <div id="user-section" class="user-row" style="display:none">
+      <img id="sidebar-avatar" src="" alt="Avatar" class="av-sm">
+      <div style="flex:1;overflow:hidden">
         <div class="user-name" id="sidebar-username">User</div>
         <div class="user-role">Admin</div>
       </div>
-      <button class="logout-btn" onclick="logout()" title="Logout">
-        <span class="ms sm" style="color:var(--out);">logout</span>
+      <button class="logout-btn" onclick="doLogout()" title="Logout">
+        <span class="ms" style="font-size:16px">logout</span>
       </button>
     </div>
   </div>
 </aside>
 
-<!-- Main -->
-<main class="admin-main">
+<!-- ══ MAIN ══════════════════════════════════════════════════════════════════ -->
+<main id="main">
 
-  <!-- ══ PAGE: OVERVIEW ══════════════════════════════════════════════════════ -->
-  <div class="page active" id="page-overview">
-    <div class="admin-topbar">
-      <div class="admin-title"><span class="ms">dashboard</span> Overview</div>
-      <button class="icon-btn" onclick="reloadAll()" title="Refresh" style="width:38px;height:38px;border-radius:10px;">
-        <span class="ms">refresh</span>
-      </button>
+<!-- ─── PAGE: OVERVIEW ─────────────────────────────────────────────────────── -->
+<div class="page active" id="page-overview">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">dashboard</span>Overview</div>
+    <div class="topbar-actions">
+      <button class="dm-btn" id="dm-toggle" onclick="toggleDark()" title="Toggle dark mode"><span class="ms" id="dm-icon">dark_mode</span></button>
+      <button class="btn secondary sm" onclick="reloadAll()"><span class="ms">refresh</span>Refresh</button>
     </div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span>A live snapshot of platform health — active keys, sessions, token usage, and the request queue at a glance.</div></div>
 
-    <div class="stat-grid" id="stat-grid">
-      <div class="stat-card">
-        <div class="stat-icon blue"><span class="ms">vpn_key</span></div>
-        <div class="stat-value" id="s-active-keys">—</div>
-        <div class="stat-label">Active API Keys</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon green"><span class="ms">person_play</span></div>
-        <div class="stat-value" id="s-demo-sessions">—</div>
-        <div class="stat-label">Demo Sessions</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon purple"><span class="ms">groups</span></div>
-        <div class="stat-value" id="s-active-24h">—</div>
-        <div class="stat-label">Active (24h)</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon amber"><span class="ms">today</span></div>
-        <div class="stat-value" id="s-requests-today">—</div>
-        <div class="stat-label">Requests Today</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon p"><span class="ms">token</span></div>
-        <div class="stat-value" id="s-total-tokens">—</div>
-        <div class="stat-label">Total Tokens</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon red"><span class="ms">block</span></div>
-        <div class="stat-value" id="s-blocked">—</div>
-        <div class="stat-label">Blocked Sessions</div>
-      </div>
-    </div>
+  <div class="stat-grid" id="stat-grid">
+    <div class="sc"><div class="sc-icon b"><span class="ms">vpn_key</span></div><div class="sc-val" id="s-keys">—</div><div class="sc-lbl">Active API Keys</div></div>
+    <div class="sc"><div class="sc-icon g"><span class="ms">person_play</span></div><div class="sc-val" id="s-demo">—</div><div class="sc-lbl">Demo Sessions</div></div>
+    <div class="sc"><div class="sc-icon m"><span class="ms">groups</span></div><div class="sc-val" id="s-24h">—</div><div class="sc-lbl">Active (24h)</div></div>
+    <div class="sc"><div class="sc-icon a"><span class="ms">today</span></div><div class="sc-val" id="s-today">—</div><div class="sc-lbl">Requests Today</div></div>
+    <div class="sc"><div class="sc-icon p"><span class="ms">token</span></div><div class="sc-val" id="s-tokens">—</div><div class="sc-lbl">Total Tokens</div></div>
+    <div class="sc"><div class="sc-icon r"><span class="ms">block</span></div><div class="sc-val" id="s-blocked">—</div><div class="sc-lbl">Blocked Sessions</div></div>
+    <div class="sc"><div class="sc-icon a"><span class="ms">pending</span></div><div class="sc-val" id="s-queued">—</div><div class="sc-lbl">Queue Pending</div></div>
+    <div class="sc"><div class="sc-icon r"><span class="ms">error</span></div><div class="sc-val" id="s-qfail">—</div><div class="sc-lbl">Queue Failed</div></div>
+  </div>
 
-    <!-- Chart -->
-    <div class="chart-section">
-      <div class="chart-card">
-        <div class="chart-title"><span class="ms" style="color:var(--p);">bar_chart</span> Requests — Last 14 Days</div>
-        <div class="chart-bars" id="chart-bars">
-          <div class="state-center" style="padding:0;flex:1;"><div class="spinner"></div></div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Recent usage quick-view -->
-    <div class="section-wrap">
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-title"><span class="ms">history</span> Recent Usage</div>
-          <button class="chip active" onclick="switchPage('usage')">View All</button>
-        </div>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr>
-              <th>Identifier</th><th>Model</th><th>Input</th><th>Output</th><th>Time</th>
-            </tr></thead>
-            <tbody id="overview-usage-tbody">
-              <tr><td colspan="5"><div class="state-center" style="padding:16px;"><div class="spinner"></div></div></td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
+  <div class="chart-wrap">
+    <div class="chart-card">
+      <div class="chart-title"><span class="ms" style="color:var(--p)">bar_chart</span>Requests — Last 14 Days</div>
+      <div class="chart-bars" id="chart-bars"><div class="state-c" style="padding:0;flex:1"><div class="spin"></div></div></div>
     </div>
   </div>
 
-  <!-- ══ PAGE: API KEYS ══════════════════════════════════════════════════════ -->
-  <div class="page" id="page-keys">
-    <div class="admin-topbar">
-      <div class="admin-title"><span class="ms">vpn_key</span> API Keys</div>
-      <m3e-button variant="filled" id="add-key-btn">
-        <m3e-icon slot="icon" name="add"></m3e-icon>
-        <span>New Key</span>
-      </m3e-button>
+  <div class="swrap">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">history</span>Recent Usage</div>
+        <button class="chip active" onclick="go('usage')">View All</button>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr><th>Identifier</th><th>Model</th><th>In Tokens</th><th>Out Tokens</th><th>Time</th></tr></thead>
+        <tbody id="ov-usage-tbody"><tr><td colspan="5"><div class="state-c" style="padding:16px"><div class="spin"></div></div></td></tr></tbody></table>
+      </div>
     </div>
+  </div>
+</div>
 
-    <div class="section-wrap" style="margin-top:20px;">
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-title"><span class="ms">list_alt</span> All Keys</div>
-          <div class="filter-chips">
+<!-- ─── PAGE: API KEYS ────────────────────────────────────────────────────── -->
+<div class="page" id="page-keys">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">vpn_key</span>API Keys</div>
+    <div class="topbar-actions">
+      <button class="dm-btn" onclick="toggleDark()"><span class="ms" id="dm-icon-keys">dark_mode</span></button>
+      <button class="btn primary sm" onclick="openKeyModal()"><span class="ms">add</span>New Key</button>
+    </div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span>Manage client API keys that grant access to OneLLM. Each key has its own rate limits, token quotas, and expiry.</div></div>
+  <div class="swrap mt">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">list_alt</span>All Keys</div>
+        <div class="shead-actions">
+          <div class="chips">
             <button class="chip active" id="kf-all" onclick="filterKeys('all')">All</button>
             <button class="chip" id="kf-demo" onclick="filterKeys('demo')">Demo</button>
             <button class="chip" id="kf-global" onclick="filterKeys('global')">Global</button>
             <button class="chip" id="kf-inactive" onclick="filterKeys('inactive')">Inactive</button>
           </div>
         </div>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr>
-              <th>Key</th><th>Name</th><th>Type</th><th>Status</th><th>RPM/RPD</th><th>Usage</th><th>Tokens</th><th>Created</th><th>Actions</th>
-            </tr></thead>
-            <tbody id="keys-tbody">
-              <tr><td colspan="9"><div class="state-center" style="padding:20px;"><div class="spinner"></div></div></td></tr>
-            </tbody>
-          </table>
-        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Key</th><th>Name</th><th>Type</th><th>Status</th><th>RPM/RPD</th><th>Usage</th><th>Tokens</th><th>Last Used</th><th>Created</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="keys-tbody"><tr><td colspan="10"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- ══ PAGE: DEMO SESSIONS ════════════════════════════════════════════════ -->
-  <div class="page" id="page-demo">
-    <div class="admin-topbar">
-      <div class="admin-title"><span class="ms">person_play</span> Demo Sessions</div>
+<!-- ─── PAGE: DEMO SESSIONS ───────────────────────────────────────────────── -->
+<div class="page" id="page-demo">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">person_play</span>Demo Sessions</div>
+    <div class="topbar-actions">
+      <button class="dm-btn" onclick="toggleDark()"><span class="ms">dark_mode</span></button>
+      <button class="btn danger sm" id="purge-btn" onclick="purgeDemoKeys()"><span class="ms">delete_sweep</span>Purge 30d Inactive</button>
     </div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span>Anonymous try-it sessions identified by browser fingerprint. Sessions inactive for 30+ days are eligible for purging.</div></div>
 
-    <!-- Mini stats row -->
-    <div class="stat-grid" style="grid-template-columns: repeat(auto-fill, minmax(140px,1fr));" id="demo-stat-grid">
-      <div class="stat-card">
-        <div class="stat-icon green"><span class="ms">check_circle</span></div>
-        <div class="stat-value" id="ds-active">—</div>
-        <div class="stat-label">Active Sessions</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon blue"><span class="ms">person</span></div>
-        <div class="stat-value" id="ds-24h">—</div>
-        <div class="stat-label">Active 24h</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon purple"><span class="ms">calendar_month</span></div>
-        <div class="stat-value" id="ds-7d">—</div>
-        <div class="stat-label">Active 7 days</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-icon red"><span class="ms">block</span></div>
-        <div class="stat-value" id="ds-blocked">—</div>
-        <div class="stat-label">Blocked</div>
-      </div>
-    </div>
+  <div class="stat-grid" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">
+    <div class="sc"><div class="sc-icon g"><span class="ms">check_circle</span></div><div class="sc-val" id="ds-active">—</div><div class="sc-lbl">Active Sessions</div></div>
+    <div class="sc"><div class="sc-icon b"><span class="ms">person</span></div><div class="sc-val" id="ds-24h">—</div><div class="sc-lbl">Active 24h</div></div>
+    <div class="sc"><div class="sc-icon m"><span class="ms">calendar_month</span></div><div class="sc-val" id="ds-7d">—</div><div class="sc-lbl">Active 7 days</div></div>
+    <div class="sc"><div class="sc-icon r"><span class="ms">block</span></div><div class="sc-val" id="ds-blocked">—</div><div class="sc-lbl">Blocked</div></div>
+    <div class="sc"><div class="sc-icon a"><span class="ms">delete_forever</span></div><div class="sc-val" id="ds-purge">—</div><div class="sc-lbl">Eligible Purge</div></div>
+  </div>
 
-    <div class="section-wrap">
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-title"><span class="ms">table_rows</span> Session List</div>
-          <div class="section-head-actions">
-            <div class="filter-chips">
-              <button class="chip active" id="df-all"     onclick="filterDemo('all')">All</button>
-              <button class="chip"        id="df-active"  onclick="filterDemo('active')">Active</button>
-              <button class="chip"        id="df-blocked" onclick="filterDemo('blocked')">Blocked</button>
-              <button class="chip"        id="df-expired" onclick="filterDemo('expired')">Expiring</button>
-            </div>
-          </div>
+  <div class="swrap">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">table_rows</span>Session List</div>
+        <div class="chips">
+          <button class="chip active" id="df-all" onclick="filterDemo('all')">All</button>
+          <button class="chip" id="df-active" onclick="filterDemo('active')">Active</button>
+          <button class="chip" id="df-blocked" onclick="filterDemo('blocked')">Blocked</button>
+          <button class="chip" id="df-expired" onclick="filterDemo('expired')">Expiring</button>
         </div>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr>
-              <th>ID</th>
-              <th>API Key</th>
-              <th>Fingerprint</th>
-              <th>IP</th>
-              <th>First Seen</th>
-              <th>Last Active</th>
-              <th>Inactive</th>
-              <th>Requests</th>
-              <th>Tokens</th>
-              <th>Status</th>
-              <th>Actions</th>
-            </tr></thead>
-            <tbody id="demo-tbody">
-              <tr><td colspan="11"><div class="state-center" style="padding:20px;"><div class="spinner"></div></div></td></tr>
-            </tbody>
-          </table>
-        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>ID</th><th>API Key</th><th>Fingerprint</th><th>IP</th><th>First Seen</th><th>Last Active</th><th>Inactive</th><th>Requests</th><th>Tokens</th><th>Status</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="demo-tbody"><tr><td colspan="11"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
       </div>
     </div>
   </div>
+</div>
 
-  <!-- ══ PAGE: USAGE LOGS ═══════════════════════════════════════════════════ -->
-  <div class="page" id="page-usage">
-    <div class="admin-topbar">
-      <div class="admin-title"><span class="ms">analytics</span> Usage Logs</div>
-    </div>
-    <div class="section-wrap" style="margin-top:20px;">
-      <div class="section-card">
-        <div class="section-head">
-          <div class="section-head-title"><span class="ms">receipt_long</span> Recent Requests</div>
-          <span style="font-size:12px;color:var(--out);">Last 100 entries</span>
-        </div>
-        <div class="data-table-wrap">
-          <table class="data-table">
-            <thead><tr>
-              <th>Identifier</th><th>Endpoint</th><th>Model</th><th>Input Tokens</th><th>Output Tokens</th><th>IP</th><th>Fingerprint</th><th>Time</th>
-            </tr></thead>
-            <tbody id="usage-tbody">
-              <tr><td colspan="8"><div class="state-center" style="padding:20px;"><div class="spinner"></div></div></td></tr>
-            </tbody>
-          </table>
-        </div>
+<!-- ─── PAGE: USAGE LOGS ──────────────────────────────────────────────────── -->
+<div class="page" id="page-usage">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">analytics</span>Usage Logs</div>
+    <div class="topbar-actions"><button class="dm-btn" onclick="toggleDark()"><span class="ms">dark_mode</span></button></div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span>A log of recent API requests across all keys — includes model used, token counts, and request metadata.</div></div>
+  <div class="swrap mt">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">receipt_long</span>Recent Requests</div>
+        <span style="font-size:11px;color:var(--out)">Last 200 entries</span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Identifier</th><th>Endpoint</th><th>Model</th><th>In Tokens</th><th>Out Tokens</th><th>IP</th><th>Fingerprint</th><th>Time</th>
+        </tr></thead>
+        <tbody id="usage-tbody"><tr><td colspan="8"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
       </div>
     </div>
   </div>
+</div>
+
+<!-- ─── PAGE: PROVIDER KEYS ───────────────────────────────────────────────── -->
+<div class="page" id="page-provkeys">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">key</span>Provider Keys</div>
+    <div class="topbar-actions">
+      <button class="dm-btn" onclick="toggleDark()"><span class="ms">dark_mode</span></button>
+      <button class="btn primary sm" onclick="openPKModal()"><span class="ms">add</span>Add Key</button>
+    </div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span>Upstream API keys for each AI provider (OpenAI, Anthropic, etc.). These are the keys OneLLM uses to forward requests.</div></div>
+  <div class="swrap mt">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">cloud_queue</span>Upstream Provider Keys</div>
+        <div class="chips" id="pk-provider-chips"></div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Provider</th><th>Name</th><th>Status</th><th>Priority</th><th>Counter</th><th>Daily Limit</th><th>Req Today</th><th>Tokens Today</th><th>Last Used</th><th>Last Error</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="pk-tbody"><tr><td colspan="11"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PAGE: PROVIDER USAGE ─────────────────────────────────────────────── -->
+<div class="page" id="page-provusage">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">monitoring</span>Provider Usage</div>
+    <div class="topbar-actions"><button class="dm-btn" onclick="toggleDark()"><span class="ms">dark_mode</span></button></div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span>Telemetry for outbound requests to AI providers — tracks tokens consumed, errors, and cost units per provider key.</div></div>
+  <div class="swrap mt">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">stacked_bar_chart</span>Provider Telemetry</div>
+        <span style="font-size:11px;color:var(--out)">Last 200 entries</span>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Provider</th><th>Key Name</th><th>Model</th><th>Status</th><th>Prompt Tokens</th><th>Completion</th><th>Total</th><th>Units</th><th>Error</th><th>Time</th>
+        </tr></thead>
+        <tbody id="pu-tbody"><tr><td colspan="10"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PAGE: MODEL CATALOG ───────────────────────────────────────────────── -->
+<div class="page" id="page-models">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">model_training</span>Model Catalog</div>
+    <div class="topbar-actions">
+      <button class="dm-btn" onclick="toggleDark()"><span class="ms">dark_mode</span></button>
+      <button class="btn primary sm" onclick="openModelModal()"><span class="ms">add</span>Add Model</button>
+    </div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span><strong>Model Catalog</strong> defines the public-facing model list — what clients can request (e.g. <code>gpt-4o</code>). Use <strong>Model Mappings</strong> to link each catalog entry to the actual upstream provider model.</div></div>
+  <div class="swrap mt">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">format_list_bulleted</span>Models</div>
+        <div class="chips" id="cat-chips">
+          <button class="chip active" id="cat-all" onclick="filterModels('all')">All</button>
+          <button class="chip" id="cat-text" onclick="filterModels('text')">Text</button>
+          <button class="chip" id="cat-image" onclick="filterModels('image')">Image</button>
+          <button class="chip" id="cat-video" onclick="filterModels('video')">Video</button>
+          <button class="chip" id="cat-audio" onclick="filterModels('audio')">Audio</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Category</th><th>Model ID</th><th>Display Name</th><th>Providers</th><th>Context</th><th>Pro</th><th>Status</th><th>Updated</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="models-tbody"><tr><td colspan="9"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PAGE: MODEL MAPPINGS ─────────────────────────────────────────────── -->
+<div class="page" id="page-mappings">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">account_tree</span>Model Mappings</div>
+    <div class="topbar-actions">
+      <button class="dm-btn" onclick="toggleDark()"><span class="ms">dark_mode</span></button>
+      <button class="btn primary sm" onclick="openMappingModal()"><span class="ms">add</span>Add Mapping</button>
+    </div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span><strong>Model Mappings</strong> route each catalog model to a specific provider and its real model ID (e.g. <code>gpt-4o</code> → OpenAI <code>gpt-4o-2024-11-20</code>). Multiple providers can back a single catalog model for fallback.</div></div>
+  <div class="swrap mt">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">link</span>Provider Mappings</div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>Model ID</th><th>Display Name</th><th>Provider</th><th>Provider Model ID</th><th>Priority</th><th>Status</th><th>Updated</th><th>Actions</th>
+        </tr></thead>
+        <tbody id="mappings-tbody"><tr><td colspan="8"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ─── PAGE: REQUEST QUEUE ───────────────────────────────────────────────── -->
+<div class="page" id="page-queue">
+  <div class="topbar">
+    <div class="page-title"><span class="ms">queue</span>Request Queue</div>
+    <div class="topbar-actions">
+      <button class="dm-btn" onclick="toggleDark()"><span class="ms">dark_mode</span></button>
+      <button class="btn secondary sm" onclick="reloadAll()"><span class="ms">refresh</span>Refresh</button>
+    </div>
+  </div>
+  <div class="page-desc"><div class="page-desc-text"><span class="ms">info</span>Queued and in-flight async requests — shows status, retry attempts, and errors for background-processed completions.</div></div>
+
+  <div class="stat-grid" style="grid-template-columns:repeat(auto-fill,minmax(130px,1fr))">
+    <div class="sc"><div class="sc-icon a"><span class="ms">pending</span></div><div class="sc-val" id="q-queued">—</div><div class="sc-lbl">Queued</div></div>
+    <div class="sc"><div class="sc-icon b"><span class="ms">sync</span></div><div class="sc-val" id="q-proc">—</div><div class="sc-lbl">Processing</div></div>
+    <div class="sc"><div class="sc-icon r"><span class="ms">error</span></div><div class="sc-val" id="q-fail">—</div><div class="sc-lbl">Failed</div></div>
+    <div class="sc"><div class="sc-icon g"><span class="ms">done_all</span></div><div class="sc-val" id="q-done">—</div><div class="sc-lbl">Done Today</div></div>
+  </div>
+
+  <div class="swrap">
+    <div class="scard">
+      <div class="shead">
+        <div class="shead-title"><span class="ms">list</span>Recent Queue Items</div>
+        <div class="chips">
+          <button class="chip active" id="qf-all" onclick="filterQueue('all')">All</button>
+          <button class="chip" id="qf-queued" onclick="filterQueue('queued')">Queued</button>
+          <button class="chip" id="qf-processing" onclick="filterQueue('processing')">Processing</button>
+          <button class="chip" id="qf-failed" onclick="filterQueue('failed')">Failed</button>
+          <button class="chip" id="qf-completed" onclick="filterQueue('completed')">Completed</button>
+        </div>
+      </div>
+      <div class="tbl-wrap">
+        <table class="tbl"><thead><tr>
+          <th>ID</th><th>Endpoint</th><th>Model</th><th>Provider</th><th>Priority</th><th>Status</th><th>Error</th><th>Created</th><th>Started</th><th>Finished</th>
+        </tr></thead>
+        <tbody id="queue-tbody"><tr><td colspan="10"><div class="state-c" style="padding:20px"><div class="spin"></div></div></td></tr></tbody></table>
+      </div>
+    </div>
+  </div>
+</div>
 
 </main>
-</m3e-theme>
 
-<!-- ══ KEY MODAL ══════════════════════════════════════════════════════════ -->
-<div class="modal-overlay" id="key-modal">
-  <div class="modal-box">
-    <div class="modal-head">
-      <h3 id="key-modal-title">New API Key</h3>
-      <button class="modal-close" onclick="closeKeyModal()"><span class="ms">close</span></button>
+<!-- ════════════════════════════════════════════════════════════════════════════
+     MODALS
+════════════════════════════════════════════════════════════════════════════ -->
+
+<!-- Key Modal -->
+<div class="overlay" id="key-modal">
+  <div class="mbox">
+    <div class="mhead">
+      <h3 id="km-title">New API Key</h3>
+      <button class="mclose" onclick="closeKeyModal()"><span class="ms">close</span></button>
     </div>
-    <form class="form-stack" id="key-form">
-      <input type="hidden" id="key-id">
-      <div class="form-group">
-        <label for="key-name">Name</label>
-        <input type="text" id="key-name" placeholder="e.g. Production Key" required>
+    <form class="fstack" id="key-form">
+      <input type="hidden" id="km-id">
+      <div class="fg"><label>Name</label><input type="text" id="km-name" placeholder="e.g. Production Key" required></div>
+      <div class="frow">
+        <div class="fg"><label>Requests / Min</label><input type="number" id="km-rpm" value="5" min="1" max="1000"></div>
+        <div class="fg"><label>Requests / Day</label><input type="number" id="km-rpd" value="20" min="1" max="100000"></div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="key-rpm">Requests / Min</label>
-          <input type="number" id="key-rpm" value="5" min="1" max="1000">
-        </div>
-        <div class="form-group">
-          <label for="key-rpd">Requests / Day</label>
-          <input type="number" id="key-rpd" value="20" min="1" max="100000">
-        </div>
+      <div class="frow">
+        <div class="fg"><label>Input Token Limit (-1=∞)</label><input type="number" id="km-itl" value="10000" min="-1"></div>
+        <div class="fg"><label>Output Token Limit (-1=∞)</label><input type="number" id="km-otl" value="-1" min="-1"></div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="key-input-limit">Input Token Limit (-1=∞)</label>
-          <input type="number" id="key-input-limit" value="10000" min="-1">
-        </div>
-        <div class="form-group">
-          <label for="key-output-limit">Output Token Limit (-1=∞)</label>
-          <input type="number" id="key-output-limit" value="-1" min="-1">
-        </div>
+      <div class="frow">
+        <div class="fg"><label>Queue Priority</label><input type="number" id="km-qp" value="0" min="0" max="100"></div>
+        <div class="fg"><label>Expires in Days (blank=never)</label><input type="number" id="km-exp" placeholder="Never" min="1"></div>
       </div>
-      <div class="form-group">
-        <label for="key-priority">Queue Priority (0 = lowest)</label>
-        <input type="number" id="key-priority" value="0" min="0" max="100">
-      </div>
-      <div class="form-group">
-        <label for="key-expires">Expires in days (leave blank = never)</label>
-        <input type="number" id="key-expires" placeholder="Never" min="1">
-      </div>
-      <div class="modal-actions">
-        <button type="button" class="btn-secondary" onclick="closeKeyModal()">Cancel</button>
-        <button type="submit" class="btn-primary">Save Key</button>
+      <div class="macts">
+        <button type="button" class="btn secondary" onclick="closeKeyModal()">Cancel</button>
+        <button type="submit" class="btn primary">Save Key</button>
       </div>
     </form>
   </div>
 </div>
 
-<!-- ══ DEMO SESSION DETAIL MODAL ══════════════════════════════════════════ -->
-<div class="modal-overlay" id="demo-modal">
-  <div class="modal-box">
-    <div class="modal-head">
+<!-- Demo Session Detail Modal -->
+<div class="overlay" id="demo-modal">
+  <div class="mbox">
+    <div class="mhead">
       <h3>Demo Session #<span id="dm-id"></span></h3>
-      <button class="modal-close" onclick="closeDemoModal()"><span class="ms">close</span></button>
+      <button class="mclose" onclick="closeDemoModal()"><span class="ms">close</span></button>
     </div>
-    <div class="form-stack">
-      <div class="form-group">
-        <label>API Key</label>
-        <input type="text" id="dm-key" readonly style="font-family:monospace;font-size:12px;">
+    <div class="fstack">
+      <div class="fg"><label>API Key</label><input type="text" id="dm-key" readonly style="font-family:monospace;font-size:11px"></div>
+      <div class="frow">
+        <div class="fg"><label>IP Address</label><input type="text" id="dm-ip" readonly></div>
+        <div class="fg"><label>Requests</label><input type="text" id="dm-reqs" readonly></div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>IP Address</label>
-          <input type="text" id="dm-ip" readonly>
-        </div>
-        <div class="form-group">
-          <label>Requests</label>
-          <input type="text" id="dm-requests" readonly>
-        </div>
+      <div class="frow">
+        <div class="fg"><label>First Seen</label><input type="text" id="dm-first" readonly></div>
+        <div class="fg"><label>Last Active</label><input type="text" id="dm-last" readonly></div>
       </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label>First Seen</label>
-          <input type="text" id="dm-first" readonly>
-        </div>
-        <div class="form-group">
-          <label>Last Active</label>
-          <input type="text" id="dm-last" readonly>
-        </div>
-      </div>
-      <div class="form-group">
-        <label>User Agent</label>
-        <textarea id="dm-ua" readonly rows="2" style="resize:none;font-size:12px;"></textarea>
-      </div>
-      <div class="form-group">
-        <label>Composite Hash</label>
-        <input type="text" id="dm-hash" readonly style="font-family:monospace;font-size:11px;">
-      </div>
-      <div class="form-group">
-        <label>Fingerprint Hash</label>
-        <input type="text" id="dm-fp" readonly style="font-family:monospace;font-size:11px;">
-      </div>
+      <div class="fg"><label>User Agent</label><textarea id="dm-ua" readonly rows="2" style="resize:none;font-size:11px"></textarea></div>
+      <div class="fg"><label>Composite Hash</label><input type="text" id="dm-hash" readonly style="font-family:monospace;font-size:10px"></div>
+      <div class="fg"><label>Fingerprint Hash</label><input type="text" id="dm-fp" readonly style="font-family:monospace;font-size:10px"></div>
     </div>
-    <div class="modal-actions" style="margin-top:16px;">
-      <button type="button" class="btn-secondary" onclick="closeDemoModal()">Close</button>
-      <button type="button" id="dm-block-btn" class="btn-danger" onclick="toggleDemoBlock()">Block Session</button>
-      <button type="button" class="btn-danger" style="max-width:120px;" onclick="deleteDemoSession()">Delete</button>
+    <div class="macts" style="margin-top:14px">
+      <button type="button" class="btn secondary" onclick="closeDemoModal()">Close</button>
+      <button type="button" id="dm-block-btn" class="btn danger" onclick="toggleDemoBlock()">Block Session</button>
+      <button type="button" class="btn danger" onclick="deleteDemoSession()" style="max-width:100px">Delete</button>
     </div>
   </div>
 </div>
 
-<!-- ══ TOAST ══════════════════════════════════════════════════════════════ -->
-<div class="toast" id="toast">
-  <span class="ms">check_circle</span>
-  <span id="toast-msg"></span>
+<!-- Provider Key Modal -->
+<div class="overlay" id="pk-modal">
+  <div class="mbox lg">
+    <div class="mhead">
+      <h3 id="pkm-title">Add Provider Key</h3>
+      <button class="mclose" onclick="closePKModal()"><span class="ms">close</span></button>
+    </div>
+    <form class="fstack" id="pk-form">
+      <input type="hidden" id="pkm-id">
+      <div class="frow">
+        <div class="fg"><label>Provider Name</label>
+          <select id="pkm-provider">
+            <option value="">Select provider...</option>
+            <option>openai</option><option>anthropic</option><option>gemini</option>
+            <option>pollinations</option><option>nvidia</option><option>groq</option>
+            <option>mistral</option><option>cohere</option><option>together</option>
+            <option>replicate</option><option>deepseek</option><option>xai</option>
+          </select>
+        </div>
+        <div class="fg"><label>Key Name / Label</label><input type="text" id="pkm-name" placeholder="e.g. Primary Key" required></div>
+      </div>
+      <div class="fg"><label>API Key</label><input type="text" id="pkm-apikey" placeholder="sk-..." autocomplete="off"></div>
+      <div class="frow">
+        <div class="fg"><label>Priority</label><input type="number" id="pkm-priority" value="0" min="0" max="100"></div>
+        <div class="fg"><label>Usage Counter Type</label>
+          <select id="pkm-counter">
+            <option value="tokens">tokens</option>
+            <option value="requests">requests</option>
+            <option value="units">units</option>
+          </select>
+        </div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Daily Req Limit (-1=∞)</label><input type="number" id="pkm-dlimit" value="-1" min="-1"></div>
+        <div class="fg"><label>Minute Req Limit (-1=∞)</label><input type="number" id="pkm-mlimit" value="-1" min="-1"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Daily Token Limit (-1=∞)</label><input type="number" id="pkm-tlimit" value="-1" min="-1"></div>
+        <div class="fg"><label>Daily Unit Limit (-1=∞)</label><input type="number" id="pkm-ulimit" value="-1" min="-1"></div>
+      </div>
+      <div class="macts">
+        <button type="button" class="btn secondary" onclick="closePKModal()">Cancel</button>
+        <button type="submit" class="btn primary">Save</button>
+      </div>
+    </form>
+  </div>
 </div>
 
+<!-- Model Catalog Modal -->
+<div class="overlay" id="model-modal">
+  <div class="mbox lg">
+    <div class="mhead">
+      <h3 id="mm-title">Add Model</h3>
+      <button class="mclose" onclick="closeModelModal()"><span class="ms">close</span></button>
+    </div>
+    <form class="fstack" id="model-form">
+      <input type="hidden" id="mm-id">
+      <div class="frow">
+        <div class="fg"><label>Category</label>
+          <select id="mm-cat" required>
+            <option value="">Category...</option>
+            <option value="text">text</option><option value="image">image</option>
+            <option value="video">video</option><option value="audio">audio</option>
+            <option value="transcription">transcription</option>
+          </select>
+        </div>
+        <div class="fg"><label>Model ID</label><input type="text" id="mm-mid" placeholder="e.g. gpt-4o" required></div>
+      </div>
+      <div class="fg"><label>Display Name</label><input type="text" id="mm-dname" placeholder="e.g. GPT-4o" required></div>
+      <div class="fg"><label>Description</label><textarea id="mm-desc" rows="2" style="resize:none"></textarea></div>
+      <div class="frow">
+        <div class="fg"><label>Context Window</label><input type="text" id="mm-ctx" placeholder="e.g. 128K"></div>
+        <div class="fg"><label>Timeout (ms)</label><input type="number" id="mm-timeout" value="60000" min="1000"></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Capabilities (comma-separated)</label><input type="text" id="mm-caps" placeholder="chat,function_calling"></div>
+        <div class="fg"><label>Tags (comma-separated)</label><input type="text" id="mm-tags" placeholder="fast,cheap"></div>
+      </div>
+      <div class="fg"><label>Compatible Providers (comma-separated)</label><input type="text" id="mm-provs" placeholder="openai,azure"></div>
+      <div class="frow">
+        <div class="fg" style="flex-direction:row;align-items:center;gap:8px;padding-top:8px">
+          <button type="button" class="toggle" id="mm-pro" onclick="this.classList.toggle('on')"></button>
+          <label style="text-transform:none;font-size:13px;font-weight:600">Pro Model</label>
+        </div>
+        <div class="fg" style="flex-direction:row;align-items:center;gap:8px;padding-top:8px">
+          <button type="button" class="toggle" id="mm-cache" onclick="this.classList.toggle('on')"></button>
+          <label style="text-transform:none;font-size:13px;font-weight:600">Supports Caching</label>
+        </div>
+      </div>
+      <div class="macts">
+        <button type="button" class="btn secondary" onclick="closeModelModal()">Cancel</button>
+        <button type="submit" class="btn primary">Save Model</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Model Mapping Modal -->
+<div class="overlay" id="mapping-modal">
+  <div class="mbox">
+    <div class="mhead">
+      <h3 id="mpm-title">Add Mapping</h3>
+      <button class="mclose" onclick="closeMappingModal()"><span class="ms">close</span></button>
+    </div>
+    <form class="fstack" id="mapping-form">
+      <input type="hidden" id="mpm-id">
+      <div class="fg"><label>Model ID (from catalog)</label><input type="text" id="mpm-mid" placeholder="e.g. gpt-4o" required></div>
+      <div class="frow">
+        <div class="fg"><label>Provider</label>
+          <select id="mpm-provider" required>
+            <option value="">Select...</option>
+            <option>cerebras</option><option>cloudflare</option><option>mistral</option>
+            <option>navy</option><option>nvidia</option><option>ollama</option>
+            <option>pollinations</option><option>voidai</option>
+          </select>
+        </div>
+        <div class="fg"><label>Provider Model ID</label><input type="text" id="mpm-pmid" placeholder="e.g. gpt-4o-2024-11-20" required></div>
+      </div>
+      <div class="frow">
+        <div class="fg"><label>Provider Context Window</label><input type="text" id="mpm-ctx" placeholder="e.g. 128K"></div>
+        <div class="fg"><label>Priority</label><input type="number" id="mpm-priority" value="0" min="0" max="100"></div>
+      </div>
+      <div class="macts">
+        <button type="button" class="btn secondary" onclick="closeMappingModal()">Cancel</button>
+        <button type="submit" class="btn primary">Save Mapping</button>
+      </div>
+    </form>
+  </div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"><span class="ms">check_circle</span><span id="toast-msg"></span></div>
+
 <script>
-// ─── State ───────────────────────────────────────────────────────────────────
-let dashData = null;          // full payload from /api/admin/dashboard
-let allKeys = [];
-let allDemoSessions = [];
-let allUsage = [];
-let currentKeyFilter = 'all';
-let currentDemoFilter = 'all';
-let activeDemoSession = null; // for the detail modal
+// ── State ──────────────────────────────────────────────────────────────────
+let D = {}; // full dashboard payload
+let allKeys=[], allDemo=[], allUsage=[], allPK=[], allPU=[], allModels=[], allMappings=[], allQueue=[];
+let activeDemoSession=null, activePK=null, activeModel=null, activeMapping=null;
+let kFilter='all', dFilter='all', mFilter='all', qFilter='all', pkFilter='all';
+let toastTimer;
 
-// ─── Navigation ──────────────────────────────────────────────────────────────
-function switchPage(name) {
-    document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
-    document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-    document.getElementById('page-' + name).classList.add('active');
-    document.getElementById('nav-' + name).classList.add('active');
+// ── HTML escape helper (XSS prevention) ────────────────────────────────────
+function esc(s){
+  if(s==null||s===undefined)return'';
+  return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;');
 }
 
-// ─── Session check ────────────────────────────────────────────────────────────
-async function checkSession() {
-    try {
-        const res = await fetch('/api/auth/session');
-        const data = await res.json();
-        if (!data.authenticated || !data.isAdmin) {
-            showLogin();
-            setTimeout(() => { window.location.href = '/'; }, 2500);
-            return false;
-        }
-        document.getElementById('sidebar-username').textContent = data.user.username;
-        document.getElementById('sidebar-avatar').src = data.user.avatar;
-        document.getElementById('user-section').style.display = 'flex';
-        document.getElementById('login-section').style.display = 'none';
-        return true;
-    } catch {
-        showLogin();
-        setTimeout(() => { window.location.href = '/'; }, 2500);
-        return false;
+// ── Navigation ──────────────────────────────────────────────────────────────
+function go(name){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const page=document.getElementById('page-'+name);
+  const nav=document.getElementById('nav-'+name);
+  if(page)page.classList.add('active');
+  if(nav)nav.classList.add('active');
+  syncDMIcons();
+}
+
+// ── Dark mode ───────────────────────────────────────────────────────────────
+function toggleDark(){
+  const html=document.documentElement;
+  const isDark=html.getAttribute('data-theme')==='dark';
+  html.setAttribute('data-theme',isDark?'light':'dark');
+  localStorage.setItem('admin_theme',isDark?'light':'dark');
+  syncDMIcons();
+}
+function syncDMIcons(){
+  const isDark=document.documentElement.getAttribute('data-theme')==='dark';
+  document.querySelectorAll('[id^="dm-icon"]').forEach(el=>el.textContent=isDark?'light_mode':'dark_mode');
+}
+(()=>{
+  const saved=localStorage.getItem('admin_theme');
+  if(saved)document.documentElement.setAttribute('data-theme',saved);
+  syncDMIcons();
+})();
+
+// ── Session ─────────────────────────────────────────────────────────────────
+async function checkSession(){
+  try{
+    const res=await fetch('/api/auth/session');
+    const data=await res.json();
+    if(!data.authenticated||!data.isAdmin){
+      document.getElementById('login-section').style.display='flex';
+      document.getElementById('user-section').style.display='none';
+      setTimeout(()=>window.location.href='/',2500);
+      return false;
     }
+    document.getElementById('sidebar-username').textContent=data.user?.username||'Admin';
+    document.getElementById('sidebar-avatar').src=data.user?.avatar||'';
+    document.getElementById('user-section').style.display='flex';
+    document.getElementById('login-section').style.display='none';
+    return true;
+  }catch{
+    setTimeout(()=>window.location.href='/',2500);
+    return false;
+  }
 }
-function showLogin() {
-    document.getElementById('login-section').style.display = 'flex';
-    document.getElementById('user-section').style.display = 'none';
-}
-async function logout() {
-    await fetch('/api/auth/logout', { method: 'POST' }).catch(() => {});
-    window.location.href = '/';
-}
-
-// ─── Load dashboard data ──────────────────────────────────────────────────────
-async function loadDashboard() {
-    try {
-        const res = await fetch('/api/admin/dashboard');
-        if (!res.ok) throw new Error('Failed to load dashboard');
-        dashData = await res.json();
-
-        updateStats(dashData.stats);
-        allKeys = dashData.keys || [];
-        allDemoSessions = dashData.demoSessions || [];
-        allUsage = dashData.recentUsage || [];
-
-        renderChart(dashData.chartData || []);
-        renderOverviewUsage(allUsage.slice(0, 8));
-        renderKeys(allKeys);
-        renderDemoSessions(allDemoSessions);
-        renderUsage(allUsage);
-
-        // Demo badge
-        const activeDemos = (dashData.stats.ACTIVE_DEMO_SESSIONS || 0);
-        if (activeDemos > 0) {
-            const badge = document.getElementById('demo-badge');
-            badge.textContent = formatNum(activeDemos);
-            badge.style.display = '';
-        }
-    } catch (err) {
-        console.error('Dashboard load failed:', err);
-        showToast('Failed to load dashboard', 'error');
-    }
+async function doLogout(){
+  await fetch('/api/auth/logout',{method:'POST'}).catch(()=>{});
+  window.location.href='/';
 }
 
-function reloadAll() { loadDashboard(); }
+// ── Load all data ────────────────────────────────────────────────────────────
+async function reloadAll(){ await loadDashboard(); }
 
-// ─── Stats ────────────────────────────────────────────────────────────────────
-function updateStats(s) {
-    const g = id => document.getElementById(id);
-    g('s-active-keys').textContent     = formatNum(s.ACTIVE_KEYS || 0);
-    g('s-demo-sessions').textContent   = formatNum(s.ACTIVE_DEMO_SESSIONS || 0);
-    g('s-active-24h').textContent      = formatNum(s.DEMO_ACTIVE_24H || 0);
-    g('s-requests-today').textContent  = formatNum(s.REQUESTS_TODAY || 0);
-    g('s-total-tokens').textContent    = formatNum(s.TOTAL_TOKENS || 0);
-    g('s-blocked').textContent         = formatNum(s.BLOCKED_SESSIONS || 0);
-    // Demo page mini stats
-    g('ds-active').textContent   = formatNum(s.ACTIVE_DEMO_SESSIONS || 0);
-    g('ds-24h').textContent      = formatNum(s.DEMO_ACTIVE_24H || 0);
-    g('ds-7d').textContent       = formatNum(s.DEMO_ACTIVE_7D || 0);
-    g('ds-blocked').textContent  = formatNum(s.BLOCKED_SESSIONS || 0);
-}
+async function loadDashboard(){
+  try{
+    const res=await fetch('/api/admin/dashboard');
+    if(!res.ok)throw new Error('Failed');
+    D=await res.json();
 
-// ─── Chart ────────────────────────────────────────────────────────────────────
-function renderChart(data) {
-    const wrap = document.getElementById('chart-bars');
-    if (!data || data.length === 0) {
-        wrap.innerHTML = `<div class="state-center" style="flex:1;padding:0;"><span class="ms">bar_chart</span><p>No data yet</p></div>`;
-        return;
-    }
-    const maxReqs = Math.max(...data.map(d => d.REQUESTS || 0), 1);
-    wrap.innerHTML = data.map(d => {
-        const pct = Math.max(((d.REQUESTS || 0) / maxReqs) * 100, 2);
-        const label = d.DAY ? new Date(d.DAY).toLocaleDateString('en', { month:'short', day:'numeric' }) : '';
-        return `<div class="chart-bar-wrap" title="${d.REQUESTS || 0} requests on ${label}">
-          <div class="chart-bar" style="height:${pct}%;"></div>
-          <div class="chart-label">${label}</div>
-        </div>`;
-    }).join('');
-}
+    allKeys=D.keys||[];
+    allDemo=D.demoSessions||[];
+    allUsage=D.recentUsage||[];
+    allPK=D.providerKeys||[];
+    allPU=D.providerRecentUsage||[];
+    allQueue=D.recentQueue||[];
 
-// ─── Overview usage ───────────────────────────────────────────────────────────
-function renderOverviewUsage(rows) {
-    const tbody = document.getElementById('overview-usage-tbody');
-    if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="5"><div class="state-center" style="padding:16px;"><span class="ms">receipt_long</span><p>No usage yet</p></div></td></tr>`;
-        return;
-    }
-    tbody.innerHTML = rows.map(r => `<tr>
-      <td><span class="mono" title="${r.IDENTIFIER || ''}">${truncate(r.IDENTIFIER, 24)}</span></td>
-      <td><span class="badge grey">${r.MODEL || '-'}</span></td>
-      <td>${formatNum(r.INPUT_TOKENS || 0)}</td>
-      <td>${formatNum(r.OUTPUT_TOKENS || 0)}</td>
-      <td style="white-space:nowrap;">${formatDate(r.CREATED_AT)}</td>
-    </tr>`).join('');
-}
-
-// ─── Keys table ───────────────────────────────────────────────────────────────
-function filterKeys(f) {
-    currentKeyFilter = f;
-    ['all','demo','global','inactive'].forEach(k => document.getElementById('kf-'+k).classList.toggle('active', k===f));
+    updateStats(D.stats||{},D.queueStats||{});
+    renderChart(D.chartData||[]);
+    renderOvUsage(allUsage.slice(0,8));
     renderKeys(allKeys);
+    renderDemo(allDemo);
+    renderUsage(allUsage);
+    renderPK(allPK);
+    renderPU(allPU);
+    renderQueue(allQueue);
+
+    const active=D.stats?.ACTIVE_DEMO_SESSIONS||0;
+    const qPending=(D.queueStats?.QUEUED||0)+(D.queueStats?.PROCESSING||0);
+    setBadge('demo-badge',active);
+    setBadge('queue-badge',qPending);
+  }catch(err){
+    console.error(err);
+    showToast('Failed to load dashboard data','error');
+  }
 }
 
-function renderKeys(keys) {
-    let rows = keys;
-    if (currentKeyFilter === 'demo')     rows = keys.filter(k => k.KEY_TYPE === 'demo');
-    if (currentKeyFilter === 'global')   rows = keys.filter(k => k.KEY_TYPE === 'global');
-    if (currentKeyFilter === 'inactive') rows = keys.filter(k => !k.IS_ACTIVE);
-
-    const tbody = document.getElementById('keys-tbody');
-    if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="9"><div class="state-center" style="padding:20px;"><span class="ms">vpn_key_off</span><p>No keys found</p></div></td></tr>`;
-        return;
-    }
-    tbody.innerHTML = rows.map(k => {
-        const active  = k.IS_ACTIVE === 1;
-        const isDemo  = k.KEY_TYPE === 'demo';
-        const tokens  = formatNum((k.TOTAL_INPUT_TOKENS || 0) + (k.TOTAL_OUTPUT_TOKENS || 0));
-        return `<tr>
-          <td><span class="mono" title="${k.KEY || ''}">${(k.KEY||'').substring(0,22)}…</span></td>
-          <td style="font-weight:600;">${k.NAME || '-'}</td>
-          <td><span class="badge ${isDemo ? 'purple' : 'blue'}">${isDemo ? 'Demo' : 'Global'}</span></td>
-          <td><span class="badge ${active ? 'green' : 'red'}"><span class="ms sm">${active ? 'check_circle' : 'cancel'}</span>${active ? 'Active' : 'Off'}</span></td>
-          <td>${k.RPM || 5}/${k.RPD || 20}</td>
-          <td>${formatNum(k.USAGE_COUNT || 0)}</td>
-          <td>${tokens}</td>
-          <td style="white-space:nowrap;">${formatDate(k.CREATED_AT)}</td>
-          <td>
-            <div class="row-actions">
-              <button class="icon-btn" onclick="editKey('${k.ID}')" title="Edit"><span class="ms">edit</span></button>
-              <button class="icon-btn red" onclick="deleteKey('${k.ID}')" title="Deactivate"><span class="ms">block</span></button>
-            </div>
-          </td>
-        </tr>`;
-    }).join('');
+async function loadModels(){
+  try{
+    const res=await fetch('/api/admin/models');
+    if(!res.ok)return;
+    allModels=await res.json();
+    renderModels(allModels);
+  }catch(e){console.error(e);}
 }
 
-// ─── Demo sessions table ──────────────────────────────────────────────────────
-function filterDemo(f) {
-    currentDemoFilter = f;
-    ['all','active','blocked','expired'].forEach(k => document.getElementById('df-'+k).classList.toggle('active', k===f));
-    renderDemoSessions(allDemoSessions);
+async function loadMappings(){
+  try{
+    const res=await fetch('/api/admin/model-mappings');
+    if(!res.ok)return;
+    allMappings=await res.json();
+    renderMappings(allMappings);
+  }catch(e){console.error(e);}
 }
 
-function renderDemoSessions(sessions) {
-    let rows = sessions;
-    if (currentDemoFilter === 'active')  rows = sessions.filter(s => !s.IS_BLOCKED && s.KEY_IS_ACTIVE !== 0);
-    if (currentDemoFilter === 'blocked') rows = sessions.filter(s => s.IS_BLOCKED);
-    if (currentDemoFilter === 'expired') rows = sessions.filter(s => (s.DAYS_INACTIVE || 0) >= 10 && !s.IS_BLOCKED);
-
-    const tbody = document.getElementById('demo-tbody');
-    if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="11"><div class="state-center" style="padding:20px;"><span class="ms">person_play</span><p>No sessions found</p></div></td></tr>`;
-        return;
-    }
-
-    tbody.innerHTML = rows.map(s => {
-        const blocked   = s.IS_BLOCKED;
-        const inactive  = s.DAYS_INACTIVE || 0;
-        const expiring  = !blocked && inactive >= 10;
-        const expired   = !blocked && inactive >= 15;
-        const tokens    = formatNum((s.TOTAL_INPUT_TOKENS || 0) + (s.TOTAL_OUTPUT_TOKENS || 0));
-
-        let statusBadge;
-        if (blocked)      statusBadge = `<span class="badge red"><span class="ms sm">block</span>Blocked</span>`;
-        else if (expired) statusBadge = `<span class="badge amber"><span class="ms sm">schedule</span>Expiring</span>`;
-        else              statusBadge = `<span class="badge green"><span class="ms sm">check_circle</span>Active</span>`;
-
-        let inactiveBadge;
-        if (inactive === 0)       inactiveBadge = `<span class="badge blue">Today</span>`;
-        else if (inactive <= 1)   inactiveBadge = `<span class="badge green">1 day</span>`;
-        else if (expiring)        inactiveBadge = `<span class="badge amber">${inactive}d</span>`;
-        else                      inactiveBadge = `<span class="badge grey">${inactive}d</span>`;
-
-        return `<tr style="${blocked ? 'opacity:.6;' : ''}">
-          <td style="font-weight:700;">#${s.ID}</td>
-          <td><span class="mono" title="${s.API_KEY || ''}">${truncate(s.API_KEY, 20)}</span></td>
-          <td><span class="mono" title="${s.FINGERPRINT_HASH || ''}">${truncate(s.FINGERPRINT_HASH, 12)}</span></td>
-          <td style="font-size:12px;">${s.IP_ADDRESS || '—'}</td>
-          <td style="white-space:nowrap;font-size:12px;">${formatDate(s.FIRST_SEEN)}</td>
-          <td style="white-space:nowrap;font-size:12px;">${formatDate(s.LAST_SEEN)}</td>
-          <td>${inactiveBadge}</td>
-          <td>${formatNum(s.REQUEST_COUNT || 0)}</td>
-          <td>${tokens}</td>
-          <td>${statusBadge}</td>
-          <td>
-            <div class="row-actions">
-              <button class="icon-btn" onclick="openDemoModal(${s.ID})" title="Details"><span class="ms">open_in_full</span></button>
-              <button class="icon-btn ${blocked ? '' : 'red'}" onclick="quickToggleBlock(${s.ID},${blocked ? 0 : 1})" title="${blocked ? 'Unblock' : 'Block'}">
-                <span class="ms">${blocked ? 'lock_open' : 'block'}</span>
-              </button>
-            </div>
-          </td>
-        </tr>`;
-    }).join('');
+// ── Stats ────────────────────────────────────────────────────────────────────
+function updateStats(s,q){
+  setText('s-keys',fmtN(s.ACTIVE_KEYS||0));
+  setText('s-demo',fmtN(s.ACTIVE_DEMO_SESSIONS||0));
+  setText('s-24h',fmtN(s.DEMO_ACTIVE_24H||0));
+  setText('s-today',fmtN(s.REQUESTS_TODAY||0));
+  setText('s-tokens',fmtN(s.TOTAL_TOKENS||0));
+  setText('s-blocked',fmtN(s.BLOCKED_SESSIONS||0));
+  setText('s-queued',fmtN((q.QUEUED||0)+(q.PROCESSING||0)));
+  setText('s-qfail',fmtN(q.FAILED||0));
+  setText('ds-active',fmtN(s.ACTIVE_DEMO_SESSIONS||0));
+  setText('ds-24h',fmtN(s.DEMO_ACTIVE_24H||0));
+  setText('ds-7d',fmtN(s.DEMO_ACTIVE_7D||0));
+  setText('ds-blocked',fmtN(s.BLOCKED_SESSIONS||0));
+  setText('ds-purge',fmtN(s.DEMO_KEYS_PURGE_ELIGIBLE||0));
+  setText('q-queued',fmtN(q.QUEUED||0));
+  setText('q-proc',fmtN(q.PROCESSING||0));
+  setText('q-fail',fmtN(q.FAILED||0));
+  setText('q-done',fmtN(q.COMPLETED_TODAY||0));
 }
 
-// ─── Demo session detail modal ────────────────────────────────────────────────
-function openDemoModal(sessionId) {
-    activeDemoSession = allDemoSessions.find(s => s.ID === sessionId) || null;
-    if (!activeDemoSession) return;
-    const s = activeDemoSession;
-    document.getElementById('dm-id').textContent = s.ID;
-    document.getElementById('dm-key').value = s.API_KEY || '—';
-    document.getElementById('dm-ip').value = s.IP_ADDRESS || '—';
-    document.getElementById('dm-requests').value = s.REQUEST_COUNT || 0;
-    document.getElementById('dm-first').value = formatDate(s.FIRST_SEEN);
-    document.getElementById('dm-last').value = formatDate(s.LAST_SEEN);
-    document.getElementById('dm-ua').value = s.USER_AGENT || '—';
-    document.getElementById('dm-hash').value = s.COMPOSITE_HASH || '—';
-    document.getElementById('dm-fp').value = s.FINGERPRINT_HASH || '—';
-    const btn = document.getElementById('dm-block-btn');
-    btn.textContent = s.IS_BLOCKED ? 'Unblock Session' : 'Block Session';
-    btn.className = s.IS_BLOCKED ? 'btn-secondary' : 'btn-danger';
-    document.getElementById('demo-modal').classList.add('show');
-}
-function closeDemoModal() {
-    document.getElementById('demo-modal').classList.remove('show');
-    activeDemoSession = null;
+// ── Chart ────────────────────────────────────────────────────────────────────
+function renderChart(data){
+  const wrap=document.getElementById('chart-bars');
+  if(!data||!data.length){wrap.innerHTML=`<div class="state-c" style="flex:1;padding:0"><span class="ms">bar_chart</span><p>No data yet</p></div>`;return;}
+  const mx=Math.max(...data.map(d=>d.REQUESTS||0),1);
+  wrap.innerHTML=data.map(d=>{
+    const pct=Math.max(((d.REQUESTS||0)/mx)*100,2);
+    const lbl=d.DAY?new Date(d.DAY).toLocaleDateString('en',{month:'short',day:'numeric'}):'';
+    return `<div class="bar-wrap" title="${esc(String(d.REQUESTS||0))} requests on ${esc(lbl)}">
+      <div class="bar" style="height:${pct}%"></div>
+      <div class="bar-lbl">${esc(lbl)}</div>
+    </div>`;
+  }).join('');
 }
 
-async function toggleDemoBlock() {
-    if (!activeDemoSession) return;
-    const nowBlocked = !activeDemoSession.IS_BLOCKED;
-    await patchDemoSession(activeDemoSession.ID, nowBlocked, true);
-    closeDemoModal();
+// ── Overview usage ────────────────────────────────────────────────────────────
+function renderOvUsage(rows){
+  const tb=document.getElementById('ov-usage-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="5"><div class="state-c" style="padding:16px"><span class="ms">receipt_long</span><p>No usage yet</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(r=>`<tr>
+    <td><span class="mono" title="${esc(r.IDENTIFIER)}">${esc(trunc(r.IDENTIFIER,22))}</span></td>
+    <td><span class="badge grey">${esc(r.MODEL||'-')}</span></td>
+    <td>${fmtN(r.INPUT_TOKENS||0)}</td>
+    <td>${fmtN(r.OUTPUT_TOKENS||0)}</td>
+    <td style="white-space:nowrap;font-size:11px">${fmtD(r.CREATED_AT)}</td>
+  </tr>`).join('');
+}
+
+// ── API Keys table ────────────────────────────────────────────────────────────
+function filterKeys(f){
+  kFilter=f;
+  ['all','demo','global','inactive'].forEach(k=>{
+    document.getElementById('kf-'+k)?.classList.toggle('active',k===f);
+  });
+  renderKeys(allKeys);
+}
+
+function renderKeys(keys){
+  let rows=keys;
+  if(kFilter==='demo')    rows=keys.filter(k=>k.KEY_TYPE==='demo');
+  if(kFilter==='global')  rows=keys.filter(k=>k.KEY_TYPE==='global');
+  if(kFilter==='inactive')rows=keys.filter(k=>!k.IS_ACTIVE);
+  const tb=document.getElementById('keys-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="10"><div class="state-c" style="padding:20px"><span class="ms">vpn_key_off</span><p>No keys found</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(k=>{
+    const active=k.IS_ACTIVE===1;
+    const isDemo=k.KEY_TYPE==='demo';
+    const tokens=fmtN((k.TOTAL_INPUT_TOKENS||0)+(k.TOTAL_OUTPUT_TOKENS||0));
+    return `<tr>
+      <td><span class="mono" title="${esc(k.KEY)}">${esc((k.KEY||'').substring(0,20))}…</span></td>
+      <td style="font-weight:600">${esc(k.NAME||'-')}</td>
+      <td><span class="badge ${isDemo?'m':'b'}">${isDemo?'Demo':'Global'}</span></td>
+      <td><span class="badge ${active?'g':'r'}">${active?'Active':'Inactive'}</span></td>
+      <td>${esc(String(k.RPM||5))}/${esc(String(k.RPD||20))}</td>
+      <td>${fmtN(k.USAGE_COUNT||0)}</td>
+      <td>${tokens}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(k.LAST_USED)}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(k.CREATED_AT)}</td>
+      <td><div class="row-acts">
+        <button class="ib" onclick="editKey(${k.ID})" title="Edit"><span class="ms">edit</span></button>
+        <button class="ib del" onclick="deleteKey(${k.ID},'${esc(k.NAME)}')" title="Delete"><span class="ms">delete</span></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Demo Sessions ─────────────────────────────────────────────────────────────
+function filterDemo(f){
+  dFilter=f;
+  ['all','active','blocked','expired'].forEach(k=>document.getElementById('df-'+k)?.classList.toggle('active',k===f));
+  renderDemo(allDemo);
+}
+
+function renderDemo(sessions){
+  let rows=sessions;
+  if(dFilter==='active')  rows=sessions.filter(s=>!s.IS_BLOCKED&&s.KEY_IS_ACTIVE!==0);
+  if(dFilter==='blocked') rows=sessions.filter(s=>s.IS_BLOCKED);
+  if(dFilter==='expired') rows=sessions.filter(s=>(s.DAYS_INACTIVE||0)>=10&&!s.IS_BLOCKED);
+  const tb=document.getElementById('demo-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="11"><div class="state-c" style="padding:20px"><span class="ms">person_play</span><p>No sessions found</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(s=>{
+    const blocked=s.IS_BLOCKED;
+    const inactive=s.DAYS_INACTIVE||0;
+    const expiring=!blocked&&inactive>=10;
+    const expired=!blocked&&inactive>=30;
+    const tokens=fmtN((s.TOTAL_INPUT_TOKENS||0)+(s.TOTAL_OUTPUT_TOKENS||0));
+    let sb;
+    if(blocked)      sb=`<span class="badge r">Blocked</span>`;
+    else if(expired) sb=`<span class="badge r">Expired</span>`;
+    else if(expiring)sb=`<span class="badge a">Expiring</span>`;
+    else             sb=`<span class="badge g">Active</span>`;
+    let ib;
+    if(inactive===0)     ib=`<span class="badge b">Today</span>`;
+    else if(inactive<=1) ib=`<span class="badge g">1d</span>`;
+    else if(expiring)    ib=`<span class="badge a">${inactive}d</span>`;
+    else                 ib=`<span class="badge grey">${inactive}d</span>`;
+    return `<tr style="${blocked?'opacity:.6':''}">
+      <td style="font-weight:700">#${esc(String(s.ID))}</td>
+      <td><span class="mono" title="${esc(s.API_KEY)}">${esc(trunc(s.API_KEY,18))}</span></td>
+      <td><span class="mono" title="${esc(s.FINGERPRINT_HASH)}">${esc(trunc(s.FINGERPRINT_HASH,10))}</span></td>
+      <td style="font-size:11px">${esc(s.IP_ADDRESS||'—')}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(s.FIRST_SEEN)}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(s.LAST_SEEN)}</td>
+      <td>${ib}</td>
+      <td>${fmtN(s.REQUEST_COUNT||0)}</td>
+      <td>${tokens}</td>
+      <td>${sb}</td>
+      <td><div class="row-acts">
+        <button class="ib" onclick="openDemoModal(${s.ID})" title="Details"><span class="ms">open_in_full</span></button>
+        <button class="ib ${blocked?'':'del'}" onclick="quickToggleBlock(${s.ID},${blocked?0:1})" title="${blocked?'Unblock':'Block'}">
+          <span class="ms">${blocked?'lock_open':'block'}</span>
+        </button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Usage Logs ────────────────────────────────────────────────────────────────
+function renderUsage(rows){
+  const tb=document.getElementById('usage-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="8"><div class="state-c" style="padding:20px"><span class="ms">analytics</span><p>No logs</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(r=>`<tr>
+    <td><span class="mono" title="${esc(r.IDENTIFIER)}">${esc(trunc(r.IDENTIFIER,20))}</span></td>
+    <td style="font-size:11px">${esc(r.ENDPOINT||'-')}</td>
+    <td><span class="badge grey">${esc(r.MODEL||'-')}</span></td>
+    <td>${fmtN(r.INPUT_TOKENS||0)}</td>
+    <td>${fmtN(r.OUTPUT_TOKENS||0)}</td>
+    <td style="font-size:11px">${esc(r.IP_ADDRESS||'—')}</td>
+    <td><span class="mono" title="${esc(r.FINGERPRINT_HASH)}">${esc(trunc(r.FINGERPRINT_HASH,10))}</span></td>
+    <td style="white-space:nowrap;font-size:11px">${fmtD(r.CREATED_AT)}</td>
+  </tr>`).join('');
+}
+
+// ── Provider Keys ─────────────────────────────────────────────────────────────
+function renderPK(keys){
+  // Build provider filter chips
+  const providers=[...new Set(keys.map(k=>k.PROVIDER_NAME).filter(Boolean))].sort();
+  const chipsEl=document.getElementById('pk-provider-chips');
+  chipsEl.innerHTML=`<button class="chip ${pkFilter==='all'?'active':''}" onclick="filterPK('all')">All</button>`+
+    providers.map(p=>`<button class="chip ${pkFilter===p?'active':''}" onclick="filterPK('${esc(p)}')">${esc(p)}</button>`).join('');
+
+  let rows=pkFilter==='all'?keys:keys.filter(k=>k.PROVIDER_NAME===pkFilter);
+  const tb=document.getElementById('pk-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="11"><div class="state-c" style="padding:20px"><span class="ms">key_off</span><p>No provider keys found</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(k=>{
+    const active=k.IS_ACTIVE===1;
+    const lasterr=k.LAST_ERROR?`<span title="${esc(k.LAST_ERROR)}" style="color:var(--r);cursor:help">⚠ Error</span>`:'—';
+    const dlimitDisp=k.DAILY_LIMIT===-1?'∞':fmtN(k.DAILY_LIMIT);
+    return `<tr>
+      <td><span class="badge p">${esc(k.PROVIDER_NAME||'-')}</span></td>
+      <td style="font-weight:600">${esc(k.KEY_NAME||'-')}</td>
+      <td><span class="badge ${active?'g':'r'}">${active?'Active':'Off'}</span></td>
+      <td>${esc(String(k.PRIORITY??0))}</td>
+      <td><span class="badge grey">${esc(k.USAGE_COUNTER_TYPE||'tokens')}</span></td>
+      <td>${dlimitDisp}</td>
+      <td>${fmtN(k.REQUESTS_TODAY||0)}</td>
+      <td>${fmtN(k.TOKENS_TODAY||0)}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(k.LAST_USED)}</td>
+      <td>${lasterr}</td>
+      <td><div class="row-acts">
+        <button class="ib" onclick="editPK(${k.ID})" title="Edit"><span class="ms">edit</span></button>
+        <button class="ib" onclick="togglePKActive(${k.ID},${active?0:1})" title="${active?'Disable':'Enable'}"><span class="ms">${active?'toggle_off':'toggle_on'}</span></button>
+        <button class="ib del" onclick="deletePK(${k.ID},'${esc(k.KEY_NAME)}')" title="Delete"><span class="ms">delete</span></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+function filterPK(f){pkFilter=f;renderPK(allPK);}
+
+// ── Provider Usage ────────────────────────────────────────────────────────────
+function renderPU(rows){
+  const tb=document.getElementById('pu-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="10"><div class="state-c" style="padding:20px"><span class="ms">monitoring</span><p>No provider usage logs</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(r=>{
+    const ok=r.STATUS_CODE&&r.STATUS_CODE>=200&&r.STATUS_CODE<300;
+    const err=r.STATUS_CODE&&r.STATUS_CODE>=400;
+    const dot=`<span class="dot ${ok?'ok':err?'err':'warn'}"></span>`;
+    return `<tr>
+      <td><span class="badge p">${esc(r.PROVIDER_NAME||'-')}</span></td>
+      <td style="font-size:11px">${esc(r.KEY_NAME||'—')}</td>
+      <td><span class="badge grey">${esc(trunc(r.MODEL,20)||'-')}</span></td>
+      <td>${dot}${esc(String(r.STATUS_CODE||'—'))}</td>
+      <td>${fmtN(r.PROMPT_TOKENS||0)}</td>
+      <td>${fmtN(r.COMPLETION_TOKENS||0)}</td>
+      <td>${fmtN(r.TOTAL_TOKENS||0)}</td>
+      <td>${fmtN(r.USAGE_UNITS||0)}</td>
+      <td style="font-size:11px;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(r.ERROR_MESSAGE)}">${esc(trunc(r.ERROR_MESSAGE,30)||'—')}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(r.CREATED_AT)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Model Catalog ─────────────────────────────────────────────────────────────
+function filterModels(f){
+  mFilter=f;
+  ['all','text','image','video','audio'].forEach(k=>{
+    document.getElementById('cat-'+k)?.classList.toggle('active',k===f);
+  });
+  renderModels(allModels);
+}
+function renderModels(models){
+  let rows=mFilter==='all'?models:models.filter(m=>m.CATEGORY===mFilter);
+  const tb=document.getElementById('models-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="9"><div class="state-c" style="padding:20px"><span class="ms">model_training</span><p>No models found</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(m=>{
+    const active=m.IS_ACTIVE===1;
+    const isPro=m.IS_PRO===1;
+    let provs='—';
+    try{const p=JSON.parse(m.COMPATIBLE_PROVIDERS_JSON||'[]');provs=p.slice(0,3).map(x=>`<span class="badge grey">${esc(x)}</span>`).join(' ');}catch{}
+    return `<tr>
+      <td><span class="badge ${catColor(m.CATEGORY)}">${esc(m.CATEGORY||'-')}</span></td>
+      <td><span class="mono" title="${esc(m.MODEL_ID)}">${esc(trunc(m.MODEL_ID,28))}</span></td>
+      <td style="font-weight:600">${esc(m.DISPLAY_NAME||'-')}</td>
+      <td>${provs}</td>
+      <td style="font-size:11px">${esc(m.CONTEXT_WINDOW||'—')}</td>
+      <td>${isPro?'<span class="badge m">Pro</span>':'<span class="badge grey">Free</span>'}</td>
+      <td><span class="badge ${active?'g':'r'}">${active?'Active':'Off'}</span></td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(m.UPDATED_AT)}</td>
+      <td><div class="row-acts">
+        <button class="ib" onclick="editModel(${m.ID})" title="Edit"><span class="ms">edit</span></button>
+        <button class="ib del" onclick="deleteModel(${m.ID},'${esc(m.DISPLAY_NAME)}')" title="Deactivate"><span class="ms">block</span></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+function catColor(c){return{text:'b',image:'m',video:'a',audio:'g',transcription:'p'}[c]||'grey';}
+
+// ── Model Mappings ────────────────────────────────────────────────────────────
+function renderMappings(maps){
+  const tb=document.getElementById('mappings-tbody');
+  if(!maps.length){tb.innerHTML=`<tr><td colspan="8"><div class="state-c" style="padding:20px"><span class="ms">account_tree</span><p>No mappings found</p></div></td></tr>`;return;}
+  tb.innerHTML=maps.map(m=>{
+    const active=m.IS_ACTIVE===1;
+    return `<tr>
+      <td><span class="mono" title="${esc(m.MODEL_ID)}">${esc(trunc(m.MODEL_ID,24))}</span></td>
+      <td style="font-size:11px;font-weight:600">${esc(m.DISPLAY_NAME||'-')}</td>
+      <td><span class="badge p">${esc(m.PROVIDER_NAME||'-')}</span></td>
+      <td><span class="mono" title="${esc(m.PROVIDER_MODEL_ID)}">${esc(trunc(m.PROVIDER_MODEL_ID,28))}</span></td>
+      <td>${esc(String(m.PRIORITY??0))}</td>
+      <td><span class="badge ${active?'g':'r'}">${active?'Active':'Off'}</span></td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(m.UPDATED_AT)}</td>
+      <td><div class="row-acts">
+        <button class="ib" onclick="editMapping(${m.ID})" title="Edit"><span class="ms">edit</span></button>
+        <button class="ib del" onclick="deleteMapping(${m.ID})" title="Deactivate"><span class="ms">block</span></button>
+      </div></td>
+    </tr>`;
+  }).join('');
+}
+
+// ── Request Queue ─────────────────────────────────────────────────────────────
+function filterQueue(f){
+  qFilter=f;
+  ['all','queued','processing','failed','completed'].forEach(k=>document.getElementById('qf-'+k)?.classList.toggle('active',k===f));
+  renderQueue(allQueue);
+}
+function renderQueue(items){
+  let rows=qFilter==='all'?items:items.filter(q=>q.STATUS===qFilter);
+  const tb=document.getElementById('queue-tbody');
+  if(!rows.length){tb.innerHTML=`<tr><td colspan="10"><div class="state-c" style="padding:20px"><span class="ms">queue</span><p>No queue items</p></div></td></tr>`;return;}
+  tb.innerHTML=rows.map(q=>{
+    const sc={queued:'a',processing:'b',completed:'g',failed:'r'}[q.STATUS||'']||'grey';
+    return `<tr>
+      <td><span class="mono" title="${esc(q.ID)}">${esc(trunc(q.ID,14))}</span></td>
+      <td style="font-size:11px">${esc(q.ENDPOINT||'-')}</td>
+      <td><span class="badge grey">${esc(q.MODEL||'-')}</span></td>
+      <td><span class="badge p">${esc(q.PROVIDER_NAME||'—')}</span></td>
+      <td>${esc(String(q.PRIORITY??0))}</td>
+      <td><span class="badge ${sc}">${esc(q.STATUS||'-')}</span></td>
+      <td style="font-size:11px;max-width:120px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${esc(q.ERROR_MESSAGE)}">${esc(trunc(q.ERROR_MESSAGE,20)||'—')}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(q.CREATED_AT)}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(q.STARTED_AT)}</td>
+      <td style="white-space:nowrap;font-size:11px">${fmtD(q.FINISHED_AT)}</td>
+    </tr>`;
+  }).join('');
+}
+
+// ── API Key Modal ─────────────────────────────────────────────────────────────
+function openKeyModal(){
+  setText('km-title','New API Key');
+  document.getElementById('key-form').reset();
+  document.getElementById('km-id').value='';
+  document.getElementById('key-modal').classList.add('show');
+}
+function closeKeyModal(){document.getElementById('key-modal').classList.remove('show');}
+function editKey(id){
+  const k=allKeys.find(k=>k.ID===id);
+  if(!k)return;
+  setText('km-title','Edit Key');
+  document.getElementById('km-id').value=k.ID;
+  document.getElementById('km-name').value=k.NAME||'';
+  document.getElementById('km-rpm').value=k.RPM??5;
+  document.getElementById('km-rpd').value=k.RPD??20;
+  document.getElementById('km-itl').value=k.INPUT_TOKEN_LIMIT??10000;
+  document.getElementById('km-otl').value=k.OUTPUT_TOKEN_LIMIT??-1;
+  document.getElementById('km-qp').value=k.QUEUE_PRIORITY??0;
+  document.getElementById('key-modal').classList.add('show');
+}
+async function deleteKey(id,name){
+  if(!confirm(`Delete key "${name}"? This is permanent.`))return;
+  try{
+    const res=await fetch(`/api/admin/keys?keyId=${encodeURIComponent(id)}`,{method:'DELETE'});
+    if(!res.ok)throw new Error();
+    showToast('Key deleted','success');
     await loadDashboard();
+  }catch{showToast('Failed to delete key','error');}
 }
-
-async function quickToggleBlock(sessionId, block) {
-    await patchDemoSession(sessionId, !!block, false);
+document.getElementById('key-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const id=document.getElementById('km-id').value;
+  const isEdit=!!id;
+  const payload={
+    name:document.getElementById('km-name').value,
+    rpm:parseInt(document.getElementById('km-rpm').value),
+    rpd:parseInt(document.getElementById('km-rpd').value),
+    inputTokenLimit:parseInt(document.getElementById('km-itl').value),
+    outputTokenLimit:parseInt(document.getElementById('km-otl').value),
+    queuePriority:parseInt(document.getElementById('km-qp').value),
+    expiresInDays:parseInt(document.getElementById('km-exp').value)||null
+  };
+  if(isEdit)payload.keyId=parseInt(id);
+  try{
+    const res=await fetch('/api/admin/keys',{method:isEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok)throw new Error();
+    const result=await res.json();
+    closeKeyModal();
+    showToast(isEdit?'Key updated':`Created: ${result.key}`,'success');
     await loadDashboard();
-}
-
-async function patchDemoSession(sessionId, isBlocked, blockKey) {
-    try {
-        const res = await fetch('/api/admin/demo-sessions', {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ sessionId, isBlocked, blockKey })
-        });
-        if (!res.ok) throw new Error('Failed to update session');
-        showToast(isBlocked ? 'Session blocked' : 'Session unblocked', isBlocked ? 'error' : 'success');
-    } catch (err) {
-        console.error(err);
-        showToast('Update failed', 'error');
-    }
-}
-
-async function deleteDemoSession() {
-    if (!activeDemoSession) return;
-    if (!confirm(`Delete session #${activeDemoSession.ID}? This cannot be undone.`)) return;
-    try {
-        const res = await fetch(`/api/admin/demo-sessions?sessionId=${activeDemoSession.ID}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error();
-        showToast('Session deleted', 'success');
-        closeDemoModal();
-        await loadDashboard();
-    } catch {
-        showToast('Delete failed', 'error');
-    }
-}
-
-// ─── Usage table ─────────────────────────────────────────────────────────────
-function renderUsage(rows) {
-    const tbody = document.getElementById('usage-tbody');
-    if (!rows.length) {
-        tbody.innerHTML = `<tr><td colspan="8"><div class="state-center" style="padding:20px;"><span class="ms">analytics</span><p>No usage logs</p></div></td></tr>`;
-        return;
-    }
-    tbody.innerHTML = rows.map(r => `<tr>
-      <td><span class="mono" title="${r.IDENTIFIER||''}">${truncate(r.IDENTIFIER, 22)}</span></td>
-      <td style="font-size:12px;">${r.ENDPOINT || '-'}</td>
-      <td><span class="badge grey">${r.MODEL || '-'}</span></td>
-      <td>${formatNum(r.INPUT_TOKENS || 0)}</td>
-      <td>${formatNum(r.OUTPUT_TOKENS || 0)}</td>
-      <td style="font-size:12px;">${r.IP_ADDRESS || '—'}</td>
-      <td><span class="mono" title="${r.FINGERPRINT_HASH||''}">${truncate(r.FINGERPRINT_HASH, 10)}</span></td>
-      <td style="white-space:nowrap;font-size:12px;">${formatDate(r.CREATED_AT)}</td>
-    </tr>`).join('');
-}
-
-// ─── Key CRUD ─────────────────────────────────────────────────────────────────
-function openKeyModal() {
-    document.getElementById('key-modal-title').textContent = 'New API Key';
-    document.getElementById('key-form').reset();
-    document.getElementById('key-id').value = '';
-    document.getElementById('key-modal').classList.add('show');
-}
-function closeKeyModal() { document.getElementById('key-modal').classList.remove('show'); }
-
-function editKey(keyId) {
-    const k = allKeys.find(k => String(k.ID) === String(keyId));
-    if (!k) return;
-    document.getElementById('key-modal-title').textContent = 'Edit Key';
-    document.getElementById('key-id').value = k.ID;
-    document.getElementById('key-name').value = k.NAME || '';
-    document.getElementById('key-rpm').value = k.RPM ?? 5;
-    document.getElementById('key-rpd').value = k.RPD ?? 20;
-    document.getElementById('key-input-limit').value = k.INPUT_TOKEN_LIMIT ?? 10000;
-    document.getElementById('key-output-limit').value = k.OUTPUT_TOKEN_LIMIT ?? -1;
-    document.getElementById('key-priority').value = k.QUEUE_PRIORITY ?? 0;
-    document.getElementById('key-modal').classList.add('show');
-}
-
-async function deleteKey(keyId) {
-    if (!confirm('Deactivate this key? It will be soft-deleted (is_active=0).')) return;
-    try {
-        const res = await fetch(`/api/admin/keys?keyId=${keyId}`, { method: 'DELETE' });
-        if (!res.ok) throw new Error();
-        showToast('Key deactivated', 'success');
-        await loadDashboard();
-    } catch { showToast('Failed to deactivate key', 'error'); }
-}
-
-document.getElementById('key-form').addEventListener('submit', async e => {
-    e.preventDefault();
-    const keyId  = document.getElementById('key-id').value;
-    const isEdit = !!keyId;
-    const payload = {
-        name:             document.getElementById('key-name').value,
-        rpm:              parseInt(document.getElementById('key-rpm').value),
-        rpd:              parseInt(document.getElementById('key-rpd').value),
-        inputTokenLimit:  parseInt(document.getElementById('key-input-limit').value),
-        outputTokenLimit: parseInt(document.getElementById('key-output-limit').value),
-        queuePriority:    parseInt(document.getElementById('key-priority').value),
-        expiresInDays:    parseInt(document.getElementById('key-expires').value) || null
-    };
-    if (isEdit) payload.keyId = parseInt(keyId);
-    try {
-        const res = await fetch('/api/admin/keys', {
-            method: isEdit ? 'PUT' : 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(payload)
-        });
-        if (!res.ok) throw new Error();
-        const result = await res.json();
-        closeKeyModal();
-        showToast(isEdit ? 'Key updated' : `Created: ${result.key}`, 'success');
-        await loadDashboard();
-    } catch { showToast('Failed to save key', 'error'); }
+  }catch{showToast('Failed to save key','error');}
 });
 
-document.getElementById('add-key-btn').addEventListener('click', openKeyModal);
-
-// ─── Toast ────────────────────────────────────────────────────────────────────
-let toastTimer;
-function showToast(msg, type = 'success') {
-    const t = document.getElementById('toast');
-    const icon = t.querySelector('.ms');
-    document.getElementById('toast-msg').textContent = msg;
-    t.className = `toast show ${type}`;
-    icon.textContent = type === 'success' ? 'check_circle' : 'error';
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => t.classList.remove('show'), 3500);
+// ── Demo Session Modal ────────────────────────────────────────────────────────
+function openDemoModal(id){
+  activeDemoSession=allDemo.find(s=>s.ID===id)||null;
+  if(!activeDemoSession)return;
+  const s=activeDemoSession;
+  setText('dm-id',s.ID);
+  document.getElementById('dm-key').value=s.API_KEY||'—';
+  document.getElementById('dm-ip').value=s.IP_ADDRESS||'—';
+  document.getElementById('dm-reqs').value=s.REQUEST_COUNT||0;
+  document.getElementById('dm-first').value=fmtD(s.FIRST_SEEN);
+  document.getElementById('dm-last').value=fmtD(s.LAST_SEEN);
+  document.getElementById('dm-ua').value=s.USER_AGENT||'—';
+  document.getElementById('dm-hash').value=s.COMPOSITE_HASH||'—';
+  document.getElementById('dm-fp').value=s.FINGERPRINT_HASH||'—';
+  const btn=document.getElementById('dm-block-btn');
+  btn.textContent=s.IS_BLOCKED?'Unblock Session':'Block Session';
+  btn.className=s.IS_BLOCKED?'btn secondary':'btn danger';
+  document.getElementById('demo-modal').classList.add('show');
+}
+function closeDemoModal(){document.getElementById('demo-modal').classList.remove('show');activeDemoSession=null;}
+async function toggleDemoBlock(){
+  if(!activeDemoSession)return;
+  const nowBlocked=!activeDemoSession.IS_BLOCKED;
+  await patchDemo(activeDemoSession.ID,nowBlocked,true);
+  closeDemoModal();await loadDashboard();
+}
+async function quickToggleBlock(id,block){await patchDemo(id,!!block,false);await loadDashboard();}
+async function patchDemo(sessionId,isBlocked,blockKey){
+  try{
+    const res=await fetch('/api/admin/demo-sessions',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionId,isBlocked,blockKey})});
+    if(!res.ok)throw new Error();
+    showToast(isBlocked?'Session blocked':'Session unblocked',isBlocked?'error':'success');
+  }catch{showToast('Update failed','error');}
+}
+async function deleteDemoSession(){
+  if(!activeDemoSession)return;
+  if(!confirm(`Delete session #${activeDemoSession.ID}? This is permanent.`))return;
+  try{
+    const res=await fetch(`/api/admin/demo-sessions?sessionId=${activeDemoSession.ID}`,{method:'DELETE'});
+    if(!res.ok)throw new Error();
+    showToast('Session deleted','success');closeDemoModal();await loadDashboard();
+  }catch{showToast('Delete failed','error');}
 }
 
-// ─── Utilities ────────────────────────────────────────────────────────────────
-function formatNum(n) {
-    if (n == null || isNaN(n)) return '0';
-    if (n >= 1e9) return (n/1e9).toFixed(1) + 'B';
-    if (n >= 1e6) return (n/1e6).toFixed(1) + 'M';
-    if (n >= 1e3) return (n/1e3).toFixed(1) + 'K';
-    return String(n);
-}
-function formatDate(d) {
-    if (!d) return '—';
-    const dt = new Date(d);
-    if (isNaN(dt)) return '—';
-    const now = new Date();
-    const diff = now - dt;
-    if (diff < 60000) return 'Just now';
-    if (diff < 3600000) return Math.floor(diff/60000) + 'm ago';
-    if (diff < 86400000) return Math.floor(diff/3600000) + 'h ago';
-    return dt.toLocaleDateString('en', { month:'short', day:'numeric', year:'numeric' });
-}
-function truncate(s, n) {
-    if (!s) return '—';
-    return s.length > n ? s.substring(0, n) + '…' : s;
+// ── Purge inactive demo keys ─────────────────────────────────────────────────
+async function purgeDemoKeys(){
+  const eligible=D.stats?.DEMO_KEYS_PURGE_ELIGIBLE||0;
+  if(!confirm(`Permanently delete ${eligible} demo keys inactive for 30+ days, along with their sessions and usage logs?`))return;
+  try{
+    const res=await fetch('/api/admin/keys?action=purge-inactive-demo',{method:'DELETE'});
+    if(!res.ok)throw new Error();
+    const data=await res.json();
+    showToast(`Purged ${data.deleted||0} demo keys`,'success');
+    await loadDashboard();
+  }catch{showToast('Purge failed','error');}
 }
 
-// ─── Init ────────────────────────────────────────────────────────────────────
-(async function init() {
-    const ok = await checkSession();
-    if (ok) await loadDashboard();
+// ── Provider Key Modal ────────────────────────────────────────────────────────
+function openPKModal(){
+  setText('pkm-title','Add Provider Key');
+  document.getElementById('pk-form').reset();
+  document.getElementById('pkm-id').value='';
+  document.getElementById('pk-modal').classList.add('show');
+}
+function closePKModal(){document.getElementById('pk-modal').classList.remove('show');activePK=null;}
+function editPK(id){
+  activePK=allPK.find(k=>k.ID===id)||null;
+  if(!activePK)return;
+  const k=activePK;
+  setText('pkm-title','Edit Provider Key');
+  document.getElementById('pkm-id').value=k.ID;
+  document.getElementById('pkm-provider').value=k.PROVIDER_NAME||'';
+  document.getElementById('pkm-name').value=k.KEY_NAME||'';
+  document.getElementById('pkm-apikey').value='';// Don't expose key
+  document.getElementById('pkm-priority').value=k.PRIORITY??0;
+  document.getElementById('pkm-counter').value=k.USAGE_COUNTER_TYPE||'tokens';
+  document.getElementById('pkm-dlimit').value=k.DAILY_LIMIT??-1;
+  document.getElementById('pkm-mlimit').value=k.MINUTE_LIMIT??-1;
+  document.getElementById('pkm-tlimit').value=k.TOKENS_DAILY_LIMIT??-1;
+  document.getElementById('pkm-ulimit').value=k.UNITS_DAILY_LIMIT??-1;
+  document.getElementById('pk-modal').classList.add('show');
+}
+async function togglePKActive(id,val){
+  try{
+    const res=await fetch('/api/admin/provider-keys',{method:'PUT',headers:{'Content-Type':'application/json'},body:JSON.stringify({keyId:id,isActive:!!val})});
+    if(!res.ok)throw new Error();
+    showToast(val?'Key enabled':'Key disabled','success');
+    await loadDashboard();
+  }catch{showToast('Failed','error');}
+}
+async function deletePK(id,name){
+  if(!confirm(`Delete provider key "${name}"?`))return;
+  try{
+    const res=await fetch(`/api/admin/provider-keys?keyId=${encodeURIComponent(id)}`,{method:'DELETE'});
+    if(!res.ok)throw new Error();
+    showToast('Provider key deleted','success');await loadDashboard();
+  }catch{showToast('Delete failed','error');}
+}
+document.getElementById('pk-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const id=document.getElementById('pkm-id').value;
+  const isEdit=!!id;
+  const apiKeyVal=document.getElementById('pkm-apikey').value.trim();
+  const payload={
+    providerName:document.getElementById('pkm-provider').value,
+    keyName:document.getElementById('pkm-name').value,
+    priority:parseInt(document.getElementById('pkm-priority').value)||0,
+    usageCounterType:document.getElementById('pkm-counter').value,
+    dailyLimit:parseInt(document.getElementById('pkm-dlimit').value)??-1,
+    minuteLimit:parseInt(document.getElementById('pkm-mlimit').value)??-1,
+    tokensDailyLimit:parseInt(document.getElementById('pkm-tlimit').value)??-1,
+    unitsDailyLimit:parseInt(document.getElementById('pkm-ulimit').value)??-1
+  };
+  if(isEdit){payload.keyId=parseInt(id);if(apiKeyVal)payload.apiKey=apiKeyVal;}
+  else{if(!apiKeyVal){showToast('API key is required','error');return;}payload.apiKey=apiKeyVal;}
+  try{
+    const res=await fetch('/api/admin/provider-keys',{method:isEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    if(!res.ok)throw new Error((await res.json()).error||'Failed');
+    closePKModal();showToast(isEdit?'Key updated':'Key added','success');await loadDashboard();
+  }catch(err){showToast(err.message||'Failed','error');}
+});
+
+// ── Model Catalog Modal ───────────────────────────────────────────────────────
+function openModelModal(){
+  setText('mm-title','Add Model');
+  document.getElementById('model-form').reset();
+  document.getElementById('mm-id').value='';
+  document.getElementById('mm-pro').classList.remove('on');
+  document.getElementById('mm-cache').classList.remove('on');
+  document.getElementById('model-modal').classList.add('show');
+}
+function closeModelModal(){document.getElementById('model-modal').classList.remove('show');activeModel=null;}
+function editModel(id){
+  activeModel=allModels.find(m=>m.ID===id)||null;
+  if(!activeModel)return;
+  const m=activeModel;
+  setText('mm-title','Edit Model');
+  document.getElementById('mm-id').value=m.ID;
+  document.getElementById('mm-cat').value=m.CATEGORY||'';
+  document.getElementById('mm-mid').value=m.MODEL_ID||'';
+  document.getElementById('mm-dname').value=m.DISPLAY_NAME||'';
+  document.getElementById('mm-desc').value=m.DESCRIPTION||'';
+  document.getElementById('mm-ctx').value=m.CONTEXT_WINDOW||'';
+  document.getElementById('mm-timeout').value=m.TIMEOUT_MS||60000;
+  try{document.getElementById('mm-caps').value=JSON.parse(m.CAPABILITIES_JSON||'[]').join(', ');}catch{document.getElementById('mm-caps').value='';}
+  try{document.getElementById('mm-tags').value=JSON.parse(m.TAGS_JSON||'[]').join(', ');}catch{document.getElementById('mm-tags').value='';}
+  try{document.getElementById('mm-provs').value=JSON.parse(m.COMPATIBLE_PROVIDERS_JSON||'[]').join(', ');}catch{document.getElementById('mm-provs').value='';}
+  document.getElementById('mm-pro').classList.toggle('on',m.IS_PRO===1);
+  document.getElementById('mm-cache').classList.toggle('on',m.SUPPORTS_CACHING===1);
+  document.getElementById('model-modal').classList.add('show');
+}
+async function deleteModel(id,name){
+  if(!confirm(`Deactivate model "${name}"?`))return;
+  try{
+    const res=await fetch(`/api/admin/models?modelEntryId=${encodeURIComponent(id)}`,{method:'DELETE'});
+    if(!res.ok)throw new Error();
+    showToast('Model deactivated','success');await loadModels();
+  }catch{showToast('Failed','error');}
+}
+document.getElementById('model-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const id=document.getElementById('mm-id').value;
+  const isEdit=!!id;
+  const payload={
+    category:document.getElementById('mm-cat').value,
+    modelId:document.getElementById('mm-mid').value,
+    displayName:document.getElementById('mm-dname').value,
+    description:document.getElementById('mm-desc').value||null,
+    contextWindow:document.getElementById('mm-ctx').value||null,
+    timeoutMs:parseInt(document.getElementById('mm-timeout').value)||60000,
+    capabilities:document.getElementById('mm-caps').value.split(',').map(s=>s.trim()).filter(Boolean),
+    tags:document.getElementById('mm-tags').value.split(',').map(s=>s.trim()).filter(Boolean),
+    compatibleProviders:document.getElementById('mm-provs').value.split(',').map(s=>s.trim()).filter(Boolean),
+    isPro:document.getElementById('mm-pro').classList.contains('on'),
+    supportsCaching:document.getElementById('mm-cache').classList.contains('on')
+  };
+  if(isEdit)payload.modelEntryId=parseInt(id);
+  try{
+    const res=await fetch('/api/admin/models',{method:isEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Failed');
+    closeModelModal();showToast(isEdit?'Model updated':'Model created','success');await loadModels();
+  }catch(err){showToast(err.message||'Failed','error');}
+});
+
+// ── Model Mapping Modal ───────────────────────────────────────────────────────
+function openMappingModal(){
+  setText('mpm-title','Add Mapping');
+  document.getElementById('mapping-form').reset();
+  document.getElementById('mpm-id').value='';
+  document.getElementById('mapping-modal').classList.add('show');
+}
+function closeMappingModal(){document.getElementById('mapping-modal').classList.remove('show');activeMapping=null;}
+function editMapping(id){
+  activeMapping=allMappings.find(m=>m.ID===id)||null;
+  if(!activeMapping)return;
+  const m=activeMapping;
+  setText('mpm-title','Edit Mapping');
+  document.getElementById('mpm-id').value=m.ID;
+  document.getElementById('mpm-mid').value=m.MODEL_ID||'';
+  document.getElementById('mpm-provider').value=m.PROVIDER_NAME||'';
+  document.getElementById('mpm-pmid').value=m.PROVIDER_MODEL_ID||'';
+  document.getElementById('mpm-ctx').value=m.PROVIDER_CONTEXT_WINDOW||'';
+  document.getElementById('mpm-priority').value=m.PRIORITY??0;
+  document.getElementById('mapping-modal').classList.add('show');
+}
+async function deleteMapping(id){
+  if(!confirm('Deactivate this mapping?'))return;
+  try{
+    const res=await fetch(`/api/admin/model-mappings?mappingId=${encodeURIComponent(id)}`,{method:'DELETE'});
+    if(!res.ok)throw new Error();
+    showToast('Mapping deactivated','success');await loadMappings();
+  }catch{showToast('Failed','error');}
+}
+document.getElementById('mapping-form').addEventListener('submit',async e=>{
+  e.preventDefault();
+  const id=document.getElementById('mpm-id').value;
+  const isEdit=!!id;
+  const payload={
+    modelId:document.getElementById('mpm-mid').value,
+    providerName:document.getElementById('mpm-provider').value,
+    providerModelId:document.getElementById('mpm-pmid').value,
+    providerContextWindow:document.getElementById('mpm-ctx').value||null,
+    priority:parseInt(document.getElementById('mpm-priority').value)||0
+  };
+  if(isEdit)payload.mappingId=parseInt(id);
+  try{
+    const res=await fetch('/api/admin/model-mappings',{method:isEdit?'PUT':'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+    const data=await res.json();
+    if(!res.ok)throw new Error(data.error||'Failed');
+    closeMappingModal();showToast(isEdit?'Mapping updated':'Mapping created','success');await loadMappings();
+  }catch(err){showToast(err.message||'Failed','error');}
+});
+
+// ── Intercept page switches for lazy-load ────────────────────────────────────
+const originalGo=go;
+window.go=function(name){
+  originalGo(name);
+  if(name==='models')loadModels();
+  if(name==='mappings')loadMappings();
+};
+
+// ── Toast ─────────────────────────────────────────────────────────────────────
+function showToast(msg,type='success'){
+  const t=document.getElementById('toast');
+  const icon=t.querySelector('.ms');
+  document.getElementById('toast-msg').textContent=msg;
+  t.className=`toast show ${type}`;
+  icon.textContent=type==='success'?'check_circle':'error';
+  clearTimeout(toastTimer);
+  toastTimer=setTimeout(()=>t.classList.remove('show'),3500);
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+function setText(id,val){const el=document.getElementById(id);if(el)el.textContent=String(val??'');}
+function setBadge(id,n){const el=document.getElementById(id);if(!el)return;if(n>0){el.textContent=fmtN(n);el.style.display='';}else el.style.display='none';}
+function fmtN(n){if(n==null||isNaN(n))return'0';if(n>=1e9)return(n/1e9).toFixed(1)+'B';if(n>=1e6)return(n/1e6).toFixed(1)+'M';if(n>=1e3)return(n/1e3).toFixed(1)+'K';return String(n);}
+function fmtD(d){
+  if(!d)return'—';const dt=new Date(d);if(isNaN(dt))return'—';
+  const now=new Date(),diff=now-dt;
+  if(diff<60000)return'Just now';
+  if(diff<3600000)return Math.floor(diff/60000)+'m ago';
+  if(diff<86400000)return Math.floor(diff/3600000)+'h ago';
+  return dt.toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'});
+}
+function trunc(s,n){if(!s)return'';return s.length>n?s.substring(0,n)+'…':s;}
+
+// ── Init ──────────────────────────────────────────────────────────────────────
+(async function init(){
+  const ok=await checkSession();
+  if(ok)await loadDashboard();
 })();
 </script>
-
 </body>
 </html>

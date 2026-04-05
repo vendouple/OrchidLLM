@@ -21,7 +21,9 @@ export function createOpenAiProvider({
     envKeyCandidates = [],
     usageCounterType = 'tokens',
     endpoints = {},
-    additionalAuthHeaders
+    additionalAuthHeaders,
+    speedTier = 3, // 1 = Ultra Fast, 2 = Fast, 3 = Standard, 4 = Slow, 5 = Ultra Slow
+    enableFreeTier = false
 }) {
     const normalizedAliases = normalizeAliases(id, aliases);
 
@@ -29,6 +31,14 @@ export function createOpenAiProvider({
         const resolvedBaseUrl = typeof resolveBaseUrl === 'function'
             ? resolveBaseUrl()
             : baseUrl;
+
+        const envSpeedTier = process.env[`PROVIDER_${id.toUpperCase()}_SPEED_TIER`];
+        const actualSpeedTier = envSpeedTier ? Number(envSpeedTier) : speedTier;
+
+        const envFreeTier = process.env[`PROVIDER_${id.toUpperCase()}_ENABLE_FREE_TIER`];
+        const actualEnableFreeTier = envFreeTier !== undefined 
+            ? String(envFreeTier).toLowerCase() === 'true' 
+            : enableFreeTier;
 
         return {
             id,
@@ -38,6 +48,8 @@ export function createOpenAiProvider({
             modelPrefix: id,
             envKeyCandidates: [...envKeyCandidates],
             usageCounterType,
+            speedTier: actualSpeedTier,
+            enableFreeTier: actualEnableFreeTier,
             endpoints: {
                 ...endpoints
             }

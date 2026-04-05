@@ -205,10 +205,105 @@ CREATE INDEX idx_model_provider_map_model_active ON model_provider_mappings(mode
 CREATE INDEX idx_model_provider_map_provider_active ON model_provider_mappings(provider_name, is_active, priority);
 CREATE INDEX idx_model_provider_map_provider_model ON model_provider_mappings(provider_name, provider_model_id, is_active);
 
--- NOTE:
--- For existing installations that already ran this base schema,
--- run db/migrate_provider_queue.sql to add provider keys, queue,
--- provider usage logs, model catalog updates, and model mappings.
+-- ============================================
+-- Table: PROVIDER_KEYS
+-- Multiple upstream API keys per provider, with
+-- per-key rate-limit counters and priority.
+-- ============================================
+
+CREATE TABLE provider_keys (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    provider_name VARCHAR2(64) NOT NULL,
+    key_name VARCHAR2(120) NOT NULL,
+    api_key VARCHAR2(4000) NOT NULL,
+    is_active NUMBER DEFAULT 1,
+    priority NUMBER DEFAULT 0,
+
+    usage_counter_type VARCHAR2(64) DEFAULT 'tokens',
+    daily_limit NUMBER DEFAULT -1,
+    minute_limit NUMBER DEFAULT -1,
+    tokens_daily_limit NUMBER DEFAULT -1,
+    units_daily_limit NUMBER DEFAULT -1,
+
+    requests_today NUMBER DEFAULT 0,
+    tokens_today NUMBER DEFAULT 0,
+    units_today NUMBER DEFAULT 0,
+
+    reset_interval VARCHAR2(20) DEFAULT 'daily',
+    resets_at TIMESTAMP,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR2(255),
+    last_used TIMESTAMP,
+    last_error VARCHAR2(1000),
+    last_rate_limit_json CLOB
+);
+
+CREATE INDEX idx_provider_keys_provider_active ON provider_keys(provider_name, is_active);
+CREATE INDEX idx_provider_keys_priority ON provider_keys(provider_name, priority, last_used);
+
+-- ============================================
+-- Table: PROVIDER_USAGE_LOGS
+-- Provider-level usage telemetry for admin dashboards.
+-- ============================================
+
+CREATE TABLE provider_usage_logs (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    provider_name VARCHAR2(64) NOT NULL,
+    provider_key_id NUMBER,
+    key_name VARCHAR2(120),
+    endpoint VARCHAR2(120),
+    model VARCHAR2(255),
+    status_code NUMBER,
+
+    prompt_tokens NUMBER DEFAULT 0,
+    completion_tokens NUMBER DEFAULT 0,
+    total_tokens NUMBER DEFAULT 0,
+    usage_units NUMBER DEFAULT 0,
+    usage_counter_type VARCHAR2(64),
+
+    rate_limit_snapshot CLOB,
+    identifier VARCHAR2(255),
+    api_key_id NUMBER,
+    error_message VARCHAR2(1000),
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+
+    CONSTRAINT fk_provider_usage_key
+        FOREIGN KEY (provider_key_id) REFERENCES provider_keys(id)
+);
+
+CREATE INDEX idx_provider_usage_provider_date ON provider_usage_logs(provider_name, created_at);
+CREATE INDEX idx_provider_usage_key_date ON provider_usage_logs(provider_key_id, created_at);
+
+-- ============================================
+-- Table: REQUEST_QUEUE
+-- Priority queue for endpoint-level scheduling.
+-- ============================================
+
+CREATE TABLE request_queue (
+    id VARCHAR2(80) PRIMARY KEY,
+    endpoint VARCHAR2(120) NOT NULL,
+    identifier VARCHAR2(255),
+    api_key_id NUMBER,
+    model VARCHAR2(255),
+    priority NUMBER DEFAULT 0,
+    provider_name VARCHAR2(64),
+    status VARCHAR2(32) DEFAULT 'queued',
+    status_code NUMBER,
+    error_message VARCHAR2(1000),
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    started_at TIMESTAMP,
+    finished_at TIMESTAMP,
+    heartbeat_at TIMESTAMP,
+
+    CONSTRAINT fk_queue_api_key
+        FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
+);
+
+CREATE INDEX idx_queue_status_priority ON request_queue(endpoint, status, priority, created_at);
+CREATE INDEX idx_queue_provider_processing ON request_queue(provider_name, status, heartbeat_at);
 
 -- ============================================
 -- Insert default demo key (optional)

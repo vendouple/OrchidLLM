@@ -2,7 +2,7 @@
  * /api/admin/dashboard - Admin Dashboard Stats
  *
  * Returns statistics and key management data for admin.
- * Includes demo session analytics for insight into anonymous users.
+ * Includes demo session analytics, queue stats, and provider stats.
  */
 
 import { validateSession, getSessionFromCookie } from '../../lib/auth.js';
@@ -43,7 +43,12 @@ export default async function handler(req, res) {
                 (SELECT COUNT(*) FROM demo_sessions
                  WHERE is_blocked = 0
                    AND last_seen >= SYSDATE - 7)                                           AS demo_active_7d,
-                (SELECT COUNT(*) FROM demo_sessions WHERE is_blocked = 1)                  AS blocked_sessions
+                (SELECT COUNT(*) FROM demo_sessions WHERE is_blocked = 1)                  AS blocked_sessions,
+                -- Demo keys pending 30-day purge
+                (SELECT COUNT(*) FROM api_keys
+                 WHERE key_type = 'demo'
+                   AND is_active = 1
+                   AND (last_used IS NULL OR last_used < SYSDATE - 30))                    AS demo_keys_purge_eligible
             FROM DUAL
         `);
 
@@ -52,11 +57,12 @@ export default async function handler(req, res) {
             SELECT
                 id, key, name, key_type, rpm, rpd,
                 input_token_limit, output_token_limit, queue_priority,
+                providers, allowed_models,
                 usage_count, total_input_tokens, total_output_tokens,
-                created_at, last_used, is_active, expires_at
+                created_at, created_by, last_used, is_active, expires_at
             FROM api_keys
             ORDER BY created_at DESC
-            FETCH FIRST 100 ROWS ONLY
+            FETCH FIRST 200 ROWS ONLY
         `);
 
         // ── Recent usage logs ───────────────────────────────────────────────
@@ -68,7 +74,7 @@ export default async function handler(req, res) {
                 ul.created_at
             FROM usage_logs ul
             ORDER BY ul.created_at DESC
-            FETCH FIRST 100 ROWS ONLY
+            FETCH FIRST 200 ROWS ONLY
         `);
 
         // ── Demo sessions list ──────────────────────────────────────────────
@@ -79,6 +85,7 @@ export default async function handler(req, res) {
                 ds.first_seen, ds.last_seen,
                 ds.request_count, ds.is_blocked,
                 ak.key AS api_key, ak.id AS api_key_id,
+                ak.is_active AS key_is_active,
                 ak.usage_count AS key_usage_count,
                 ak.total_input_tokens, ak.total_output_tokens,
                 -- Days since last activity (TRUNC both sides → plain NUMBER, avoids ORA-00932)
@@ -86,7 +93,7 @@ export default async function handler(req, res) {
             FROM demo_sessions ds
             LEFT JOIN api_keys ak ON ds.api_key_id = ak.id
             ORDER BY NVL(ds.last_seen, ds.first_seen) DESC NULLS LAST
-            FETCH FIRST 200 ROWS ONLY
+            FETCH FIRST 500 ROWS ONLY
         `);
 
         // ── Daily request chart data (last 14 days) ─────────────────────────
@@ -104,6 +111,7 @@ export default async function handler(req, res) {
         // ── Provider key capacity and usage overview (optional tables) ─────
         let providerStats = [];
         let providerRecentUsage = [];
+        let providerKeys = [];
 
         try {
             const providerStatsResult = await executeQuery(`
@@ -120,9 +128,7 @@ export default async function handler(req, res) {
             `);
             providerStats = providerStatsResult.rows;
         } catch (error) {
-            if (!isMissingTableError(error)) {
-                throw error;
-            }
+            if (!isMissingTableError(error)) throw error;
         }
 
         try {
@@ -147,9 +153,56 @@ export default async function handler(req, res) {
             `);
             providerRecentUsage = providerUsageResult.rows;
         } catch (error) {
-            if (!isMissingTableError(error)) {
-                throw error;
-            }
+            if (!isMissingTableError(error)) throw error;
+        }
+
+        try {
+            const providerKeysResult = await executeQuery(`
+                SELECT
+                    id, provider_name, key_name,
+                    is_active, priority,
+                    usage_counter_type,
+                    daily_limit, minute_limit, tokens_daily_limit, units_daily_limit,
+                    requests_today, tokens_today, units_today,
+                    resets_at, reset_interval,
+                    created_at, last_used, last_error
+                FROM provider_keys
+                ORDER BY provider_name ASC, priority DESC, created_at DESC
+            `);
+            providerKeys = providerKeysResult.rows;
+        } catch (error) {
+            if (!isMissingTableError(error)) throw error;
+        }
+
+        // ── Request queue stats + recent rows ───────────────────────────────
+        let queueStats = { QUEUED: 0, PROCESSING: 0, FAILED: 0, COMPLETED_TODAY: 0 };
+        let recentQueue = [];
+
+        try {
+            const queueStatsResult = await executeQuery(`
+                SELECT
+                    SUM(CASE WHEN status = 'queued'     THEN 1 ELSE 0 END) AS queued,
+                    SUM(CASE WHEN status = 'processing' THEN 1 ELSE 0 END) AS processing,
+                    SUM(CASE WHEN status = 'failed'     THEN 1 ELSE 0 END) AS failed,
+                    SUM(CASE WHEN status = 'completed'
+                                  AND TRUNC(created_at) = TRUNC(SYSDATE) THEN 1 ELSE 0 END) AS completed_today
+                FROM request_queue
+            `);
+            if (queueStatsResult.rows[0]) queueStats = queueStatsResult.rows[0];
+
+            const queueRowsResult = await executeQuery(`
+                SELECT
+                    id, endpoint, identifier, model,
+                    priority, provider_name, status,
+                    status_code, error_message,
+                    created_at, started_at, finished_at, heartbeat_at
+                FROM request_queue
+                ORDER BY created_at DESC
+                FETCH FIRST 100 ROWS ONLY
+            `);
+            recentQueue = queueRowsResult.rows;
+        } catch (error) {
+            if (!isMissingTableError(error)) throw error;
         }
 
         res.status(200).json({
@@ -159,7 +212,10 @@ export default async function handler(req, res) {
             demoSessions: demoSessionsResult.rows,
             chartData:    chartResult.rows,
             providerStats,
-            providerRecentUsage
+            providerRecentUsage,
+            providerKeys,
+            queueStats,
+            recentQueue
         });
     } catch (error) {
         console.error('Dashboard error:', error);
