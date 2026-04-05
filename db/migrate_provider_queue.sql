@@ -240,4 +240,69 @@ EXCEPTION
 END;
 /
 
+-- =============================================================
+-- Table: model_provider_mappings
+-- Global model -> provider model translation and provider context.
+-- =============================================================
+BEGIN
+    EXECUTE IMMEDIATE '
+        CREATE TABLE model_provider_mappings (
+            id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+            model_catalog_id NUMBER NOT NULL,
+            provider_name VARCHAR2(64) NOT NULL,
+            provider_model_id VARCHAR2(255) NOT NULL,
+            provider_context_window VARCHAR2(64),
+            metadata_json CLOB,
+            priority NUMBER DEFAULT 0,
+            is_active NUMBER DEFAULT 1,
+
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            created_by VARCHAR2(255),
+            updated_by VARCHAR2(255),
+
+            CONSTRAINT fk_model_provider_mapping_model
+                FOREIGN KEY (model_catalog_id) REFERENCES model_catalog(id),
+            CONSTRAINT uq_model_provider_mapping
+                UNIQUE (model_catalog_id, provider_name, provider_model_id)
+        )
+    ';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE INDEX idx_model_provider_map_model_active ON model_provider_mappings(model_catalog_id, is_active, priority)';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE INDEX idx_model_provider_map_provider_active ON model_provider_mappings(provider_name, is_active, priority)';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
+BEGIN
+    EXECUTE IMMEDIATE 'CREATE INDEX idx_model_provider_map_provider_model ON model_provider_mappings(provider_name, provider_model_id, is_active)';
+EXCEPTION
+    WHEN OTHERS THEN
+        IF SQLCODE != -955 THEN
+            RAISE;
+        END IF;
+END;
+/
+
 COMMIT;

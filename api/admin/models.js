@@ -6,6 +6,7 @@
 
 import { validateSession, getSessionFromCookie } from '../../lib/auth.js';
 import { executeQuery, closePool } from '../../lib/oracle.js';
+import { invalidateModelCatalogCache } from '../../lib/model-catalog.js';
 
 const ALLOWED_CATEGORIES = new Set(['text', 'image', 'video', 'audio', 'transcription']);
 
@@ -238,6 +239,8 @@ async function handlePost(req, res) {
             }
         );
 
+        invalidateModelCatalogCache();
+
         res.status(201).json({ success: true });
     } catch (error) {
         if (isMissingTableError(error)) {
@@ -386,6 +389,8 @@ async function handlePut(req, res) {
             binds
         );
 
+        invalidateModelCatalogCache();
+
         res.status(200).json({ success: true });
     } catch (error) {
         if (isMissingTableError(error)) {
@@ -425,6 +430,8 @@ async function handleDelete(req, res) {
                 updatedBy: session.githubUsername || 'admin'
             }
         );
+
+        invalidateModelCatalogCache();
 
         res.status(200).json({ success: true });
     } catch (error) {

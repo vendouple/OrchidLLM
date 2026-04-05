@@ -175,9 +175,40 @@ CREATE TABLE model_catalog (
 CREATE INDEX idx_model_catalog_cat_active ON model_catalog(category, is_active);
 CREATE INDEX idx_model_catalog_deprecates ON model_catalog(deprecates_at);
 
+-- ============================================
+-- Table: MODEL_PROVIDER_MAPPINGS
+-- Global model ID to provider model ID translation
+-- ============================================
+
+CREATE TABLE model_provider_mappings (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    model_catalog_id NUMBER NOT NULL,
+    provider_name VARCHAR2(64) NOT NULL,
+    provider_model_id VARCHAR2(255) NOT NULL,
+    provider_context_window VARCHAR2(64),
+    metadata_json CLOB,
+    priority NUMBER DEFAULT 0,
+    is_active NUMBER DEFAULT 1,
+
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR2(255),
+    updated_by VARCHAR2(255),
+
+    CONSTRAINT fk_model_provider_mapping_model
+        FOREIGN KEY (model_catalog_id) REFERENCES model_catalog(id),
+    CONSTRAINT uq_model_provider_mapping
+        UNIQUE (model_catalog_id, provider_name, provider_model_id)
+);
+
+CREATE INDEX idx_model_provider_map_model_active ON model_provider_mappings(model_catalog_id, is_active, priority);
+CREATE INDEX idx_model_provider_map_provider_active ON model_provider_mappings(provider_name, is_active, priority);
+CREATE INDEX idx_model_provider_map_provider_model ON model_provider_mappings(provider_name, provider_model_id, is_active);
+
 -- NOTE:
--- Provider key pool, provider usage logs, request queue, and model catalog
--- are created in db/migrate_provider_queue.sql.
+-- For existing installations that already ran this base schema,
+-- run db/migrate_provider_queue.sql to add provider keys, queue,
+-- provider usage logs, model catalog updates, and model mappings.
 
 -- ============================================
 -- Insert default demo key (optional)

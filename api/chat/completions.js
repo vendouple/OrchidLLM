@@ -18,6 +18,10 @@ import { countMessagesTokens, estimateOutputTokens } from '../../lib/tokenizer.j
 import { generateCompositeHash } from '../../lib/fingerprint.js';
 import { closePool, isDbConfigured } from '../../lib/oracle.js';
 import {
+    getActiveModelById,
+    mapProviderCandidatesForModel
+} from '../../lib/model-catalog.js';
+import {
     buildProviderCandidates,
     PROVIDER_ENDPOINTS
 } from '../../lib/provider-registry.js';
@@ -37,8 +41,7 @@ import {
     filterCandidatesByKeyAccess,
     buildRoutableCandidates,
     waitForQueueTurn,
-    orderCandidatesForExecution,
-    endpointModelLabel
+    orderCandidatesForExecution
 } from '../../providers/distributor.js';
 
 // Hard wall for the entire upstream round-trip (connect + headers + full body).
@@ -185,23 +188,58 @@ export default async function handler(req, res) {
         }
 
         // ── Parse body ───────────────────────────────────────────────────────
-        const body = req.body;
+        const body = req.body || {};
         const { model, messages, stream, provider: requestedProvider } = body;
+        const requestedModelId = String(model || '').trim();
         const isByopFastTrack = keyInfo.type === 'byop';
-        const effectiveRequestedProvider = isByopFastTrack ? 'pollinations' : requestedProvider;
+        const isDemoPinnedMode = keyInfo.type === 'demo';
+        const isPollinationsPinnedMode = isByopFastTrack || isDemoPinnedMode;
+        const effectiveRequestedProvider = isPollinationsPinnedMode ? 'pollinations' : requestedProvider;
 
-        if (!model || !messages) {
+        if (!requestedModelId || !messages) {
             return res.status(400).json({
                 error: 'Missing required fields',
                 message: 'model and messages are required'
             });
         }
 
+        if (!dbAvailable) {
+            return res.status(503).json({
+                error: 'Database unavailable',
+                message: 'Model routing requires Oracle DB because the model catalog is DB-only.'
+            });
+        }
+
+        let activeModel = null;
+        try {
+            activeModel = await withDbTimeout(
+                getActiveModelById(requestedModelId),
+                null,
+                'getActiveModelById'
+            );
+        } catch (catalogError) {
+            if (catalogError?.code === 'MODEL_CATALOG_TABLE_MISSING') {
+                return res.status(503).json({
+                    error: 'Model catalog table missing',
+                    message: 'Run db/migrate_provider_queue.sql to create model_catalog and model_provider_mappings.'
+                });
+            }
+
+            throw catalogError;
+        }
+
+        if (!activeModel) {
+            return res.status(400).json({
+                error: 'Invalid model',
+                message: `Model '${requestedModelId}' is not active in model_catalog.`
+            });
+        }
+
         // ── Model access (global keys only) ───────────────────────────────────
-        if (!keyInfo.bypassLimits && keyInfo.type !== 'demo' && !isModelAllowed(keyInfo, model)) {
+        if (!keyInfo.bypassLimits && keyInfo.type !== 'demo' && !isModelAllowed(keyInfo, requestedModelId)) {
             return res.status(403).json({
                 error: 'Model not allowed',
-                message: `No access to ${model}`
+                message: `No access to ${requestedModelId}`
             });
         }
 
@@ -209,7 +247,7 @@ export default async function handler(req, res) {
         let inputTokens = 0;
         if (!keyInfo.bypassLimits && keyInfo.inputTokenLimit !== -1) {
             inputTokens = await countMessagesTokens(messages);
-            const estimatedOutput = estimateOutputTokens(inputTokens, model);
+            const estimatedOutput = estimateOutputTokens(inputTokens, requestedModelId);
             const tc = await checkTokenLimits(keyInfo, inputTokens, estimatedOutput);
             if (!tc.allowed) {
                 return res.status(400).json({ error: 'Token limit exceeded', message: tc.reason });
@@ -222,7 +260,7 @@ export default async function handler(req, res) {
             : [];
 
         const providerCandidates = buildProviderCandidates({
-            model,
+            model: requestedModelId,
             requestedProvider: effectiveRequestedProvider,
             allowedProviders,
             endpointKey: PROVIDER_ENDPOINTS.CHAT_COMPLETIONS
@@ -244,8 +282,34 @@ export default async function handler(req, res) {
             });
         }
 
+        const mappedCandidatesResult = await withDbTimeout(
+            mapProviderCandidatesForModel(requestedModelId, accessibleCandidates),
+            { reason: 'mapping_resolution_timeout', model: activeModel, candidates: [] },
+            'mapProviderCandidatesForModel'
+        );
+
+        if (mappedCandidatesResult?.reason === 'model_not_found') {
+            return res.status(400).json({
+                error: 'Invalid model',
+                message: `Model '${requestedModelId}' is not active in model_catalog.`
+            });
+        }
+
+        const mappedCandidates = Array.isArray(mappedCandidatesResult?.candidates)
+            ? mappedCandidatesResult.candidates
+            : [];
+
+        if (mappedCandidates.length === 0) {
+            const reason = mappedCandidatesResult?.reason || 'mapping_missing';
+            return res.status(503).json({
+                error: 'No upstream provider available',
+                reason,
+                message: `No active provider mapping found for model '${requestedModelId}'.`
+            });
+        }
+
         const routableCandidates = await buildRoutableCandidates({
-            providerCandidates: accessibleCandidates,
+            providerCandidates: mappedCandidates,
             keyInfo,
             allowDb: dbAvailable,
             endpointKey: PROVIDER_ENDPOINTS.CHAT_COMPLETIONS
@@ -273,7 +337,7 @@ export default async function handler(req, res) {
                 endpoint: '/chat/completions',
                 identifier,
                 apiKeyId: keyInfo.id,
-                model,
+                model: requestedModelId,
                 priority: queuePriority
             });
 
@@ -305,7 +369,7 @@ export default async function handler(req, res) {
 
         const { provider: _requestedProvider, ...forwardBody } = body;
 
-        const candidatesInAttemptOrder = isByopFastTrack
+        const candidatesInAttemptOrder = isPollinationsPinnedMode
             ? [selectedCandidate]
             : orderCandidatesForExecution(selectedCandidate, routableCandidates);
 
@@ -408,9 +472,10 @@ export default async function handler(req, res) {
             }
 
             if (usedDb) {
+                const clientFacingModel = selectedCandidate?.globalModelId || requestedModelId;
                 logUsage({
                     identifier, apiKeyId: keyInfo.id, endpoint: '/chat/completions',
-                    model: endpointModelLabel(selectedCandidate),
+                    model: clientFacingModel,
                     inputTokens: promptTokensFromStream,
                     outputTokens,
                     ip: clientIP,
@@ -454,6 +519,11 @@ export default async function handler(req, res) {
 
         } else {
             const data = providerResult.normalizedData || {};
+            const clientFacingModel = selectedCandidate?.globalModelId || requestedModelId;
+
+            if (data && typeof data === 'object') {
+                data.model = clientFacingModel;
+            }
 
             const outputTokens = data.usage?.completion_tokens || 0;
             const actualInput  = data.usage?.prompt_tokens || inputTokens;
@@ -461,7 +531,7 @@ export default async function handler(req, res) {
             if (usedDb) {
                 logUsage({
                     identifier, apiKeyId: keyInfo.id, endpoint: '/chat/completions',
-                    model: endpointModelLabel(selectedCandidate),
+                    model: clientFacingModel,
                     inputTokens: actualInput,
                     outputTokens,
                     ip: clientIP,
