@@ -99,6 +99,8 @@ Request body (JSON):
 - response_format ("url"|"b64_json", default: "b64_json"): Return format
 - quality, seed, nologo, enhance, safe: Same as GET /image/{prompt}
 
+*Note: Pollinations ignores the `n` parameter (always generates 1 image).*
+
 ### POST /v1/images/edits
 
 OpenAI-compatible image editing. Accepts JSON with image URLs or multipart/form-data file uploads.

@@ -37,6 +37,8 @@ response_format
 stringdefault:"url"
 The format of the generated images. Either url or b64_json.
 ​
+*Note: VoidAI image editing supports specific params like `mask` and `size`, but standard OpenAI response formats might not apply identically across all its internal models.*
+
 Response
 ​
 created

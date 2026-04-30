@@ -53,6 +53,7 @@ POST /v1/images/generations
   "style": "vivid",
   "sync": true
 }
+*Note: NavyAI supports `sync: true` for synchronous generation. Standard OpenAI params like `n` (number of images) might be ignored.*
 5. Text‑to‑Speech
 POST /v1/audio/speech
 
