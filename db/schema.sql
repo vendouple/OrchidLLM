@@ -1,5 +1,140 @@
--- OrchidLLM Oracle DB Schema
+﻿-- OrchidLLM Oracle DB Schema (Production - Migrations 002 & 003 Merged)
 -- Run this in Oracle Cloud Autonomous DB
+-- This is the complete schema with all required fields from the codebase
+
+-- ============================================
+-- Table: TIERS
+-- Defines the available plans, pricing, and limits
+-- ============================================
+
+CREATE TABLE tiers (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR2(100) NOT NULL UNIQUE,
+    tier_name VARCHAR2(50) NOT NULL UNIQUE,
+    tier_level VARCHAR2(50) NOT NULL UNIQUE,
+    sort_order NUMBER DEFAULT 0,
+    price_idr NUMBER DEFAULT 0,
+    monthly_credits NUMBER DEFAULT 0,
+    rollover_cap NUMBER,
+    rollover_months NUMBER,
+    queue_priority_fast NUMBER DEFAULT 0,
+    queue_priority_std NUMBER DEFAULT 0,
+    queue_priority_exhausted NUMBER DEFAULT 0,
+    concurrent_requests NUMBER DEFAULT 1,
+    concurrent_batches NUMBER DEFAULT 0,
+    batch_discount_pct NUMBER,
+    model_access_level VARCHAR2(50) DEFAULT 'free',
+    is_active NUMBER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX idx_tiers_sort_order ON tiers(sort_order);
+
+-- ============================================
+-- Table: USERS
+-- Persistent users from GitHub OAuth
+-- ============================================
+
+CREATE TABLE users (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    github_id VARCHAR2(64) NOT NULL UNIQUE,
+    github_username VARCHAR2(100),
+    github_avatar VARCHAR2(500),
+    tier_id NUMBER,
+    is_admin NUMBER DEFAULT 0,
+    credits_balance NUMBER DEFAULT 0,
+    credits_rollover NUMBER DEFAULT 0,
+    billing_cycle_start TIMESTAMP,
+    billing_cycle_end TIMESTAMP,
+    is_banned NUMBER DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    last_seen TIMESTAMP,
+    
+    CONSTRAINT fk_users_tier FOREIGN KEY (tier_id) REFERENCES tiers(id)
+);
+
+CREATE INDEX idx_users_github ON users(github_id);
+CREATE INDEX idx_users_tier ON users(tier_id);
+
+-- ============================================
+-- Table: RECHARGE_PACKAGES
+-- Credit top-ups (with expiry, discount, and tier targeting)
+-- ============================================
+
+CREATE TABLE recharge_packages (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name VARCHAR2(100) NOT NULL,
+    description VARCHAR2(500),
+    credits NUMBER NOT NULL,
+    price_idr NUMBER NOT NULL,
+    original_price_idr NUMBER,
+    discount_pct NUMBER(5,2) DEFAULT 0,
+    target_tier_name VARCHAR2(50),
+    expiry_date TIMESTAMP,
+    is_disabled NUMBER(1) DEFAULT 0,
+    discount_start_date TIMESTAMP,
+    discount_end_date TIMESTAMP,
+    is_active NUMBER DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- ============================================
+-- Table: USER_RECHARGE_BALANCES
+-- User purchased top-up balances
+-- ============================================
+
+CREATE TABLE user_recharge_balances (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id NUMBER NOT NULL,
+    tier_id NUMBER NOT NULL,
+    credits_remaining NUMBER DEFAULT 0,
+    purchased_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at TIMESTAMP,
+    
+    CONSTRAINT fk_recharge_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_recharge_tier FOREIGN KEY (tier_id) REFERENCES tiers(id)
+);
+
+CREATE INDEX idx_recharge_user ON user_recharge_balances(user_id, expires_at);
+
+-- ============================================
+-- Table: USER_MODEL_PREFERENCES
+-- Context routing preferences per user per model
+-- ============================================
+
+CREATE TABLE user_model_preferences (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id NUMBER NOT NULL,
+    model_id VARCHAR2(255) NOT NULL,
+    heavy_action VARCHAR2(10) DEFAULT 'RAW',
+    massive_action VARCHAR2(10) DEFAULT 'BLOCK',
+    worker_model_id VARCHAR2(255),
+    compression_prompt CLOB,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    
+    CONSTRAINT fk_prefs_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT uq_user_model_pref UNIQUE (user_id, model_id)
+);
+
+-- ============================================
+-- Table: ANNOUNCEMENTS
+-- Admin broadcast messages (with banner, urgency, dismissal tracking)
+-- ============================================
+
+CREATE TABLE announcements (
+    id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title VARCHAR2(255) NOT NULL,
+    content CLOB NOT NULL,
+    type VARCHAR2(20) DEFAULT 'info',
+    is_active NUMBER DEFAULT 1,
+    is_banner NUMBER DEFAULT 0,
+    is_urgent NUMBER DEFAULT 0,
+    dismissible NUMBER DEFAULT 1,
+    expires_at TIMESTAMP,
+    read_by CLOB,    -- JSON array of github_ids who dismissed
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by VARCHAR2(100)
+);
 
 -- ============================================
 -- Table: API_KEYS
@@ -9,8 +144,9 @@
 CREATE TABLE api_keys (
     id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     key VARCHAR2(64) NOT NULL UNIQUE,
-    name VARCHAR2(100) NOT NULL,
-    key_type VARCHAR2(20) NOT NULL,        -- 'demo' or 'global'
+    name VARCHAR2(100) NOT NULL,, 'global', or 'user'
+    user_id NUMBER,                        -- Linked user for personal keysglobal'
+    user_id NUMBER,                        -- Linked user
     
     -- Rate Limits
     rpm NUMBER DEFAULT 5,                  -- Requests per minute
@@ -19,6 +155,11 @@ CREATE TABLE api_keys (
     -- Token Limits (-1 = unlimited/disabled)
     input_token_limit NUMBER DEFAULT 10000,
     output_token_limit NUMBER DEFAULT -1,
+    
+    -- Credit Limits (-1 = unlimited/disabled)
+    daily_credit_limit NUMBER DEFAULT -1,
+    monthly_credit_limit NUMBER DEFAULT -1,
+    overall_credit_limit NUMBER DEFAULT -1,
     
     -- Queue System (for future implementation)
     queue_priority NUMBER DEFAULT 0,       -- 0 = lowest, -1 = highest
@@ -37,13 +178,16 @@ CREATE TABLE api_keys (
     
     -- Token Usage Tracking
     total_input_tokens NUMBER DEFAULT 0,
-    total_output_tokens NUMBER DEFAULT 0
+    total_output_tokens NUMBER DEFAULT 0,
+    
+    CONSTRAINT fk_apikey_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
 
 -- Indexes for fast lookup
 CREATE INDEX idx_api_keys_key ON api_keys(key);
 CREATE INDEX idx_api_keys_active ON api_keys(is_active, expires_at);
 CREATE INDEX idx_api_keys_type ON api_keys(key_type);
+CREATE INDEX idx_apikey_user ON api_keys(user_id);
 
 -- ============================================
 -- Table: USAGE_LOGS
@@ -102,24 +246,16 @@ CREATE INDEX idx_sessions_expires ON sessions(expires_at);
 -- ============================================
 -- Table: DEMO_SESSIONS
 -- Tracks anonymous demo users by composite hash
--- (fingerprint + IP + date) with fallback to
--- fingerprint_hash for VPN / new-day reconnection.
---
--- Keys expire after 15 days of inactivity
--- (enforced in app logic, not a DB constraint).
 -- ============================================
 
 CREATE TABLE demo_sessions (
     id NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    -- Primary identity: fingerprint + IP + date combined hash
     composite_hash VARCHAR2(64) NOT NULL UNIQUE,
-    -- Device fingerprint without IP/date — used for VPN reconnection
     fingerprint_hash VARCHAR2(64),
     ip_address VARCHAR2(45),
     user_agent VARCHAR2(500),
     api_key_id NUMBER,
     first_seen TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    -- Updated on every request; NULL until first use after creation
     last_seen TIMESTAMP,
     request_count NUMBER DEFAULT 0,
     is_blocked NUMBER DEFAULT 0,
@@ -127,17 +263,15 @@ CREATE TABLE demo_sessions (
     CONSTRAINT fk_demo_api_key FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
 );
 
--- Exact-match lookup (primary path)
 CREATE INDEX idx_demo_composite ON demo_sessions(composite_hash);
--- Fallback lookup by device fingerprint (VPN / new-day reconnection)
 CREATE INDEX idx_demo_fingerprint ON demo_sessions(fingerprint_hash, is_blocked);
--- Inactivity expiry scan
 CREATE INDEX idx_demo_last_seen ON demo_sessions(last_seen);
 CREATE INDEX idx_demo_blocked ON demo_sessions(is_blocked);
 
 -- ============================================
 -- Table: MODEL_CATALOG
 -- Admin-managed model metadata and availability
+-- Includes parameter-based pricing, caching, deprecation, tier access
 -- ============================================
 
 CREATE TABLE model_catalog (
@@ -152,15 +286,27 @@ CREATE TABLE model_catalog (
     capabilities_json VARCHAR2(4000),
     tags_json VARCHAR2(4000),
     compatible_providers_json VARCHAR2(4000),
+    supported_parameters CLOB,
+    parameter_whitelist CLOB,
+    available_tiers CLOB,
 
     -- Runtime/deprecation metadata
     timeout_ms NUMBER DEFAULT 60000,
     deprecates_at TIMESTAMP,
+    deprecation_date TIMESTAMP,
     deprecation_note VARCHAR2(500),
+
+    -- Routing / Multipliers
+    model_access_level VARCHAR2(50) DEFAULT 'free',
+    in_multiplier NUMBER DEFAULT 1.0,
+    out_multiplier NUMBER DEFAULT 1.0,
+    cache_read_multiplier NUMBER(10,6) DEFAULT 1.0,
+    cache_write_multiplier NUMBER(10,6) DEFAULT 1.0,
 
     -- Flags
     is_pro NUMBER DEFAULT 0,
-    supports_caching NUMBER DEFAULT 0,
+    supports_caching NUMBER(1) DEFAULT 0,
+    supports_batch NUMBER DEFAULT 0,
     is_active NUMBER DEFAULT 1,
 
     -- Audit
@@ -185,10 +331,16 @@ CREATE TABLE model_provider_mappings (
     model_catalog_id NUMBER NOT NULL,
     provider_name VARCHAR2(64) NOT NULL,
     provider_model_id VARCHAR2(255) NOT NULL,
+    backend_model_id VARCHAR2(255),
     provider_context_window VARCHAR2(64),
     metadata_json CLOB,
+    mapping_multipliers CLOB,
     priority NUMBER DEFAULT 0,
-    is_active NUMBER DEFAULT 1,
+    is_active NUMBER(1) DEFAULT 1,
+    supports_batch NUMBER DEFAULT 0,
+    in_multiplier NUMBER,
+    out_multiplier NUMBER,
+    allowed_params_json CLOB,
 
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -207,8 +359,7 @@ CREATE INDEX idx_model_provider_map_provider_model ON model_provider_mappings(pr
 
 -- ============================================
 -- Table: PROVIDER_KEYS
--- Multiple upstream API keys per provider, with
--- per-key rate-limit counters and priority.
+-- Multiple upstream API keys per provider
 -- ============================================
 
 CREATE TABLE provider_keys (
@@ -244,7 +395,7 @@ CREATE INDEX idx_provider_keys_priority ON provider_keys(provider_name, priority
 
 -- ============================================
 -- Table: PROVIDER_USAGE_LOGS
--- Provider-level usage telemetry for admin dashboards.
+-- Provider-level usage telemetry
 -- ============================================
 
 CREATE TABLE provider_usage_logs (
@@ -305,12 +456,3 @@ CREATE TABLE request_queue (
 CREATE INDEX idx_queue_status_priority ON request_queue(endpoint, status, priority, created_at);
 CREATE INDEX idx_queue_provider_processing ON request_queue(provider_name, status, heartbeat_at);
 
--- ============================================
--- Insert default demo key (optional)
--- ============================================
-
--- Uncomment to create a default demo key
--- INSERT INTO api_keys (key, name, key_type, rpm, rpd, input_token_limit, output_token_limit, queue_priority, created_by)
--- VALUES ('nobindes_default_demo_key', 'Default Demo Key', 'demo', 5, 20, 10000, -1, 0, 'system');
-
-COMMIT;

@@ -43,6 +43,8 @@ import {
     waitForQueueTurn,
     orderCandidatesForExecution
 } from '../../providers/distributor.js';
+import { deductCredits } from '../../lib/credits.js';
+import { routeRequest } from '../../lib/context-router.js';
 
 // Hard wall for the entire upstream round-trip (connect + headers + full body).
 // Keep well below Vercel's 300 s function limit.
@@ -190,7 +192,7 @@ export default async function handler(req, res) {
         // ── Parse body ───────────────────────────────────────────────────────
         const body = req.body || {};
         const { model, messages, stream, provider: requestedProvider } = body;
-        const requestedModelId = String(model || '').trim();
+        let requestedModelId = String(model || '').trim();
         const isByopFastTrack = keyInfo.type === 'byop';
         const isDemoPinnedMode = keyInfo.type === 'demo';
         const isPollinationsPinnedMode = isByopFastTrack || isDemoPinnedMode;
@@ -251,6 +253,37 @@ export default async function handler(req, res) {
             const tc = await checkTokenLimits(keyInfo, inputTokens, estimatedOutput);
             if (!tc.allowed) {
                 return res.status(400).json({ error: 'Token limit exceeded', message: tc.reason });
+            }
+        }
+
+        // ── Dynamic Context Routing ──────────────────────────────────────────
+        let routedMessages = messages;
+        let routeMultiplier = 1.0;
+        
+        if (dbAvailable && keyInfo.userId && !keyInfo.bypassLimits) {
+            if (inputTokens === 0) {
+                inputTokens = await countMessagesTokens(messages);
+            }
+            
+            const routeResult = await withDbTimeout(
+                routeRequest({ messages, modelRow: activeModel, userId: keyInfo.userId }),
+                { action: 'RAW', multiplier: 1.0, messages },
+                'routeRequest'
+            );
+            
+            if (routeResult.action === 'BLOCK') {
+                return res.status(400).json({ error: 'Context threshold exceeded', message: 'Context size blocked by your routing preferences.' });
+            }
+            
+            if (routeResult.action === 'COMPRESS') {
+                routedMessages = routeResult.compressedMessages;
+                requestedModelId = routeResult.workerModel.id;
+                activeModel = routeResult.workerModel;
+                
+                // Recalculate token count for the compressed prompt
+                inputTokens = await countMessagesTokens(routedMessages);
+            } else {
+                routeMultiplier = routeResult.multiplier || 1.0;
             }
         }
 
@@ -327,11 +360,38 @@ export default async function handler(req, res) {
             selectedCandidate = routableCandidates.find(candidate => candidate.providerId === 'pollinations') || null;
             res.setHeader('x-provider-fasttrack', 'byop-pollinations');
         } else {
-            const queuePriority = normalizeQueuePriority(
+            let queuePriority = normalizeQueuePriority(
                 keyInfo.queuePriority !== undefined
                     ? keyInfo.queuePriority
                     : 0
             );
+
+            // ── Credit Deduction (Pre-flight estimated) ─────────────────────────
+            let deductedCreditsInfo = null;
+            if (dbAvailable && keyInfo.userId && !keyInfo.bypassLimits) {
+                const estOutput = estimateOutputTokens(inputTokens, requestedModelId);
+                const deduction = await withDbTimeout(
+                    deductCredits({ 
+                        userId: keyInfo.userId, 
+                        promptTokens: inputTokens, 
+                        completionTokens: estOutput, 
+                        modelRow: activeModel, 
+                        isBatch: false, 
+                        isCached: false 
+                    }),
+                    null,
+                    'deductCredits'
+                );
+                
+                if (deduction && !deduction.allowed) {
+                    return res.status(402).json({ error: 'Insufficient credits', message: 'Not enough credits to process request.' });
+                }
+                
+                if (deduction) {
+                    queuePriority = deduction.queuePriority;
+                    deductedCreditsInfo = deduction;
+                }
+            }
 
             const queueEntry = await enqueueRequest({
                 endpoint: '/chat/completions',
@@ -368,6 +428,7 @@ export default async function handler(req, res) {
         }
 
         const { provider: _requestedProvider, ...forwardBody } = body;
+        forwardBody.messages = routedMessages;
 
         const candidatesInAttemptOrder = isPollinationsPinnedMode
             ? [selectedCandidate]

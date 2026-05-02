@@ -1,6 +1,6 @@
 # Dynamic Context Routing & Orchestration Overhaul
 
-This plan outlines the architecture and implementation steps to transform OneLLM's backend into a dynamic AI orchestration gateway, supporting tiered plans, global cost thresholds, user-defined context routing, and comprehensive API key management.
+This plan outlines the architecture and implementation steps to transform OrchidLLM's backend into a dynamic AI orchestration gateway, supporting tiered plans, global cost thresholds, user-defined context routing, and comprehensive API key management.
 
 ## User Review Required
 

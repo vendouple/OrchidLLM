@@ -2176,9 +2176,14 @@ function setAuthUi(session) {
   const authImg = document.getElementById('auth-avatar-img');
   const loggedOut = document.getElementById('dropup-loggedout');
   const loggedIn = document.getElementById('dropup-loggedin');
+  const dashboardQuickLink = document.getElementById('dashboard-quick-link');
+  const dashboardQuickLinkText = document.getElementById('dashboard-quick-link-text');
 
   if (session && session.authenticated) {
     const u = session.user;
+    const dashboardHref = '/user.html';
+    const dashboardLabel = 'Go to Dashboard';
+
     // Trigger row
     if (authName) authName.textContent = u.username;
     if (authSub) authSub.textContent = session.isAdmin ? 'Admin' : 'Member';
@@ -2188,6 +2193,13 @@ function setAuthUi(session) {
       authImg.style.display = 'block';
       authImg.style.position = 'static';
     }
+
+    if (dashboardQuickLink) {
+      dashboardQuickLink.href = dashboardHref;
+      dashboardQuickLink.style.display = 'flex';
+    }
+    if (dashboardQuickLinkText) dashboardQuickLinkText.textContent = dashboardLabel;
+
     // Dropup panels
     if (loggedOut) loggedOut.style.display = 'none';
     if (loggedIn) {
@@ -2196,10 +2208,13 @@ function setAuthUi(session) {
       const da = document.getElementById('dropup-avatar');
       const dr = document.getElementById('dropup-role');
       const dal = document.getElementById('dropup-admin-link');
+      const dul = document.getElementById('dropup-user-link');
       if (du) du.textContent = u.username;
       if (da) da.src = u.avatar;
       if (dr) dr.textContent = session.isAdmin ? 'Admin' : 'Member';
       if (dal) dal.style.display = session.isAdmin ? 'flex' : 'none';
+      if (dul) dul.style.display = 'flex';
+      if (dul) dul.href = '/user.html';
     }
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
   } else {
@@ -2210,6 +2225,7 @@ function setAuthUi(session) {
     if (authImg) authImg.style.display = 'none';
     if (loggedOut) loggedOut.style.display = 'flex';
     if (loggedIn) loggedIn.style.display = 'none';
+    if (dashboardQuickLink) dashboardQuickLink.style.display = 'none';
   }
 }
 

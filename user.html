@@ -1,0 +1,476 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>User Dashboard — OrchidLLM</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+  <style>
+    :root {
+      --md-primary: #6750A4; --md-on-primary: #fff; --md-primary-container: #EADDFF; --md-on-primary-container: #21005D;
+      --md-secondary: #625B71; --md-secondary-container: #E8DEF8;
+      --md-tertiary: #7D5260; --md-tertiary-container: #FFD8E4;
+      --md-error: #B3261E; --md-error-container: #F9DEDC;
+      --md-surface: #141218; --md-surface-variant: #49454F; --md-on-surface: #E6E0E9; --md-on-surface-variant: #CAC4D0;
+      --md-outline: #938F99; --md-outline-variant: #49454F;
+      --md-surf1: #1D1B20; --md-surf2: #242127; --md-surf3: #2B2830; --md-surf4: #2D2B33; --md-surf5: #302D38;
+      --md-scrim: rgba(0,0,0,.6);
+      --md-green: #4CAF50; --md-orange: #FF9800; --md-red: #F44336; --md-blue: #2196F3;
+      --md-radius-xs: 4px; --md-radius-sm: 8px; --md-radius-md: 12px; --md-radius-lg: 16px; --md-radius-xl: 28px;
+      --md-elevation1: 0 1px 2px rgba(0,0,0,.3), 0 1px 3px 1px rgba(0,0,0,.15);
+      --md-elevation2: 0 1px 2px rgba(0,0,0,.3), 0 2px 6px 2px rgba(0,0,0,.15);
+      --md-elevation3: 0 4px 8px 3px rgba(0,0,0,.15), 0 1px 3px rgba(0,0,0,.3);
+      --md-elevation4: 0 6px 10px 4px rgba(0,0,0,.15), 0 2px 3px rgba(0,0,0,.3);
+      --tr: .2s cubic-bezier(.2,0,0,1);
+    }
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: 'Outfit', sans-serif; background: var(--md-surface); color: var(--md-on-surface); min-height: 100vh; display: flex; overflow: hidden; }
+    a { color: inherit; text-decoration: none; }
+    .ms { font-family: 'Material Symbols Rounded'; font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24; font-size: 20px; line-height: 1; display: inline-block; white-space: nowrap; -webkit-font-smoothing: antialiased; }
+    .ms.f { font-variation-settings: 'FILL' 1, 'wght' 400, 'GRAD' 0, 'opsz' 24; }
+
+    /* Sidebar */
+    .sidebar { width: 280px; min-width: 280px; background: var(--md-surf1); display: flex; flex-direction: column; height: 100vh; overflow-y: auto; overflow-x: hidden; position: fixed; left: 0; top: 0; z-index: 100; border-right: 1px solid rgba(255,255,255,.05); }
+    .sb-header { padding: 20px 16px 8px; display: flex; align-items: center; gap: 12px; border-bottom: 1px solid rgba(255,255,255,.05); }
+    .sb-logo { width: 40px; height: 40px; border-radius: 14px; background: linear-gradient(135deg, #6750A4, #9C27B0); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+    .sb-title { font-size: 18px; font-weight: 800; letter-spacing: -.3px; }
+    .sb-sub { font-size: 11px; color: var(--md-on-surface-variant); font-weight: 500; }
+    .sb-nav { padding: 4px 12px; flex: 1; }
+    .nav-section { font-size: 10px; font-weight: 700; color: var(--md-on-surface-variant); letter-spacing: .1em; text-transform: uppercase; padding: 16px 4px 6px; }
+    .nav-item { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-radius: 50px; color: var(--md-on-surface-variant); font-size: 14px; font-weight: 500; cursor: pointer; border: none; background: none; width: 100%; text-align: left; transition: var(--tr); position: relative; }
+    .nav-item:hover { background: rgba(255,255,255,.08); color: var(--md-on-surface); }
+    .nav-item.active { background: var(--md-primary-container); color: var(--md-on-primary-container); font-weight: 700; }
+    .nav-item.active .ms { color: var(--md-on-primary-container); }
+    .sb-footer { padding: 12px; border-top: 1px solid rgba(255,255,255,.05); }
+    .user-row { display: flex; align-items: center; gap: 10px; padding: 8px; border-radius: 16px; }
+    .user-av { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; border: 2px solid var(--md-primary); }
+    .user-info { flex: 1; overflow: hidden; }
+    .user-name { font-size: 13px; font-weight: 700; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .user-role { font-size: 11px; color: var(--md-primary); font-weight: 600; }
+    .logout-btn { width: 32px; height: 32px; border: none; background: rgba(255,255,255,.08); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--md-on-surface-variant); transition: var(--tr); }
+    .logout-btn:hover { background: rgba(179,38,30,.2); color: var(--md-error); }
+    .notif-btn { position: relative; width: 32px; height: 32px; border: none; background: rgba(255,255,255,.08); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--md-on-surface-variant); transition: var(--tr); margin-right: 4px; }
+    .notif-btn:hover { background: rgba(255,255,255,.12); }
+    .notif-dot { position: absolute; top: 5px; right: 5px; width: 8px; height: 8px; border-radius: 50%; background: var(--md-error); border: 2px solid var(--md-surf1); display: none; }
+    .notif-dot.show { display: block; }
+
+    /* Banners */
+    .banners { position: fixed; top: 0; left: 280px; right: 0; z-index: 50; pointer-events: none; }
+    .banner { pointer-events: all; display: flex; align-items: center; gap: 12px; padding: 10px 20px; font-size: 13px; font-weight: 600; animation: slideDown .3s ease; cursor: pointer; }
+    .banner.urgent { background: var(--md-error); color: #fff; }
+    .banner.info { background: #2C2C3A; border-bottom: 2px solid var(--md-primary); color: var(--md-on-surface); }
+    .banner-close { margin-left: auto; background: none; border: none; cursor: pointer; color: inherit; display: flex; padding: 4px; border-radius: 4px; }
+    @keyframes slideDown { from { transform: translateY(-100%); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+    /* Main */
+    main { margin-left: 280px; flex: 1; display: flex; flex-direction: column; min-height: 100vh; max-height: 100vh; overflow-y: auto; }
+    .page { display: none; flex-direction: column; flex: 1; padding: 0 0 32px; }
+    .page.active { display: flex; }
+    .topbar { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 0; gap: 12px; position: sticky; top: 0; z-index: 10; background: var(--md-surface); }
+    .page-title { font-size: 22px; font-weight: 800; display: flex; align-items: center; gap: 10px; letter-spacing: -.3px; }
+    .page-title .ms { font-size: 24px; color: var(--md-primary); }
+    .topbar-right { display: flex; gap: 8px; align-items: center; }
+
+    /* Stat cards */
+    .stat-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 12px; padding: 20px 24px 0; }
+    .stat-card { background: var(--md-surf1); border-radius: var(--md-radius-xl); padding: 20px; display: flex; flex-direction: column; gap: 10px; transition: var(--tr); border: 1px solid rgba(255,255,255,.05); }
+    .stat-card:hover { transform: translateY(-2px); box-shadow: var(--md-elevation3); }
+    .stat-icon { width: 40px; height: 40px; border-radius: var(--md-radius-md); display: flex; align-items: center; justify-content: center; }
+    .stat-val { font-size: 28px; font-weight: 800; line-height: 1; letter-spacing: -.5px; }
+    .stat-lbl { font-size: 12px; color: var(--md-on-surface-variant); font-weight: 500; }
+
+    /* Section */
+    .section { padding: 20px 24px 0; }
+    .card { background: var(--md-surf1); border-radius: var(--md-radius-xl); border: 1px solid rgba(255,255,255,.05); overflow: hidden; }
+    .card-header { display: flex; align-items: center; justify-content: space-between; padding: 16px 20px; border-bottom: 1px solid rgba(255,255,255,.05); flex-wrap: wrap; gap: 10px; }
+    .card-title { font-size: 15px; font-weight: 700; display: flex; align-items: center; gap: 8px; }
+    .card-actions { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+
+    /* Buttons */
+    .btn { display: inline-flex; align-items: center; gap: 6px; padding: 0 20px; height: 40px; border: none; border-radius: 50px; font-family: inherit; font-size: 14px; font-weight: 600; cursor: pointer; transition: var(--tr); white-space: nowrap; }
+    .btn-filled { background: var(--md-primary); color: #fff; }
+    .btn-filled:hover { filter: brightness(1.15); }
+    .btn-tonal { background: var(--md-secondary-container); color: #1D192B; }
+    .btn-tonal:hover { filter: brightness(1.1); }
+    .btn-outlined { background: none; border: 1.5px solid var(--md-outline-variant); color: var(--md-on-surface); }
+    .btn-outlined:hover { background: rgba(255,255,255,.08); }
+    .btn-sm { height: 32px; padding: 0 14px; font-size: 12px; }
+    .btn-danger { background: rgba(179,38,30,.15); color: #CF6679; border: 1.5px solid rgba(179,38,30,.3); }
+    .btn-danger:hover { background: var(--md-error); color: #fff; }
+    .ib { width: 32px; height: 32px; border: none; background: none; border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--md-on-surface-variant); transition: var(--tr); }
+    .ib:hover { background: rgba(255,255,255,.1); color: var(--md-on-surface); }
+    .ib.del:hover { background: rgba(244,67,54,.15); color: var(--md-error); }
+    .ib .ms { font-size: 16px; }
+
+    /* Badges */
+    .badge { display: inline-flex; align-items: center; gap: 3px; padding: 3px 10px; border-radius: 50px; font-size: 11px; font-weight: 700; white-space: nowrap; }
+    .badge-green { background: rgba(76,175,80,.15); color: #81C784; }
+    .badge-red { background: rgba(244,67,54,.15); color: #E57373; }
+    .badge-orange { background: rgba(255,152,0,.15); color: #FFB74D; }
+    .badge-blue { background: rgba(33,150,243,.15); color: #64B5F6; }
+    .badge-purple { background: rgba(103,80,164,.2); color: #CE93D8; }
+    .badge-grey { background: rgba(255,255,255,.08); color: var(--md-on-surface-variant); }
+
+    /* Table */
+    .tbl-wrap { overflow-x: auto; }
+    .tbl { width: 100%; border-collapse: collapse; font-size: 13px; }
+    .tbl th { padding: 10px 16px; text-align: left; font-size: 11px; font-weight: 700; color: var(--md-on-surface-variant); text-transform: uppercase; letter-spacing: .06em; background: rgba(255,255,255,.03); border-bottom: 1px solid rgba(255,255,255,.05); white-space: nowrap; }
+    .tbl td { padding: 10px 16px; border-bottom: 1px solid rgba(255,255,255,.04); vertical-align: middle; }
+    .tbl tr:last-child td { border: none; }
+    .tbl tr:hover td { background: rgba(255,255,255,.04); }
+
+    /* Misc */
+    .mono { font-family: 'SF Mono', 'Cascadia Code', monospace; font-size: 11px; background: rgba(255,255,255,.06); padding: 2px 6px; border-radius: 4px; max-width: 160px; overflow: hidden; text-overflow: ellipsis; display: inline-block; white-space: nowrap; }
+    .state-empty { display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 48px 20px; color: var(--md-on-surface-variant); gap: 10px; }
+    .state-empty .ms { font-size: 48px; opacity: .3; }
+    .spin { width: 28px; height: 28px; border: 3px solid rgba(255,255,255,.1); border-top-color: var(--md-primary); border-radius: 50%; animation: spin .8s linear infinite; margin: 0 auto; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .md-content h1, .md-content h2, .md-content h3 { font-weight: 700; margin: .5em 0; }
+    .md-content p { margin: .3em 0; line-height: 1.6; }
+    .md-content code { background: rgba(255,255,255,.08); padding: 2px 6px; border-radius: 4px; font-size: .9em; }
+    .md-content ul, .md-content ol { margin: .3em 0; padding-left: 1.5em; }
+
+    /* Toast */
+    .toast { position: fixed; bottom: 24px; right: 24px; z-index: 999; padding: 12px 20px; border-radius: var(--md-radius-lg); background: var(--md-surf5); border: 1px solid rgba(255,255,255,.1); box-shadow: var(--md-elevation4); font-size: 14px; font-weight: 500; transform: translateY(120px); opacity: 0; transition: var(--tr); display: flex; align-items: center; gap: 10px; max-width: 360px; }
+    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.success { border-color: rgba(76,175,80,.4); }
+    .toast.success .ms { color: #81C784; }
+    .toast.error { border-color: rgba(244,67,54,.4); }
+    .toast.error .ms { color: #E57373; }
+
+    /* Modal */
+    .overlay { position: fixed; inset: 0; background: var(--md-scrim); display: none; align-items: center; justify-content: center; z-index: 200; backdrop-filter: blur(4px); padding: 16px; }
+    .overlay.show { display: flex; }
+    .modal { background: var(--md-surf3); border-radius: var(--md-radius-xl); padding: 24px; width: 100%; max-width: 560px; max-height: 92vh; overflow-y: auto; box-shadow: var(--md-elevation4); animation: popIn .25s cubic-bezier(.34,1.56,.64,1); }
+    @keyframes popIn { from { transform: scale(.9); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+    .modal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+    .modal-title { font-size: 18px; font-weight: 800; letter-spacing: -.3px; }
+    .modal-close { width: 36px; height: 36px; border: none; background: rgba(255,255,255,.08); border-radius: 50%; cursor: pointer; display: flex; align-items: center; justify-content: center; color: var(--md-on-surface-variant); transition: var(--tr); }
+    .modal-close:hover { background: rgba(244,67,54,.15); color: var(--md-error); }
+    .form-stack { display: flex; flex-direction: column; gap: 14px; }
+    .form-group { display: flex; flex-direction: column; gap: 6px; }
+    .form-group label { font-size: 11px; font-weight: 700; color: var(--md-on-surface-variant); text-transform: uppercase; letter-spacing: .04em; }
+    .form-group input, .form-group select, .form-group textarea { padding: 10px 14px; border: 1.5px solid rgba(255,255,255,.12); border-radius: var(--md-radius-md); font-size: 13px; background: var(--md-surf4); color: var(--md-on-surface); transition: var(--tr); font-family: inherit; width: 100%; }
+    .form-group input:focus, .form-group select:focus, .form-group textarea:focus { outline: none; border-color: var(--md-primary); background: var(--md-surf5); }
+    .form-actions { display: flex; gap: 10px; margin-top: 8px; justify-content: flex-end; }
+
+    @media(max-width:900px) { .sidebar { transform: translateX(-100%); } .banners { left: 0; } main { margin-left: 0; } }
+  </style>
+</head>
+<body>
+
+<!-- BANNERS -->
+<div id="banners" class="banners"></div>
+
+<!-- SIDEBAR -->
+<aside class="sidebar">
+  <div class="sb-header">
+    <div class="sb-logo"><span class="ms f" style="color:#fff;font-size:22px">auto_awesome</span></div>
+    <div><div class="sb-title">OrchidLLM</div><div class="sb-sub">User Dashboard</div></div>
+  </div>
+  <nav class="sb-nav">
+    <div class="nav-section">Your Account</div>
+    <button class="nav-item active" id="nav-overview" onclick="go('overview')"><span class="ms">person</span>Overview</button>
+    <button class="nav-item" id="nav-keys" onclick="go('keys')"><span class="ms">vpn_key</span>My API Keys</button>
+    <button class="nav-item" id="nav-recharge" onclick="go('recharge')"><span class="ms">add_card</span>Recharge Credits</button>
+    <div class="nav-section">System</div>
+    <button class="nav-item" id="nav-ann" onclick="go('ann')"><span class="ms">campaign</span>Announcements</button>
+  </nav>
+  <div class="sb-footer">
+    <div id="sb-login" style="padding:8px;text-align:center;display:none">
+      <a href="/api/auth/github" class="btn btn-filled" style="width:100%;justify-content:center"><span class="ms">login</span>Sign in with GitHub</a>
+    </div>
+    <div class="user-row" id="sb-user" style="display:none">
+      <img id="sb-avatar" class="user-av" src="" alt="">
+      <div class="user-info">
+        <div class="user-name" id="sb-username">User</div>
+        <div class="user-role" id="sb-role">User</div>
+      </div>
+      <button class="notif-btn" onclick="go('ann')" title="Announcements"><span class="ms">notifications</span><span class="notif-dot" id="notif-dot"></span></button>
+      <button class="logout-btn" onclick="doLogout()" title="Logout"><span class="ms">logout</span></button>
+    </div>
+  </div>
+</aside>
+
+<!-- MAIN -->
+<main>
+
+<!-- OVERVIEW -->
+<div class="page active" id="page-overview">
+  <div class="topbar"><div class="page-title"><span class="ms">person</span>My Account</div>
+    <div class="topbar-right">
+      <a href="/admin.html" id="admin-link" class="btn btn-outlined btn-sm" style="display:none"><span class="ms">admin_panel_settings</span>Admin Panel</a>
+      <a href="/index.html" class="btn btn-outlined btn-sm"><span class="ms">chat</span>Go to Chat</a>
+    </div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(103,80,164,.2)"><span class="ms f" style="color:var(--md-primary)">military_tech</span></div><div class="stat-val" id="u-tier">—</div><div class="stat-lbl">Current Tier</div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(76,175,80,.2)"><span class="ms f" style="color:#81C784">wallet</span></div><div class="stat-val" id="u-credits">—</div><div class="stat-lbl">Credits</div></div>
+    <div class="stat-card"><div class="stat-icon" style="background:rgba(33,150,243,.2)"><span class="ms f" style="color:#64B5F6">savings</span></div><div class="stat-val" id="u-rollover">—</div><div class="stat-lbl">Rollover</div></div>
+  </div>
+  <div class="section"><div class="card">
+    <div class="card-header"><div class="card-title"><span class="ms">campaign</span>Announcements</div></div>
+    <div id="u-ann-list" style="padding:16px 20px;line-height:1.8"></div>
+  </div></div>
+</div>
+
+<!-- KEYS -->
+<div class="page" id="page-keys">
+  <div class="topbar"><div class="page-title"><span class="ms">vpn_key</span>My API Keys</div>
+    <div class="topbar-right"><button class="btn btn-filled btn-sm" onclick="createUserKey()"><span class="ms">add</span>Create Key</button></div>
+  </div>
+  <div class="section"><div class="card">
+    <div class="card-header"><div class="card-title"><span class="ms">list_alt</span>Keys</div></div>
+    <div class="tbl-wrap"><table class="tbl"><thead><tr><th>Name</th><th>Key (click to reveal)</th><th>Usage</th><th>Actions</th></tr></thead><tbody id="keys-tbody"></tbody></table></div>
+  </div></div>
+</div>
+
+<!-- RECHARGE -->
+<div class="page" id="page-recharge">
+  <div class="topbar"><div class="page-title"><span class="ms">add_card</span>Recharge Credits</div></div>
+  <div class="section"><div id="recharge-grid" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:16px"></div></div>
+</div>
+
+<!-- ANNOUNCEMENTS -->
+<div class="page" id="page-ann">
+  <div class="topbar"><div class="page-title"><span class="ms">campaign</span>All Announcements</div></div>
+  <div class="section"><div id="ann-page" style="display:flex;flex-direction:column;gap:12px"></div></div>
+</div>
+
+</main>
+
+<!-- TOAST -->
+<div class="toast" id="toast"><span class="ms" id="toast-icon">check_circle</span><span id="toast-msg"></span></div>
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+const API_BASE = window.location.origin;
+let sessionUser = null;
+let toastTimer = null;
+
+/* ── Auth ── */
+async function initAuth() {
+  try {
+    const res = await fetch(`${API_BASE}/api/auth/session`);
+    const data = await res.json();
+    if (data.authenticated) {
+      sessionUser = data;
+      document.getElementById('sb-login').style.display = 'none';
+      document.getElementById('sb-user').style.display = 'flex';
+      document.getElementById('sb-username').textContent = data.githubUsername || 'User';
+      document.getElementById('sb-role').textContent = data.isAdmin ? 'Admin' : 'User';
+      document.getElementById('sb-avatar').src = data.githubAvatar || '';
+      if (data.isAdmin) {
+        document.getElementById('admin-link').style.display = 'inline-flex';
+      }
+      loadUnreadAnnouncements();
+      loadUserOverview();
+    } else {
+      document.getElementById('sb-login').style.display = 'block';
+      document.getElementById('sb-user').style.display = 'none';
+    }
+  } catch (e) {
+    document.getElementById('sb-login').style.display = 'block';
+  }
+}
+
+async function doLogout() {
+  await fetch(`${API_BASE}/api/auth/logout`, { method: 'POST' });
+  location.reload();
+}
+
+/* ── Navigation ── */
+function go(page) {
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const pageEl = document.getElementById('page-' + page);
+  if (pageEl) pageEl.classList.add('active');
+  const navEl = document.getElementById('nav-' + page);
+  if (navEl) navEl.classList.add('active');
+
+  if (page === 'overview') loadUserOverview();
+  if (page === 'keys') loadUserKeys();
+  if (page === 'recharge') loadUserRecharge();
+  if (page === 'ann') loadUserAnnouncements();
+}
+
+/* ── Toast ── */
+function showToast(msg, type = 'success') {
+  const t = document.getElementById('toast');
+  document.getElementById('toast-msg').textContent = msg;
+  document.getElementById('toast-icon').textContent = type === 'error' ? 'error' : 'check_circle';
+  t.className = 'toast show ' + type;
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => t.classList.remove('show'), 3000);
+}
+
+/* ── Overview ── */
+async function loadUserOverview() {
+  try {
+    const res = await fetch(`${API_BASE}/api/user/me`);
+    const data = await res.json();
+    document.getElementById('u-tier').textContent = data.tier?.name || 'Free';
+    document.getElementById('u-credits').textContent = fmtNum(data.credits?.balance);
+    document.getElementById('u-rollover').textContent = fmtNum(data.credits?.rollover);
+
+    // Load recent announcements
+    const annRes = await fetch(`${API_BASE}/api/admin/announcements`);
+    const anns = await annRes.json();
+    const list = document.getElementById('u-ann-list');
+    if (!Array.isArray(anns) || !anns.length) { list.innerHTML = '<div class="state-empty">No announcements</div>'; return; }
+    list.innerHTML = anns.filter(a => a.IS_ACTIVE || a.is_active).slice(0,3).map(a => `
+      <div style="padding:12px 0;border-bottom:1px solid rgba(255,255,255,.05)">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px">
+          <span class="badge badge-${(a.TYPE || a.type || 'info') === 'error' ? 'red' : (a.TYPE || a.type || 'info') === 'warning' ? 'orange' : (a.TYPE || a.type || 'info') === 'success' ? 'green' : 'blue'}">${a.TYPE || a.type || 'info'}</span>
+          <strong>${a.TITLE || a.title || ''}</strong>
+        </div>
+        <div class="md-content" style="font-size:13px;color:var(--md-on-surface-variant)">${marked.parse((a.CONTENT || a.content || '').slice(0,200))}</div>
+      </div>
+    `).join('');
+  } catch (e) { console.error(e); }
+}
+
+/* ── Keys ── */
+async function loadUserKeys() {
+  const tbody = document.getElementById('keys-tbody');
+  try {
+    const res = await fetch(`${API_BASE}/api/user/keys`);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) { tbody.innerHTML = '<tr><td colspan="4"><div class="state-empty">No keys yet</div></td></tr>'; return; }
+    tbody.innerHTML = data.map(k => `
+      <tr>
+        <td>${k.NAME || k.name || 'Personal Key'}</td>
+        <td><span class="mono" onclick="this.textContent = (this.textContent === 'Click to reveal' ? ('${k.KEY || k.key || ''}') : 'Click to reveal')" style="cursor:pointer">Click to reveal</span></td>
+        <td>${fmtNum(k.USAGE_COUNT || k.usage_count || 0)}</td>
+        <td><button class="ib del" onclick="deleteUserKey(${k.ID || k.id})"><span class="ms">delete</span></button></td>
+      </tr>
+    `).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function createUserKey() {
+  try {
+    const res = await fetch(`${API_BASE}/api/user/keys`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name: 'New Key' }) });
+    if (res.ok) { showToast('Key created'); loadUserKeys(); }
+    else { const err = await res.json(); showToast(err.error || 'Error', 'error'); }
+  } catch (e) { showToast('Network error', 'error'); }
+}
+
+async function deleteUserKey(id) {
+  if (!confirm('Delete this key?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/user/keys?id=${id}`, { method: 'DELETE' });
+    if (res.ok) { showToast('Deleted'); loadUserKeys(); }
+    else { const err = await res.json(); showToast(err.error || 'Error', 'error'); }
+  } catch (e) { showToast('Network error', 'error'); }
+}
+
+/* ── Recharge ── */
+async function loadUserRecharge() {
+  const grid = document.getElementById('recharge-grid');
+  try {
+    const res = await fetch(`${API_BASE}/api/user/recharge`);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) { grid.innerHTML = '<div class="state-empty">No packages available</div>'; return; }
+    grid.innerHTML = data.map(p => `
+      <div class="card" style="padding:20px;display:flex;flex-direction:column;gap:12px">
+        <div style="font-size:18px;font-weight:800">${p.name}</div>
+        <div style="font-size:14px;color:var(--md-on-surface-variant)">${p.description || ''}</div>
+        <div style="display:flex;align-items:baseline;gap:8px">
+          <span style="font-size:28px;font-weight:800">Rp ${fmtNum(p.priceIdr || p.price_idr || 0)}</span>
+          ${p.originalPriceIdr ? `<span style="text-decoration:line-through;opacity:.6">Rp ${fmtNum(p.originalPriceIdr)}</span>` : ''}
+        </div>
+        <div><span class="badge badge-purple">${fmtNum(p.credits)} credits</span> ${p.discountPct ? `<span class="badge badge-green">${p.discountPct}% off</span>` : ''}</div>
+        <button class="btn btn-filled" style="margin-top:auto" onclick="buyRecharge(${p.id})">Purchase</button>
+      </div>
+    `).join('');
+  } catch (e) { console.error(e); }
+}
+
+async function buyRecharge(packageId) {
+  try {
+    const res = await fetch(`${API_BASE}/api/user/recharge`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ packageId }) });
+    if (res.ok) { showToast('Recharge successful!'); loadUserOverview(); }
+    else { const err = await res.json(); showToast(err.error || 'Error', 'error'); }
+  } catch (e) { showToast('Network error', 'error'); }
+}
+
+/* ── Announcements ── */
+async function loadUserAnnouncements() {
+  const page = document.getElementById('ann-page');
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/announcements`);
+    const data = await res.json();
+    if (!Array.isArray(data) || !data.length) { page.innerHTML = '<div class="state-empty">No announcements</div>'; return; }
+    page.innerHTML = data.filter(a => a.IS_ACTIVE || a.is_active).map(a => `
+      <div class="card" style="padding:20px">
+        <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+          <span class="badge badge-${(a.TYPE || a.type || 'info') === 'error' ? 'red' : (a.TYPE || a.type || 'info') === 'warning' ? 'orange' : (a.TYPE || a.type || 'info') === 'success' ? 'green' : 'blue'}">${a.TYPE || a.type || 'info'}</span>
+          <span style="font-weight:700">${a.TITLE || a.title || ''}</span>
+          <span style="margin-left:auto;font-size:12px;color:var(--md-on-surface-variant)">${fmtDate(a.CREATED_AT || a.created_at)}</span>
+        </div>
+        <div class="md-content">${marked.parse(a.CONTENT || a.content || '')}</div>
+      </div>
+    `).join('');
+  } catch (e) { console.error(e); }
+}
+
+/* ── Banners ── */
+async function loadBanners() {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/announcements`);
+    const data = await res.json();
+    const banners = (Array.isArray(data) ? data : []).filter(a => (a.IS_BANNER || a.is_banner) && (a.IS_ACTIVE || a.is_active));
+    const container = document.getElementById('banners');
+    container.innerHTML = banners.slice(0, 3).map(b => `
+      <div class="banner ${(b.IS_URGENT || b.is_urgent) ? 'urgent' : 'info'}" onclick="location.href = '#ann'">
+        <span class="ms">${(b.IS_URGENT || b.is_urgent) ? 'warning' : 'info'}</span>
+        <span>${b.TITLE || b.title || ''}</span>
+        <button class="banner-close" onclick="event.stopPropagation(); dismissBanner(${b.ID || b.id}, this)"><span class="ms">close</span></button>
+      </div>
+    `).join('');
+  } catch (e) { }
+}
+
+async function dismissBanner(id, btn) {
+  try {
+    await fetch(`${API_BASE}/api/admin/announcements/${id}/dismiss`, { method: 'POST' });
+    btn.closest('.banner').remove();
+  } catch (e) { }
+}
+
+async function loadUnreadAnnouncements() {
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/announcements`);
+    const data = await res.json();
+    const unread = (Array.isArray(data) ? data : []).filter(a => (a.IS_ACTIVE || a.is_active)).length;
+    const dot = document.getElementById('notif-dot');
+    if (dot) dot.classList.toggle('show', unread > 0);
+  } catch (e) { }
+}
+
+/* ── Utilities ── */
+function fmtNum(n) {
+  if (n === undefined || n === null) return '—';
+  return Number(n).toLocaleString();
+}
+
+function fmtDate(d) {
+  if (!d) return '—';
+  const date = new Date(d);
+  if (isNaN(date)) return String(d).slice(0, 16);
+  return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+
+/* ── Init ── */
+document.addEventListener('DOMContentLoaded', () => {
+  initAuth();
+  loadBanners();
+  go('overview');
+});
+</script>
+</body>
+</html>

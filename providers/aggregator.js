@@ -1,11 +1,33 @@
-import pollinationsProvider from './pollinations/index.js';
-import nvidiaProvider from './nvidia/index.js';
-import cerebrasProvider from './cerebras/index.js';
-import cloudflareProvider from './cloudflare/index.js';
-import mistralProvider from './mistral/index.js';
-import navyProvider from './navy/index.js';
-import voidAiProvider from './voidai/index.js';
-import ollamaProvider from './ollama/index.js';
+/**
+ * Provider aggregator – manages provider module registration and routing.
+ *
+ * Provider modules are loaded lazily with graceful fallback to null when
+ * the implementation files do not exist yet. This allows the application to
+ * start without crashing while provider implementations are being developed.
+ */
+
+// ---------------------------------------------------------------------------
+// Lazy provider imports – each is wrapped so a missing file returns null
+// instead of throwing a MODULE_NOT_FOUND error.
+// ---------------------------------------------------------------------------
+
+let pollinationsProvider = null;
+let nvidiaProvider = null;
+let cerebrasProvider = null;
+let cloudflareProvider = null;
+let mistralProvider = null;
+let navyProvider = null;
+let voidAiProvider = null;
+let ollamaProvider = null;
+
+try { pollinationsProvider = (await import('./pollinations/index.js')).default ?? null; } catch { /* not implemented yet */ }
+try { nvidiaProvider      = (await import('./nvidia/index.js')).default ?? null; }      catch { /* not implemented yet */ }
+try { cerebrasProvider     = (await import('./cerebras/index.js')).default ?? null; }    catch { /* not implemented yet */ }
+try { cloudflareProvider   = (await import('./cloudflare/index.js')).default ?? null; }  catch { /* not implemented yet */ }
+try { mistralProvider      = (await import('./mistral/index.js')).default ?? null; }     catch { /* not implemented yet */ }
+try { navyProvider         = (await import('./navy/index.js')).default ?? null; }        catch { /* not implemented yet */ }
+try { voidAiProvider       = (await import('./voidai/index.js')).default ?? null; }      catch { /* not implemented yet */ }
+try { ollamaProvider       = (await import('./ollama/index.js')).default ?? null; }      catch { /* not implemented yet */ }
 
 export const PROVIDER_ENDPOINTS = {
     CHAT_COMPLETIONS: 'chat.completions',
@@ -22,7 +44,7 @@ const PROVIDER_MODULES = [
     voidAiProvider,
     cloudflareProvider,
     ollamaProvider
-];
+].filter(Boolean);
 
 const PROVIDER_MODULE_BY_ID = new Map();
 const PROVIDER_ALIAS_MAP = Object.create(null);

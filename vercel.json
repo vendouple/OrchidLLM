@@ -34,8 +34,13 @@
     { "src": "/api/queue/([^/]+)", "dest": "/api/queue/status.js?id=$1" },
     { "src": "/api/ping", "dest": "/api/ping.js" },
     { "src": "/api/images/(.*)", "dest": "/api/images/$1.js" },
+    { "src": "/api/admin/catalog", "dest": "/api/admin/catalog.js" },
     { "src": "/api/admin/(.*)", "dest": "/api/admin/$1.js" },
+    { "src": "/api/user/(.*)", "dest": "/api/user/$1.js" },
+    { "src": "/api/announcements", "dest": "/api/announcements.js" },
     { "src": "/admin", "dest": "/admin.html" },
+    { "src": "/user", "dest": "/user.html" },
+    { "src": "/docs", "dest": "/docs.html" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "crons": [

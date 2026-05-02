@@ -61,11 +61,10 @@
         <span class="qn-text">Character Library</span>
         <span class="qn-badge soon">Soon</span>
       </div>
-      <div class="qn-item" onclick="showComingSoon('Dashboard')">
+      <a class="qn-item" id="dashboard-quick-link" href="/user.html" style="text-decoration:none; color:inherit; display:none;">
         <span class="ms sm">bar_chart</span>
-        <span class="qn-text">Dashboard</span>
-        <span class="qn-badge soon">Soon</span>
-      </div>
+        <span class="qn-text" id="dashboard-quick-link-text">Go to Dashboard</span>
+      </a>
     </div>
     <div class="side-foot" style="padding:12px 0px 12px 16px; border-top: 1px solid var(--out-v); position:relative;">
       <!-- Auth Dropup Trigger -->
@@ -140,6 +139,19 @@
             " onmouseover="this.style.backgroundColor='var(--p-c)'; this.style.transform='scale(1.02)'" onmouseout="this.style.backgroundColor='transparent'; this.style.transform='scale(1)'" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1.02)'" role="menuitem">
               <span class="ms sm" style="color:var(--p)">admin_panel_settings</span>
               Admin Dashboard
+            </a>
+            <a href="/user.html" id="dropup-user-link" style="
+              display:flex; align-items:center; gap:10px;
+              padding:10px 12px;
+              border-radius:10px;
+              text-decoration:none;
+              color:var(--on-surf);
+              font-size:13px;
+              font-weight:600;
+              transition:background-color 200ms var(--std), transform 150ms var(--spring);
+            " onmouseover="this.style.backgroundColor='var(--p-c)'; this.style.transform='scale(1.02)'" onmouseout="this.style.backgroundColor='transparent'; this.style.transform='scale(1)'" onmousedown="this.style.transform='scale(0.98)'" onmouseup="this.style.transform='scale(1.02)'" role="menuitem">
+              <span class="ms sm" style="color:var(--p)">dashboard</span>
+              Dashboard
             </a>
             <button onclick="logout()" style="
               display:flex; align-items:center; gap:10px;
@@ -523,7 +535,7 @@
             <span class="ms fill">download</span>
             <div class="srow-info">
               <div class="srow-label">Progressive App Install</div>
-              <div class="srow-desc">Install OneLLM for a native-style experience with quick launch from your device.</div>
+              <div class="srow-desc">Install OrchidLLM for a native-style experience with quick launch from your device.</div>
             </div>
           </div>
         </div>
@@ -542,7 +554,7 @@
               </div>
               <div class="install-step">
                 <div class="install-step-num">2</div>
-                <span>Select <strong>"Install OneLLM…"</strong> or <strong>"Install app"</strong></span>
+                <span>Select <strong>"Install OrchidLLM…"</strong> or <strong>"Install app"</strong></span>
               </div>
               <div class="install-step">
                 <div class="install-step-num">3</div>

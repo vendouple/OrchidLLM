@@ -38,7 +38,11 @@ export default async function handler(req, res) {
             isAdmin: session.isAdmin,
             user: {
                 username: session.githubUsername,
-                avatar: session.githubAvatar
+                login: session.githubUsername,
+                avatar: session.githubAvatar,
+                avatar_url: session.githubAvatar,
+                isAdmin: session.isAdmin === true,
+                is_admin: session.isAdmin === true
             },
             expiresAt: session.expiresAt
         });
