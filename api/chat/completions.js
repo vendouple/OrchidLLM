@@ -370,14 +370,24 @@ export default async function handler(req, res) {
             let deductedCreditsInfo = null;
             if (dbAvailable && keyInfo.userId && !keyInfo.bypassLimits) {
                 const estOutput = estimateOutputTokens(inputTokens, requestedModelId);
+                // Credits are deducted before queue slot selection so queue priority can be
+                // calculated. Use the first routable candidate as the conservative provider
+                // estimate and merge route multipliers when available; the final provider can
+                // still differ if queue scheduling selects another route.
+                const estimatedCreditCandidate = routableCandidates[0] || null;
+                const estimatedModelRow = estimatedCreditCandidate?.mappingMultipliers
+                    ? { ...activeModel, ...estimatedCreditCandidate.mappingMultipliers }
+                    : activeModel;
                 const deduction = await withDbTimeout(
-                    deductCredits({ 
-                        userId: keyInfo.userId, 
-                        promptTokens: inputTokens, 
-                        completionTokens: estOutput, 
-                        modelRow: activeModel, 
-                        isBatch: false, 
-                        isCached: false 
+                    deductCredits({
+                        userId: keyInfo.userId,
+                        promptTokens: inputTokens,
+                        completionTokens: estOutput,
+                        modelRow: estimatedModelRow,
+                        isBatch: false,
+                        isCached: false,
+                        providerName: estimatedCreditCandidate?.providerId || null,
+                        contextSizeTokens: inputTokens
                     }),
                     null,
                     'deductCredits'

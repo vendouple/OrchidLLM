@@ -202,10 +202,10 @@ async function fetchCanonicalModels(targetId = null) {
         SELECT
             cm.id,
             cm.category,
-            cm.model_id,
-            cm.display_name,
+            NVL(cm.model_slug, cm.model_id) AS model_id,
+            NVL(cm.display_name, cm.name) AS display_name,
             cm.description,
-            cm.default_context_window,
+            NVL(cm.default_context_window, cm.context_window) AS default_context_window,
             cm.timeout_ms,
             cm.supports_caching,
             cm.supports_batch,
@@ -213,7 +213,7 @@ async function fetchCanonicalModels(targetId = null) {
             cm.out_multiplier,
             cm.cache_read_multiplier,
             cm.cache_write_multiplier,
-            cm.deprecation_date,
+            NVL(cm.deprecates_at, cm.deprecation_date) AS deprecation_date,
             cm.deprecation_note,
             cm.expires_at,
             cm.is_active,
@@ -225,7 +225,7 @@ async function fetchCanonicalModels(targetId = null) {
         FROM canonical_models cm
         WHERE cm.is_active = 1
           ${targetId ? 'AND cm.id = :targetId' : ''}
-        ORDER BY cm.category ASC, cm.model_id ASC
+        ORDER BY cm.category ASC, NVL(cm.model_slug, cm.model_id) ASC
     `, targetId ? { targetId: Number(targetId) } : {});
 
     const models = modelResult.rows || [];
@@ -746,8 +746,11 @@ async function handleCanonicalPost(req, res, session) {
         INSERT INTO canonical_models (
             category,
             model_id,
+            model_slug,
+            name,
             display_name,
             description,
+            context_window,
             default_context_window,
             timeout_ms,
             supports_caching,
@@ -757,6 +760,7 @@ async function handleCanonicalPost(req, res, session) {
             cache_read_multiplier,
             cache_write_multiplier,
             deprecation_date,
+            deprecates_at,
             deprecation_note,
             expires_at,
             metadata_json,
@@ -766,8 +770,11 @@ async function handleCanonicalPost(req, res, session) {
         ) VALUES (
             :category,
             :model_id,
+            :model_id,
+            :display_name,
             :display_name,
             :description,
+            :default_context_window,
             :default_context_window,
             :timeout_ms,
             :supports_caching,
@@ -776,6 +783,7 @@ async function handleCanonicalPost(req, res, session) {
             :out_multiplier,
             :cache_read_multiplier,
             :cache_write_multiplier,
+            :deprecation_date,
             :deprecation_date,
             :deprecation_note,
             :expires_at,
@@ -927,8 +935,11 @@ async function handleCanonicalPut(req, res, session) {
         UPDATE canonical_models SET
             category = :category,
             model_id = :model_id,
+            model_slug = :model_id,
+            name = :display_name,
             display_name = :display_name,
             description = :description,
+            context_window = :default_context_window,
             default_context_window = :default_context_window,
             timeout_ms = :timeout_ms,
             supports_caching = :supports_caching,
@@ -938,6 +949,7 @@ async function handleCanonicalPut(req, res, session) {
             cache_read_multiplier = :cache_read_multiplier,
             cache_write_multiplier = :cache_write_multiplier,
             deprecation_date = :deprecation_date,
+            deprecates_at = :deprecation_date,
             deprecation_note = :deprecation_note,
             expires_at = :expires_at,
             metadata_json = :metadata_json,

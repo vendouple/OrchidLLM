@@ -215,8 +215,20 @@ export default async function handler(req, res) {
 
             const countResult = await executeQuery(`SELECT COUNT(*) AS total FROM users`);
 
+            const users = (result.rows || []).map(r => ({
+                id: r.ID, githubId: r.GITHUB_ID, githubUsername: r.GITHUB_USERNAME,
+                githubAvatar: r.GITHUB_AVATAR, tierId: r.TIER_ID,
+                tierName: r.TIER_NAME, tierDisplayName: r.TIER_DISPLAY_NAME,
+                tierLevel: r.TIER_LEVEL, tierCode: r.TIER_CODE,
+                canonicalTierName: r.CANONICAL_TIER_NAME, canonicalTierCode: r.CANONICAL_TIER_CODE,
+                isAdmin: r.IS_ADMIN, creditsBalance: r.CREDITS_BALANCE,
+                creditsRollover: r.CREDITS_ROLLOVER, billingCycleStart: r.BILLING_CYCLE_START,
+                billingCycleEnd: r.BILLING_CYCLE_END, isBanned: r.IS_BANNED,
+                createdAt: r.CREATED_AT, lastSeen: r.LAST_SEEN
+            }));
+
             return res.status(200).json({
-                users: result.rows || [],
+                users,
                 total: countResult.rows?.[0]?.TOTAL || 0,
                 page,
                 limit

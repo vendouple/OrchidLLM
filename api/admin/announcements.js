@@ -91,7 +91,21 @@ export default async function handler(req, res) {
                 FROM announcements
                 ORDER BY is_urgent DESC, is_banner DESC, created_at DESC
             `);
-            return res.status(200).json(result.rows || []);
+            const rows = (result.rows || []).map(r => ({
+                id: r.ID,
+                title: r.TITLE,
+                content: r.CONTENT,
+                type: r.TYPE,
+                isActive: r.IS_ACTIVE === 1,
+                isBanner: r.IS_BANNER === 1,
+                isUrgent: r.IS_URGENT === 1,
+                dismissible: r.DISMISSIBLE === 1,
+                expiresAt: r.EXPIRES_AT,
+                readBy: safeJson(r.READ_BY, []),
+                createdAt: r.CREATED_AT,
+                createdBy: r.CREATED_BY
+            }));
+            return res.status(200).json(rows);
         }
 
         if (req.method === 'POST') {

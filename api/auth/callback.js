@@ -72,14 +72,61 @@ export default async function handler(req, res) {
             const login = typeof user?.login === 'string' ? user.login : null;
             const avatar = typeof user?.avatar_url === 'string' ? user.avatar_url : null;
             const isUserAdmin = login ? (isAdmin(login) ? 1 : 0) : 0;
-            const freeTierQuery = `SELECT id FROM tiers WHERE tier_level = 0 FETCH FIRST 1 ROWS ONLY`;
-            const unlimitedTierQuery = `SELECT id FROM tiers WHERE tier_level = 5 FETCH FIRST 1 ROWS ONLY`;
 
-            console.log('[auth/callback] normalized GitHub bind types', {
-                githubIdType: githubId === null ? 'null' : typeof githubId,
-                loginType: login === null ? 'null' : typeof login,
-                avatarType: avatar === null ? 'null' : typeof avatar
-            });
+            // Resolve default tier for new users from system_settings
+            let tierId = null;
+            try {
+                if (isUserAdmin) {
+                    // Admin: use highest sort_order tier
+                    const adminTierRes = await executeQuery(
+                        `SELECT id FROM tiers WHERE is_active = 1 ORDER BY sort_order DESC FETCH FIRST 1 ROWS ONLY`
+                    );
+                    tierId = adminTierRes.rows?.[0]?.ID ?? null;
+                    // Admin fallback: if no tier found by sort_order, use any active tier
+                    if (!tierId) {
+                        const anyTierRes = await executeQuery(
+                            `SELECT id FROM tiers WHERE is_active = 1 FETCH FIRST 1 ROWS ONLY`
+                        );
+                        tierId = anyTierRes.rows?.[0]?.ID ?? null;
+                    }
+                } else {
+                    // Try system_settings default_signup_tier_id first
+                    const settingRes = await executeQuery(
+                        `SELECT setting_value FROM system_settings WHERE setting_key = 'default_signup_tier_id' AND is_active = 1 FETCH FIRST 1 ROWS ONLY`
+                    );
+                    const settingVal = settingRes.rows?.[0]?.SETTING_VALUE ?? null;
+                    if (settingVal != null && String(settingVal).trim() !== '' && !isNaN(Number(settingVal))) {
+                        // Verify the configured tier exists and is active
+                        const verifyRes = await executeQuery(
+                            `SELECT id FROM tiers WHERE id = :id AND is_active = 1 FETCH FIRST 1 ROWS ONLY`,
+                            { id: Number(settingVal) }
+                        );
+                        tierId = verifyRes.rows?.[0]?.ID ?? null;
+                        if (!tierId) {
+                            console.warn(`[auth/callback] default_signup_tier_id=${settingVal} not found or inactive, falling back`);
+                        }
+                    }
+                    // Fall back to lowest sort_order active tier
+                    if (!tierId) {
+                        const fallbackRes = await executeQuery(
+                            `SELECT id FROM tiers WHERE is_active = 1 ORDER BY sort_order ASC FETCH FIRST 1 ROWS ONLY`
+                        );
+                        tierId = fallbackRes.rows?.[0]?.ID ?? null;
+                    }
+                }
+            } catch (tierErr) {
+                console.error('[auth/callback] Could not resolve tier:', tierErr.message);
+                // Last-resort fallback: try to get any active tier
+                try {
+                    const rescueRes = await executeQuery(
+                        `SELECT id FROM tiers WHERE is_active = 1 ORDER BY sort_order ASC FETCH FIRST 1 ROWS ONLY`
+                    );
+                    tierId = rescueRes.rows?.[0]?.ID ?? null;
+                } catch (rescueErr) {
+                    console.error('[auth/callback] Rescue tier query also failed:', rescueErr.message);
+                }
+            }
+
 
             // Try to find existing user first
             const existingUserResult = await executeQuery(
@@ -107,10 +154,11 @@ export default async function handler(req, res) {
                     }
                 );
             } else {
-                // New user
-                const tierQuery = isUserAdmin ? unlimitedTierQuery : freeTierQuery;
-                const tierResult = await executeQuery(tierQuery);
-                const tierId = (tierResult.rows && tierResult.rows.length > 0) ? tierResult.rows[0].ID : null;
+                // New user - tierId already resolved above
+                if (!tierId) {
+                    console.error('[auth/callback] Cannot create new user: no active tiers available for signup');
+                    return sendRedirect(res, '/?error=no_active_tiers');
+                }
 
                 await executeQuery(
                     `INSERT INTO users (

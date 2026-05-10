@@ -1,4 +1,7 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>OrchidLLM Admin</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200&display=swap" rel="stylesheet">
 <style>
 @import url('https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap');
 @import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200');
@@ -56,7 +59,7 @@ a{color:inherit;text-decoration:none}
 .notif-dot.show{display:block}
 
 /* Banners */
-.banners{position:fixed;top:0;left:280px;right:0;z-index:50;pointer-events:none}
+.banners{position:fixed;top:0;left:280px;right:0;width:calc(100% - 280px);z-index:50;pointer-events:none}
 .banner{pointer-events:all;display:flex;align-items:center;gap:12px;padding:10px 20px;font-size:13px;font-weight:600;animation:slideDown .3s ease;cursor:pointer}
 .banner.urgent{background:var(--md-error);color:#fff}
 .banner.info{background:#2C2C3A;border-bottom:2px solid var(--md-primary);color:var(--md-on-surface)}
@@ -64,7 +67,7 @@ a{color:inherit;text-decoration:none}
 @keyframes slideDown{from{transform:translateY(-100%);opacity:0}to{transform:translateY(0);opacity:1}}
 
 /* Main */
-main{margin-left:280px;flex:1;display:flex;flex-direction:column;min-height:100vh;max-height:100vh;overflow-y:auto}
+main{margin-left:280px;width:calc(100% - 280px);flex:1;display:flex;flex-direction:column;min-height:100vh;max-height:100vh;overflow-y:auto}
 .page{display:none;flex-direction:column;flex:1;padding:0 0 32px}
 .page.active{display:flex}
 .topbar{display:flex;align-items:center;justify-content:space-between;padding:20px 24px 0;gap:12px;position:sticky;top:0;z-index:10;background:var(--md-surface)}
@@ -177,9 +180,24 @@ main{margin-left:280px;flex:1;display:flex;flex-direction:column;min-height:100v
 input[type=range]{-webkit-appearance:none;height:6px;border-radius:3px;background:rgba(255,255,255,.15);width:100%}
 input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;height:18px;border-radius:50%;background:var(--md-primary);cursor:pointer}
 .section-divider{height:1px;background:rgba(255,255,255,.05);margin:4px 0}
-@media(max-width:900px){.sidebar{transform:translateX(-100%)}.banners{left:0}main{margin-left:0}}
+@media(max-width:900px){.sidebar{transform:translateX(-100%)}.banners{left:0;width:100%}main{margin-left:0;width:100%}}
+
+
+/* Provider dropdowns and context multipliers */
+.provider-select,.mapping-input,.provider-mult-input{min-width:130px;padding:9px 12px;border:1.5px solid rgba(255,255,255,.14);border-radius:12px;background:linear-gradient(180deg,var(--md-surf4),var(--md-surf3));color:var(--md-on-surface);font:inherit;font-size:12px;outline:none;transition:var(--tr);}
+.provider-select{min-width:170px;appearance:none;background-image:linear-gradient(45deg,transparent 50%,var(--md-on-surface-variant) 50%),linear-gradient(135deg,var(--md-on-surface-variant) 50%,transparent 50%),linear-gradient(180deg,var(--md-surf4),var(--md-surf3));background-position:calc(100% - 18px) 50%,calc(100% - 12px) 50%,0 0;background-size:6px 6px,6px 6px,100% 100%;background-repeat:no-repeat;padding-right:34px;}
+.provider-select:hover,.mapping-input:hover,.provider-mult-input:hover{border-color:rgba(255,255,255,.24);background-color:var(--md-surf5);}
+.provider-select:focus,.mapping-input:focus,.provider-mult-input:focus{border-color:var(--md-primary);box-shadow:0 0 0 3px rgba(208,188,255,.14);}
+.provider-select option{background:var(--md-surf3);color:var(--md-on-surface);}
+.provider-mult-table td{vertical-align:middle;}
+.provider-mult-table input{width:120px;}
+.mono-input{font-variant-numeric:tabular-nums;}
+.toggle.small{width:42px;height:24px;min-width:42px;}
+.toggle.small span{width:18px;height:18px;}
+.toggle.small.on span{transform:translateX(18px);}
 </style>
-></head><body>
+</head><body>
+
 <!-- BANNERS -->
 <div id="banners" class="banners"></div>
 
@@ -204,6 +222,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
     <button class="nav-item" id="nav-announcements" onclick="go('announcements')"><span class="ms">campaign</span>Announcements</button>
     <div class="nav-section">Platform</div>
     <button class="nav-item" id="nav-keys" onclick="go('keys')"><span class="ms">vpn_key</span>API Keys</button>
+    <button class="nav-item" id="nav-providers" onclick="go('providers')"><span class="ms">hub</span>Providers</button>
     <button class="nav-item" id="nav-demo" onclick="go('demo')"><span class="ms">person_play</span>Demo Sessions<span class="nav-badge" id="demo-badge" style="display:none">0</span></button>
     <button class="nav-item" id="nav-usage" onclick="go('usage')"><span class="ms">analytics</span>Usage Logs</button>
     <button class="nav-item" id="nav-queue" onclick="go('queue')"><span class="ms">queue</span>Request Queue<span class="nav-badge" id="queue-badge" style="display:none">0</span></button>
@@ -271,13 +290,20 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 <!-- TIERS -->
 <div class="page" id="page-tiers">
   <div class="topbar"><div class="page-title"><span class="ms">military_tech</span>Tiers</div>
-    <div class="topbar-right"><button class="btn btn-outlined btn-sm" onclick="loadTiers()"><span class="ms">refresh</span>Refresh</button></div>
+    <div class="topbar-right">
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;color:var(--md-on-surface-variant);white-space:nowrap">Default Signup Tier:</label>
+        <select id="default-tier-select" style="font-size:13px"><option value="">(None)</option></select>
+        <button class="btn btn-tonal btn-sm" onclick="saveDefaultTier()">Save</button>
+      </div>
+      <button class="btn btn-filled btn-sm" onclick="openTierModal()"><span class="ms">add</span>New Tier</button>
+    </div>
   </div>
   <div class="section" style="margin-top:20px"><div class="card">
     <div class="card-header"><div class="card-title"><span class="ms">list_alt</span>Subscription Tiers</div></div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr>
-      <th>Level</th><th>Name</th><th>Price (IDR)</th><th>Monthly Credits</th><th>Rollover Cap</th><th>Queue (F/S/E)</th><th>Concurrent (R/B)</th><th>Access Level</th>
-    </tr></thead><tbody id="tiers-tbody"><tr><td colspan="8"><div class="state-empty"><div class="spin"></div></div></td></tr></tbody></table></div>
+      <th>Order</th><th>Name</th><th>Price (Rp)</th><th>Credits</th><th>Rollover</th><th>Queue (F/S/E)</th><th>Concur (R/B)</th><th>Status / Billing</th><th>Actions</th>
+    </tr></thead><tbody id="tiers-tbody"><tr><td colspan="9"><div class="state-empty"><div class="spin"></div></div></td></tr></tbody></table></div>
   </div></div>
 </div>
 
@@ -303,6 +329,27 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
   </div></div>
 </div>
 
+<!-- PROVIDER MULTIPLIERS -->
+<div class="page" id="page-providers">
+  <div class="topbar"><div class="page-title"><span class="ms">hub</span>Provider Multipliers</div>
+    <div class="topbar-right">
+      <span class="badge badge-blue"><span id="provider-count">0</span> providers</span>
+      <button class="btn btn-outlined btn-sm" onclick="loadProviderMultipliers()"><span class="ms">refresh</span>Refresh</button>
+      <button class="btn btn-tonal btn-sm" onclick="addDefaultProviderMultipliers()"><span class="ms">playlist_add</span>Add Defaults</button>
+      <button class="btn btn-filled btn-sm" onclick="addProviderMultiplierRow(0)"><span class="ms">add</span>Add Row</button>
+    </div>
+  </div>
+  <div class="section" style="margin-top:20px"><div class="card">
+    <div class="card-header">
+      <div><div class="card-title"><span class="ms">tune</span>Context Threshold Multipliers</div>
+      <div style="font-size:12px;color:var(--md-on-surface-variant);margin-top:4px">Use threshold 0 as the base multiplier. Higher rows apply when request context tokens are greater than or equal to the threshold.</div></div>
+    </div>
+    <div class="tbl-wrap"><table class="tbl provider-mult-table"><thead><tr>
+      <th>Provider</th><th>Threshold Tokens</th><th>In×</th><th>Out×</th><th>Cache Read×</th><th>Cache Write×</th><th>Active</th><th>Actions</th>
+    </tr></thead><tbody id="provider-multipliers-tbody"><tr><td colspan="8"><div class="state-empty"><div class="spin"></div></div></td></tr></tbody></table></div>
+  </div></div>
+</div>
+
 <!-- RECHARGE PACKAGES -->
 <div class="page" id="page-recharges">
   <div class="topbar"><div class="page-title"><span class="ms">payments</span>Recharge Packages</div>
@@ -324,8 +371,8 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
   <div class="section" style="margin-top:20px"><div class="card">
     <div class="card-header"><div class="card-title"><span class="ms">list_alt</span>All Announcements</div></div>
     <div class="tbl-wrap"><table class="tbl"><thead><tr>
-      <th>Title</th><th>Type</th><th>Banner</th><th>Urgent</th><th>Expires</th><th>Active</th><th>Actions</th>
-    </tr></thead><tbody id="ann-tbody"><tr><td colspan="7"><div class="state-empty"><div class="spin"></div></div></td></tr></tbody></table></div>
+      <th>Title</th><th>Type</th><th>Banner</th><th>Expires</th><th>Active</th><th>Actions</th>
+    </tr></thead><tbody id="ann-tbody"><tr><td colspan="6"><div class="state-empty"><div class="spin"></div></div></td></tr></tbody></table></div>
   </div></div>
 </div>
 
@@ -426,6 +473,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
 <!-- TOAST -->
 <div class="toast" id="toast"><span class="ms" id="toast-icon">check_circle</span><span id="toast-msg"></span></div>
 
+
 <!-- KEY MODAL -->
 <div class="overlay" id="key-modal"><div class="modal">
   <div class="modal-header"><div class="modal-title" id="km-title">New API Key</div><button class="modal-close" onclick="closeModal('key-modal')"><span class="ms">close</span></button></div>
@@ -459,7 +507,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
     <div class="form-row">
       <div class="form-group"><label>Display Name</label><input type="text" id="cm-dname" placeholder="e.g. Claude Opus 4.5" required></div>
       <div class="form-group"><label>Access Level (Tier)</label>
-        <select id="cm-access"><option value="free">Free</option><option value="basic">Basic</option><option value="plus">Plus</option><option value="pro">Pro</option><option value="ultra">Ultra</option><option value="ultimate">Ultimate</option></select>
+        <select id="cm-access"><option value="">Loading…</option></select>
       </div>
     </div>
     <div class="form-group"><label>Description</label><textarea id="cm-desc" rows="2" style="resize:none"></textarea></div>
@@ -516,7 +564,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
     </div>
     <div class="form-row">
       <div class="form-group"><label>Discount %</label><input type="number" id="rm-discount" value="0" min="0" max="99"></div>
-      <div class="form-group"><label>Target Tier (min)</label><select id="rm-tier"><option value="0">Free</option><option value="1">Basic</option><option value="2">Plus</option><option value="3">Pro</option><option value="4">Ultra</option><option value="5">Ultimate</option></select></div>
+      <div class="form-group"><label>Target Tier (min)</label><select id="rm-tier"><option value="">Any</option></select></div>
     </div>
     <div class="form-group"><label>Package Expires At (optional)</label><input type="datetime-local" id="rm-expires"></div>
     <div class="toggle-row"><button type="button" class="toggle on" id="rm-active" onclick="this.classList.toggle('on')"></button><span class="toggle-label">Active</span></div>
@@ -533,16 +581,55 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
     <div class="form-group"><label>Content (Markdown supported)</label><textarea id="am-content" rows="6" style="resize:vertical;font-family:monospace;font-size:12px" placeholder="## Heading&#10;&#10;Body text here..."></textarea></div>
     <div class="form-row">
       <div class="form-group"><label>Type</label>
-        <select id="am-type"><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error / Outage</option><option value="success">Success</option></select>
+        <div style="display:flex;gap:8px;align-items:center">
+          <select id="am-type" onchange="updateAnnTypeHint()" style="flex:1"><option value="info">Info</option><option value="warning">Warning</option><option value="error">Error / Outage</option><option value="success">Success</option></select>
+          <span id="am-type-hint" style="display:flex;align-items:center;gap:6px;padding:6px 12px;border-radius:20px;font-size:12px;font-weight:600;white-space:nowrap;background:var(--hint-bg,rgba(88,166,255,.15));color:var(--hint-color,#58a6ff)"><span class="ms" id="am-type-icon" style="font-size:16px">info</span><span id="am-type-label">Info</span></span>
+        </div>
       </div>
       <div class="form-group"><label>Expires At (optional)</label><input type="datetime-local" id="am-expires"></div>
     </div>
     <div style="display:flex;gap:24px;flex-wrap:wrap">
       <div class="toggle-row"><button type="button" class="toggle on" id="am-active" onclick="this.classList.toggle('on')"></button><span class="toggle-label">Active</span></div>
       <div class="toggle-row"><button type="button" class="toggle" id="am-banner" onclick="this.classList.toggle('on')"></button><span class="toggle-label">Show Banner</span></div>
-      <div class="toggle-row"><button type="button" class="toggle" id="am-urgent" onclick="this.classList.toggle('on')"></button><span class="toggle-label">Urgent (Red)</span></div>
     </div>
     <div class="form-actions"><button type="button" class="btn btn-outlined" onclick="closeModal('ann-modal')">Cancel</button><button type="submit" class="btn btn-filled">Save</button></div>
+  </form>
+</div></div>
+
+<!-- TIER MODAL -->
+<div class="overlay" id="tier-modal"><div class="modal lg">
+  <div class="modal-header"><div class="modal-title" id="tm-title">New Tier</div><button class="modal-close" onclick="closeModal('tier-modal')"><span class="ms">close</span></button></div>
+  <form class="form-stack" id="tier-form" onsubmit="submitTier(event)">
+    <input type="hidden" id="tm-id">
+    <div class="form-row">
+      <div class="form-group"><label>Display Name</label><input type="text" id="tm-name" placeholder="e.g. Pro" required></div>
+      <div class="form-group"><label>Tier Code (slug)</label><input type="text" id="tm-code" placeholder="e.g. pro"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Sort Order (0 = lowest)</label><input type="number" id="tm-order" value="0" min="0" max="100"></div>
+      <div class="form-group"><label>Price (IDR/mo)</label><input type="number" id="tm-price" value="0" min="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Monthly Credits</label><input type="number" id="tm-credits" value="100000" min="0"></div>
+      <div class="form-group"><label>Rollover Cap</label><input type="number" id="tm-rollover" value="0" min="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Concurrent Requests</label><input type="number" id="tm-creq" value="1" min="1"></div>
+      <div class="form-group"><label>Concurrent Batches</label><input type="number" id="tm-cbatch" value="0" min="0"></div>
+    </div>
+    <div class="form-row">
+      <div class="form-group"><label>Queue Priority Fast</label><input type="number" id="tm-qpf" value="0" min="0"></div>
+      <div class="form-group"><label>Queue Priority Std</label><input type="number" id="tm-qps" value="0" min="0"></div>
+    </div>
+    <div class="form-group"><label>Billing Periods</label>
+      <div style="display:flex;gap:16px;margin-top:6px">
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="tm-monthly" checked> Monthly</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="tm-quarterly"> Quarterly</label>
+        <label style="display:flex;align-items:center;gap:6px;font-size:13px;text-transform:none;letter-spacing:0;font-weight:500"><input type="checkbox" id="tm-yearly"> Yearly</label>
+      </div>
+    </div>
+    <div class="toggle-row"><button type="button" class="toggle on" id="tm-active" onclick="this.classList.toggle('on')"></button><span class="toggle-label">Active</span></div>
+    <div class="form-actions"><button type="button" class="btn btn-outlined" onclick="closeModal('tier-modal')">Cancel</button><button type="submit" class="btn btn-filled">Save Tier</button></div>
   </form>
 </div></div>
 
@@ -552,7 +639,7 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
   <form class="form-stack" id="user-form" onsubmit="submitUser(event)">
     <input type="hidden" id="um-id">
     <div class="form-group"><label>GitHub Username (readonly)</label><input type="text" id="um-username" readonly></div>
-    <div class="form-group"><label>Tier</label><select id="um-tier"><option value="0">Free</option><option value="1">Basic</option><option value="2">Plus</option><option value="3">Pro</option><option value="4">Ultra</option><option value="5">Ultimate</option></select></div>
+    <div class="form-group"><label>Tier</label><select id="um-tier"><option value="">Loading…</option></select></div>
     <div class="form-row">
       <div class="form-group"><label>Credits Balance</label><input type="number" id="um-credits" min="0"></div>
       <div class="form-group"><label>Rollover Credits</label><input type="number" id="um-rollover" min="0"></div>
@@ -562,7 +649,33 @@ input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:18px;heigh
     <div class="form-actions"><button type="button" class="btn btn-outlined" onclick="closeModal('user-modal')">Cancel</button><button type="submit" class="btn btn-filled">Save</button></div>
   </form>
 </div></div>
-<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script><script>const PROVIDERS=["pollinations","nvidia","cerebras","mistral","navy","voidai","cloudflare","ollama","openai","anthropic","azure","groq","openrouter","google","cohere","xai","deepseek","together","fireworks","perplexity","ai21","elevenlabs","stability"];const TIER_LEVELS=["Free","Basic","Plus","Pro","Ultra","Ultimate"];/* OrchidLLM Admin Panel — Material 3 Expressive */
+
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script>
+/* OrchidLLM Admin Panel -- Material 3 Expressive */
+let PROVIDERS = []; // populated dynamically from /api/admin/providers
+let providerMultipliers = [];
+
+function escapeHtml(value) {
+  const div = document.createElement("div");
+  div.textContent = value ?? "";
+  return div.innerHTML;
+}
+
+function providerOptions(selected = '') {
+  if (!PROVIDERS.length) return '<option value="">No providers loaded</option>';
+  return PROVIDERS.map(p => `<option value="${escapeHtml(p)}" ${selected === p ? 'selected' : ''}>${escapeHtml(p)}</option>`).join('');
+}
+
+async function loadProviderList() {
+  try {
+    const r = await fetch(`${API_BASE}/api/admin/providers`);
+    if (r.ok) {
+      const d = await r.json();
+      PROVIDERS = Array.isArray(d.providers) ? d.providers : [];
+    }
+  } catch(e) { console.warn('Provider list unavailable', e); }
+}
 let _recharges = [];
 let _announcements = [];
 const API_BASE = window.location.origin;
@@ -638,6 +751,7 @@ function go(page) {
   if (page === 'users') loadUsers();
   if (page === 'tiers') loadTiers();
   if (page === 'catalog') loadCatalog();
+  if (page === 'providers') loadProviderMultipliers();
   if (page === 'recharges') loadRecharges();
   if (page === 'announcements') loadAnnouncements();
   if (page === 'keys') loadKeys();
@@ -703,19 +817,34 @@ async function loadUsers() {
   try {
     const res = await fetch(`${API_BASE}/api/admin/users`);
     const data = await res.json();
-    if (!Array.isArray(data)) { tbody.innerHTML = '<tr><td colspan="7">Error loading users</td></tr>'; return; }
-    tbody.innerHTML = data.map(u => `
+    // API returns { users: [...], total, page, limit } OR plain array
+    const users = Array.isArray(data) ? data : (Array.isArray(data.users) ? data.users : null);
+    if (!users) { tbody.innerHTML = '<tr><td colspan="7">Error loading users</td></tr>'; return; }
+    if (!users.length) { tbody.innerHTML = '<tr><td colspan="7"><div class="state-empty">No users found</div></td></tr>'; return; }
+    tbody.innerHTML = users.map(u => {
+      // Support both camelCase (new API) and snake_case (old API)
+      const id      = u.id;
+      const avatar  = u.githubAvatar   || u.github_avatar  || '';
+      const name    = u.githubUsername || u.github_username || 'Unknown';
+      const tier    = u.tierName       || u.tier_name       || u.canonicalTierName || 'Free';
+      const tierId  = u.tierId         || u.tier_id         || 0;
+      const bal     = u.creditsBalance || u.credits_balance  || 0;
+      const roll    = u.creditsRollover|| u.credits_rollover || 0;
+      const isAdm   = u.isAdmin        ?? u.is_admin        ?? 0;
+      const isBan   = u.isBanned       ?? u.is_banned       ?? 0;
+      const joined  = u.createdAt      || u.created_at      || '';
+      return `
       <tr>
-        <td><div style="display:flex;align-items:center;gap:8px"><img src="${u.github_avatar||''}" class="user-av" style="width:28px;height:28px" onerror="this.style.display='none'"><span>${u.github_username||'Unknown'}</span></div></td>
-        <td><span class="badge badge-purple">${u.tier_name||'Free'}</span></td>
-        <td>${fmtNum(u.credits_balance)}</td>
-        <td>${fmtNum(u.credits_rollover)}</td>
-        <td>${u.is_admin?'Yes':'No'}</td>
-        <td>${fmtDate(u.created_at)}</td>
-        <td><button class="ib" onclick="editUser(${u.id},'${u.github_username||''}',${u.tier_id||0},${u.credits_balance||0},${u.credits_rollover||0},${u.is_admin?1:0},${u.is_banned?1:0})"><span class="ms">edit</span></button></td>
-      </tr>
-    `).join('');
-  } catch (e) { console.error(e); }
+        <td><div style="display:flex;align-items:center;gap:8px"><img src="${avatar}" class="user-av" style="width:28px;height:28px" onerror="this.style.display='none'"><span>${name}</span></div></td>
+        <td><span class="badge badge-purple">${tier}</span></td>
+        <td>${fmtNum(bal)}</td>
+        <td>${fmtNum(roll)}</td>
+        <td>${isAdm ? '<span class="badge badge-green">Yes</span>' : 'No'}</td>
+        <td>${fmtDate(joined)}</td>
+        <td><button class="ib" onclick="editUser(${id},'${name}',${tierId},${bal},${roll},${isAdm?1:0},${isBan?1:0})"><span class="ms">edit</span></button></td>
+      </tr>`;
+    }).join('');
+  } catch (e) { console.error(e); tbody.innerHTML = '<tr><td colspan="7">Error: ' + e.message + '</td></tr>'; }
 }
 
 function editUser(id, username, tierId, credits, rollover, isAdmin, isBanned) {
@@ -749,27 +878,165 @@ async function submitUser(e) {
   } catch (e) { showToast('Network error','error'); }
 }
 
-/* ── Tiers ── */
-async function loadTiers() {
-  const tbody = document.getElementById('tiers-tbody');
-  tbody.innerHTML = '<tr><td colspan="8"><div class="state-empty"><div class="spin"></div></div></td></tr>';
+/* -- Tiers -- */
+let _tiers = [];
+
+/* Populate all tier-related <select> elements from _tiers cache */
+function populateTierSelects() {
+  // rm-tier (recharge modal): value = tier name, label = tier name
+  const rmTier = document.getElementById('rm-tier');
+  if (rmTier) {
+    const prev = rmTier.value;
+    rmTier.innerHTML = '<option value="">Any</option>' + _tiers.map(t => `<option value="${t.name}">${t.name}</option>`).join('');
+    if (prev) rmTier.value = prev;
+  }
+  // um-tier (user edit modal): value = tier id, label = tier name
+  const umTier = document.getElementById('um-tier');
+  if (umTier) {
+    const prev = umTier.value;
+    umTier.innerHTML = _tiers.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+    if (prev) umTier.value = prev;
+  }
+  // cm-access (catalog modal): value = tier code, label = tier name (code)
+  const cmAccess = document.getElementById('cm-access');
+  if (cmAccess) {
+    const prev = cmAccess.value;
+    cmAccess.innerHTML = _tiers.map(t => `<option value="${t.tierCode || t.tier_code || t.name.toLowerCase()}">${t.name}</option>`).join('');
+    if (prev) cmAccess.value = prev;
+  }
+}
+
+/* Pre-load tier options into dropdowns (called once at init) */
+async function loadTierOptions() {
+  if (_tiers.length > 0) { populateTierSelects(); return; }
   try {
     const res = await fetch(`${API_BASE}/api/admin/tiers`);
     const data = await res.json();
-    if (!Array.isArray(data)) { tbody.innerHTML = '<tr><td colspan="8">Error</td></tr>'; return; }
-    tbody.innerHTML = data.map(t => `
-      <tr>
-        <td>${t.SORT_ORDER??t.sort_order??0}</td>
-        <td><strong>${t.NAME??t.name??''}</strong></td>
-        <td>${fmtNum(t.PRICE_IDR??t.price_idr??0)}</td>
-        <td>${fmtNum(t.MONTHLY_CREDITS??t.monthly_credits??0)}</td>
-        <td>${fmtNum(t.ROLLOVER_CAP??t.rollover_cap??0)}</td>
-        <td>${t.QUEUE_PRIORITY_FAST??t.queue_priority_fast??0}/${t.QUEUE_PRIORITY_STD??t.queue_priority_std??0}/${t.QUEUE_PRIORITY_EXHAUSTED??t.queue_priority_exhausted??0}</td>
-        <td>${t.CONCURRENT_REQUESTS??t.concurrent_requests??0}/${t.CONCURRENT_BATCHES??t.concurrent_batches??0}</td>
-        <td><span class="badge ${(t.IS_ACTIVE??t.is_active)?'badge-green':'badge-red'}">${(t.IS_ACTIVE??t.is_active)?'Active':'Inactive'}</span></td>
+    if (Array.isArray(data)) { _tiers = data; populateTierSelects(); }
+  } catch(e) { console.warn('Tier options unavailable', e); }
+}
+
+async function loadTiers() {
+  const tbody = document.getElementById('tiers-tbody');
+  tbody.innerHTML = '<tr><td colspan="9"><div class="state-empty"><div class="spin"></div></div></td></tr>';
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/tiers`);
+    const data = await res.json();
+    if (!Array.isArray(data)) { tbody.innerHTML = '<tr><td colspan="9">Error</td></tr>'; return; }
+    _tiers = data;
+    populateTierSelects();
+    // Load default signup tier setting
+    try {
+      const setRes = await fetch(`${API_BASE}/api/admin/settings`);
+      const setArray = await setRes.json();
+      const defaultTierSet = setArray.find(s => (s.key || s.settingKey) === 'default_signup_tier_id');
+      const select = document.getElementById('default-tier-select');
+      if (select) {
+        select.innerHTML = '<option value="">(None)</option>' + data.map(t => `<option value="${t.id}">${t.name}</option>`).join('');
+        if (defaultTierSet && (defaultTierSet.value || defaultTierSet.settingValue)) {
+          select.value = defaultTierSet.value || defaultTierSet.settingValue;
+        }
+      }
+    } catch(e) {}
+    tbody.innerHTML = data.map(t => {
+      const active = !!(t.isActive ?? t.is_active);
+      const periods = (() => { try { const p = JSON.parse(t.billingPeriods ?? '["monthly"]'); return Array.isArray(p) ? p.join(', ') : 'monthly'; } catch { return 'monthly'; } })();
+      return `
+      <tr style="${!active ? 'opacity:0.5' : ''}">
+        <td><span class="badge badge-grey" style="font-weight:800">${t.sortOrder ?? 0}</span></td>
+        <td><strong>${t.name ?? ''}</strong><div style="font-size:11px;color:var(--md-on-surface-variant)">${t.tierCode ?? ''}</div></td>
+        <td>Rp ${fmtNum(t.priceIdr ?? 0)}</td>
+        <td>${fmtNum(t.monthlyCredits ?? 0)}</td>
+        <td>${fmtNum(t.rolloverCap ?? 0)}</td>
+        <td>${t.queuePriorityFast ?? 0}/${t.queuePriorityStd ?? 0}/${t.queuePriorityExhausted ?? 0}</td>
+        <td>${t.concurrentRequests ?? 0}/${t.concurrentBatches ?? 0}</td>
+        <td><span class="badge ${active ? 'badge-green' : 'badge-red'}">${active ? 'Active' : 'Inactive'}</span><div style="font-size:10px;color:var(--md-on-surface-variant);margin-top:3px">${periods}</div></td>
+        <td>
+          <button class="ib" onclick="openEditTierModal(${t.id})"><span class="ms">edit</span></button>
+          <button class="ib del" onclick="deleteTier(${t.id})"><span class="ms">delete</span></button>
+        </td>
       </tr>
-    `).join('');
+    `}).join('');
   } catch (e) { console.error(e); }
+}
+
+async function saveDefaultTier() {
+  const val = document.getElementById('default-tier-select')?.value;
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/settings`, {
+      method: 'PUT', headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({ key: 'default_signup_tier_id', value: val || null })
+    });
+    if (res.ok) showToast('Default signup tier saved');
+    else showToast('Error saving', 'error');
+  } catch(e) { showToast('Network error', 'error'); }
+}
+
+async function deleteTier(id) {
+  if (!confirm('Deactivate this tier? (marks inactive, users keep their current tier)')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/tiers?id=${id}`, { method: 'DELETE' });
+    if (res.ok) { showToast('Tier deactivated'); loadTiers(); loadTierOptions(); }
+    else { const err = await res.json(); showToast(err.error || 'Error', 'error'); }
+  } catch(e) { showToast('Network error', 'error'); }
+}
+
+function openTierModal() {
+  document.getElementById('tm-id').value = '';
+  document.getElementById('tm-title').textContent = 'New Tier';
+  document.getElementById('tier-form').reset();
+  document.getElementById('tm-active').classList.add('on');
+  ['monthly','quarterly','yearly'].forEach((p, i) => document.getElementById('tm-' + p).checked = (i === 0));
+  openModal('tier-modal');
+}
+
+function openEditTierModal(id) {
+  const t = _tiers.find(x => x.id === id);
+  if (!t) { showToast('Tier not found -- reload page', 'error'); return; }
+  document.getElementById('tm-id').value = t.id;
+  document.getElementById('tm-title').textContent = 'Edit Tier';
+  document.getElementById('tm-name').value = t.name || '';
+  document.getElementById('tm-code').value = t.tierCode || '';
+  document.getElementById('tm-order').value = t.sortOrder ?? 0;
+  document.getElementById('tm-price').value = t.priceIdr ?? 0;
+  document.getElementById('tm-credits').value = t.monthlyCredits ?? 0;
+  document.getElementById('tm-rollover').value = t.rolloverCap ?? 0;
+  document.getElementById('tm-creq').value = t.concurrentRequests ?? 1;
+  document.getElementById('tm-cbatch').value = t.concurrentBatches ?? 0;
+  document.getElementById('tm-qpf').value = t.queuePriorityFast ?? 0;
+  document.getElementById('tm-qps').value = t.queuePriorityStd ?? 0;
+  document.getElementById('tm-active').classList.toggle('on', !!(t.isActive ?? t.is_active));
+  const per = (() => { try { return JSON.parse(t.billingPeriods || '["monthly"]'); } catch { return ['monthly']; } })();
+  ['monthly','quarterly','yearly'].forEach(p => document.getElementById('tm-' + p).checked = per.includes(p));
+  openModal('tier-modal');
+}
+
+async function submitTier(e) {
+  e.preventDefault();
+  const id = document.getElementById('tm-id').value;
+  const periods = ['monthly','quarterly','yearly'].filter(p => document.getElementById('tm-' + p).checked);
+  if (!periods.length) periods.push('monthly');
+  const body = {
+    name: document.getElementById('tm-name').value,
+    tierCode: document.getElementById('tm-code').value || null,
+    sortOrder: Number(document.getElementById('tm-order').value) || 0,
+    priceIdr: Number(document.getElementById('tm-price').value) || 0,
+    monthlyCredits: Number(document.getElementById('tm-credits').value) || 0,
+    rolloverCap: Number(document.getElementById('tm-rollover').value) || 0,
+    concurrentRequests: Number(document.getElementById('tm-creq').value) || 1,
+    concurrentBatches: Number(document.getElementById('tm-cbatch').value) || 0,
+    queuePriorityFast: Number(document.getElementById('tm-qpf').value) || 0,
+    queuePriorityStd: Number(document.getElementById('tm-qps').value) || 0,
+    billingPeriods: periods,
+    isActive: document.getElementById('tm-active').classList.contains('on')
+  };
+  if (id) body.id = id;
+  try {
+    const method = id ? 'PUT' : 'POST';
+    const res = await fetch(`${API_BASE}/api/admin/tiers`, { method, headers: {'Content-Type':'application/json'}, body: JSON.stringify(body) });
+    if (res.ok) { closeModal('tier-modal'); showToast(id ? 'Tier updated' : 'Tier created'); loadTiers(); loadTierOptions(); }
+    else { const err = await res.json(); showToast(err.error || 'Error', 'error'); }
+  } catch(e) { showToast('Network error', 'error'); }
 }
 
 /* ── Catalog (merged model + provider mappings) ── */
@@ -861,15 +1128,16 @@ function editCatalog(id) {
 }
 
 function mappingRowHtml(i, r) {
+  const selectedProvider = r.providerName || r.provider_name || '';
   return `
     <tr data-index="${i}">
-      <td><select class="mapping-input" data-field="providerName">${PROVIDERS.map(p => `<option value="${p}" ${(r.providerName||r.provider_name||'')===p?'selected':''}>${p}</option>`).join('')}</select></td>
-      <td><input type="text" class="mapping-input" data-field="providerModelId" value="${r.providerModelId||r.backendModelId||r.BACKEND_MODEL_ID||r.provider_model_id||''}" placeholder="backend model id"></td>
-      <td><input type="number" class="mapping-input" data-field="contextWindow" value="${r.contextWindow||r.providerContextWindow||r.context_window||r.PROVIDER_CONTEXT_WINDOW||''}" placeholder="tokens"></td>
-      <td><input type="number" class="mapping-input" data-field="priority" value="${r.priority||0}"></td>
-      <td><input type="number" class="mapping-input" data-field="inMultiplier" value="${r.inMultiplier||r.in_multiplier||''}" step="0.1" placeholder="inherit"></td>
-      <td><input type="number" class="mapping-input" data-field="outMultiplier" value="${r.outMultiplier||r.out_multiplier||''}" step="0.1" placeholder="inherit"></td>
-      <td><input type="text" class="mapping-input" data-field="allowedParams" value="${(r.allowedParams?Object.keys(r.allowedParams).join(','):'')}" placeholder="param1,param2"></td>
+      <td><select class="mapping-input provider-select" data-field="providerName">${providerOptions(selectedProvider)}</select></td>
+      <td><input type="text" class="mapping-input" data-field="providerModelId" value="${escapeHtml(r.providerModelId||r.backendModelId||r.BACKEND_MODEL_ID||r.provider_model_id||'')}" placeholder="backend model id"></td>
+      <td><input type="number" class="mapping-input" data-field="contextWindow" value="${escapeHtml(r.contextWindow||r.providerContextWindow||r.context_window||r.PROVIDER_CONTEXT_WINDOW||'')}" placeholder="tokens"></td>
+      <td><input type="number" class="mapping-input" data-field="priority" value="${escapeHtml(r.priority||0)}"></td>
+      <td><input type="number" class="mapping-input" data-field="inMultiplier" value="${escapeHtml(r.inMultiplier||r.in_multiplier||'')}" step="0.1" placeholder="inherit"></td>
+      <td><input type="number" class="mapping-input" data-field="outMultiplier" value="${escapeHtml(r.outMultiplier||r.out_multiplier||'')}" step="0.1" placeholder="inherit"></td>
+      <td><input type="text" class="mapping-input" data-field="allowedParams" value="${escapeHtml(r.allowedParams?Object.keys(r.allowedParams).join(','):'')}" placeholder="param1,param2"></td>
       <td><input type="checkbox" class="mapping-input" data-field="supportsBatch" ${(r.supportsBatch||r.supports_batch)?'checked':''}></td>
       <td><input type="checkbox" class="mapping-input" data-field="isActive" ${(r.isActive!==false && r.is_active!==0)?'checked':''}></td>
       <td><button type="button" class="ib del" onclick="this.closest('tr').remove()"><span class="ms">delete</span></button></td>
@@ -880,10 +1148,7 @@ function mappingRowHtml(i, r) {
 function addMappingRow() {
   const tbody = document.getElementById('mappings-tbody');
   const i = tbody.children.length;
-  const tr = document.createElement('tr');
-  tr.setAttribute('data-index', i);
-  tr.innerHTML = mappingRowHtml(i, {});
-  tbody.appendChild(tr);
+  tbody.insertAdjacentHTML('beforeend', mappingRowHtml(i, {}));
 }
 
 async function submitCatalog(e) {
@@ -946,6 +1211,114 @@ async function submitCatalog(e) {
   } catch (e) { showToast('Network error','error'); }
 }
 
+async function loadProviderMultipliers() {
+  const tbody = document.getElementById('provider-multipliers-tbody');
+  if (!tbody) return;
+  tbody.innerHTML = '<tr><td colspan="8"><div class="state-empty"><div class="spin"></div></div></td></tr>';
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/providers?action=multipliers`);
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Failed to load providers');
+    PROVIDERS = Array.isArray(data.providers) ? data.providers : PROVIDERS;
+    providerMultipliers = Array.isArray(data.multipliers) ? data.multipliers : [];
+    renderProviderMultipliers();
+  } catch (e) {
+    tbody.innerHTML = `<tr><td colspan="8"><div class="state-empty">${escapeHtml(e.message || 'Could not load provider multipliers')}</div></td></tr>`;
+  }
+}
+
+function providerMultiplierRowHtml(row = {}) {
+  const id = row.id || '';
+  const providerName = row.providerName || row.provider_name || (PROVIDERS[0] || '');
+  const isActive = row.isActive !== false && row.is_active !== 0;
+  return `
+    <tr data-id="${escapeHtml(id)}">
+      <td><select class="provider-mult-input provider-select" data-field="providerName">${providerOptions(providerName)}</select></td>
+      <td><input type="number" class="provider-mult-input mono-input" data-field="contextThresholdTokens" value="${escapeHtml(row.contextThresholdTokens ?? row.context_threshold_tokens ?? 0)}" min="0" step="1000"></td>
+      <td><input type="number" class="provider-mult-input" data-field="multiplierIn" value="${escapeHtml(row.multiplierIn ?? row.multiplier_in ?? 1)}" min="0" step="0.01"></td>
+      <td><input type="number" class="provider-mult-input" data-field="multiplierOut" value="${escapeHtml(row.multiplierOut ?? row.multiplier_out ?? 1)}" min="0" step="0.01"></td>
+      <td><input type="number" class="provider-mult-input" data-field="multiplierCacheRead" value="${escapeHtml(row.multiplierCacheRead ?? row.multiplier_cache_read ?? 1)}" min="0" step="0.01"></td>
+      <td><input type="number" class="provider-mult-input" data-field="multiplierCacheWrite" value="${escapeHtml(row.multiplierCacheWrite ?? row.multiplier_cache_write ?? 1)}" min="0" step="0.01"></td>
+      <td><label class="toggle small ${isActive ? 'on' : ''}" onclick="this.classList.toggle('on')" data-field="isActive"><span></span></label></td>
+      <td>
+        <button class="ib" onclick="saveProviderMultiplier(this)"><span class="ms">save</span></button>
+        <button class="ib del" onclick="deleteProviderMultiplier(this)"><span class="ms">delete</span></button>
+      </td>
+    </tr>
+  `;
+}
+
+function renderProviderMultipliers() {
+  const tbody = document.getElementById('provider-multipliers-tbody');
+  const count = document.getElementById('provider-count');
+  if (count) count.textContent = PROVIDERS.length;
+  if (!providerMultipliers.length) {
+    tbody.innerHTML = '<tr><td colspan="8"><div class="state-empty">No provider context multipliers yet. Add base threshold 0 or any context threshold.</div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = providerMultipliers.map(row => providerMultiplierRowHtml(row)).join('');
+}
+
+function addProviderMultiplierRow(threshold = 0) {
+  const tbody = document.getElementById('provider-multipliers-tbody');
+  if (!tbody) return;
+  if (tbody.querySelector('.state-empty')) tbody.innerHTML = '';
+  tbody.insertAdjacentHTML('beforeend', providerMultiplierRowHtml({ contextThresholdTokens: threshold }));
+}
+
+function addDefaultProviderMultipliers() {
+  [0, 33000, 200000, 1000000].forEach(threshold => addProviderMultiplierRow(threshold));
+}
+
+async function saveProviderMultiplier(btn) {
+  const tr = btn.closest('tr');
+  const get = field => {
+    const el = tr.querySelector(`[data-field="${field}"]`);
+    if (!el) return null;
+    if (el.classList.contains('toggle')) return el.classList.contains('on');
+    return el.value;
+  };
+  const body = {
+    id: tr.dataset.id || null,
+    providerName: get('providerName'),
+    contextThresholdTokens: Number(get('contextThresholdTokens')) || 0,
+    multiplierIn: Number(get('multiplierIn')) || 1,
+    multiplierOut: Number(get('multiplierOut')) || 1,
+    multiplierCacheRead: Number(get('multiplierCacheRead')) || 1,
+    multiplierCacheWrite: Number(get('multiplierCacheWrite')) || 1,
+    isActive: !!get('isActive')
+  };
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/providers`, {
+      method: body.id ? 'PUT' : 'POST',
+      headers: {'Content-Type':'application/json'},
+      body: JSON.stringify(body)
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Save failed');
+    showToast('Provider multiplier saved');
+    loadProviderMultipliers();
+  } catch (e) {
+    showToast(e.message || 'Save failed', 'error');
+  }
+}
+
+async function deleteProviderMultiplier(btn) {
+  const tr = btn.closest('tr');
+  const id = tr.dataset.id;
+  if (!id) { tr.remove(); return; }
+  if (!confirm('Deactivate this provider multiplier row?')) return;
+  try {
+    const res = await fetch(`${API_BASE}/api/admin/providers?id=${encodeURIComponent(id)}`, { method: 'DELETE' });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.error || 'Delete failed');
+    showToast('Provider multiplier deactivated');
+    loadProviderMultipliers();
+  } catch (e) {
+    showToast(e.message || 'Delete failed', 'error');
+  }
+}
+
 async function deleteCatalog(id) {
   if (!confirm('Delete this model?')) return;
   try {
@@ -1001,10 +1374,9 @@ function editRecharge(id) {
   document.getElementById('rm-credits').value = p.CREDITS||p.credits||0;
   document.getElementById('rm-price').value = p.PRICE_IDR||p.price_idr||p.PRICEIDR||p.priceIdr||0;
   document.getElementById('rm-discount').value = p.DISCOUNT_PCT||p.discount_pct||p.DISCOUNTPCT||p.discountPct||0;
-  // Set tier select
+  // Set tier select (value is now the tier name string)
   const tierName = p.TARGET_TIER_NAME||p.target_tier_name||p.TARGETTIERNAME||p.targetTierName||'';
-  const tierIdx = TIER_LEVELS.indexOf(tierName);
-  document.getElementById('rm-tier').value = tierIdx >= 0 ? tierIdx : 0;
+  document.getElementById('rm-tier').value = tierName;
   // Set expiry
   const exp = p.EXPIRY_DATE||p.expiry_date||p.EXPIRYDATE||p.expiryDate;
   if (exp) {
@@ -1025,7 +1397,7 @@ async function submitRecharge(e) {
     credits: Number(document.getElementById('rm-credits').value),
     priceIdr: Number(document.getElementById('rm-price').value),
     discountPct: Number(document.getElementById('rm-discount').value) || 0,
-    targetTierName: TIER_LEVELS[document.getElementById('rm-tier').value] || null,
+    targetTierName: document.getElementById('rm-tier').value || null,
     expiryDate: document.getElementById('rm-expires').value || null,
     isActive: document.getElementById('rm-active').classList.contains('on')
   };
@@ -1047,29 +1419,33 @@ async function deleteRecharge(id) {
   } catch (e) { showToast('Network error','error'); }
 }
 
-/* ── Announcements ── */
+/* -- Announcements -- */
 async function loadAnnouncements() {
   const tbody = document.getElementById('ann-tbody');
-  tbody.innerHTML = '<tr><td colspan="7"><div class="state-empty"><div class="spin"></div></div></td></tr>';
+  tbody.innerHTML = '<tr><td colspan="6"><div class="state-empty"><div class="spin"></div></div></td></tr>';
   try {
     const res = await fetch(`${API_BASE}/api/admin/announcements`);
     const data = await res.json();
-    if (!Array.isArray(data)) { tbody.innerHTML = '<tr><td colspan="7">Error</td></tr>'; return; }
+    if (!Array.isArray(data)) { tbody.innerHTML = '<tr><td colspan="6">Error</td></tr>'; return; }
     _announcements = data;
-    tbody.innerHTML = data.map(a => `
-      <tr>
-        <td><strong>${a.TITLE||a.title||''}</strong></td>
-        <td><span class="badge badge-${(a.TYPE||a.type||'info')==='error'?'red':(a.TYPE||a.type||'info')==='warning'?'orange':(a.TYPE||a.type||'info')==='success'?'green':'blue'}">${a.TYPE||a.type||'info'}</span></td>
-        <td>${(a.IS_BANNER||a.is_banner)?'<span class="badge badge-green">Yes</span>':'No'}</td>
-        <td>${(a.IS_URGENT||a.is_urgent)?'<span class="badge badge-red">Yes</span>':'No'}</td>
-        <td>${a.EXPIRES_AT||a.expires_at?fmtDate(a.EXPIRES_AT||a.expires_at):'Never'}</td>
-        <td><span class="badge ${(a.IS_ACTIVE||a.is_active)?'badge-green':'badge-red'}">${(a.IS_ACTIVE||a.is_active)?'Active':'Inactive'}</span></td>
+    tbody.innerHTML = data.map(a => {
+      const t = a.type || a.TYPE || 'info';
+      const typeBadgeClass = t==='error'?'badge-red':t==='warning'?'badge-orange':t==='success'?'badge-green':'badge-blue';
+      const typeIcon = t==='error'?'error':t==='warning'?'warning':t==='success'?'check_circle':'info';
+      const isActive = !!(a.isActive ?? a.IS_ACTIVE ?? a.is_active);
+      return `
+      <tr style="${!isActive ? 'opacity:0.45' : ''}">
+        <td><strong>${a.title || a.TITLE || ''}</strong></td>
+        <td><span class="badge ${typeBadgeClass}"><span class="ms" style="font-size:13px;vertical-align:middle;margin-right:3px">${typeIcon}</span>${t}</span></td>
+        <td>${(a.isBanner || a.IS_BANNER || a.is_banner) ? '<span class="badge badge-green">Yes</span>' : 'No'}</td>
+        <td>${(a.expiresAt || a.EXPIRES_AT || a.expires_at) ? fmtDate(a.expiresAt || a.EXPIRES_AT || a.expires_at) : 'Never'}</td>
+        <td><span class="badge ${isActive ? 'badge-green' : 'badge-red'}">${isActive ? 'Active' : 'Inactive'}</span></td>
         <td>
-          <button class="ib" onclick="editAnnouncement(${a.ID||a.id})"><span class="ms">edit</span></button>
-          <button class="ib del" onclick="deleteAnnouncement(${a.ID||a.id})"><span class="ms">delete</span></button>
+          <button class="ib" onclick="editAnnouncement(${a.id || a.ID})"><span class="ms">edit</span></button>
+          <button class="ib del" onclick="deleteAnnouncement(${a.id || a.ID})"><span class="ms">delete</span></button>
         </td>
       </tr>
-    `).join('');
+    `}).join('');
   } catch (e) { console.error(e); }
 }
 
@@ -1079,8 +1455,27 @@ function openAnnModal() {
   document.getElementById('ann-form').reset();
   document.getElementById('am-active').classList.add('on');
   document.getElementById('am-banner').classList.remove('on');
-  document.getElementById('am-urgent').classList.remove('on');
+  updateAnnTypeHint();
   openModal('ann-modal');
+}
+
+function updateAnnTypeHint() {
+  const t = document.getElementById('am-type')?.value || 'info';
+  const configs = {
+    error:   { icon:'error',         label:'Error / Outage', bg:'rgba(248,81,73,.18)',  color:'#f85149' },
+    warning: { icon:'warning',        label:'Warning',        bg:'rgba(255,166,0,.18)',  color:'#ffa600' },
+    success: { icon:'check_circle',   label:'Success',        bg:'rgba(46,160,67,.18)', color:'#2ea043' },
+    info:    { icon:'info',           label:'Info',           bg:'rgba(88,166,255,.18)',color:'#58a6ff' }
+  };
+  const c = configs[t] || configs.info;
+  const hint = document.getElementById('am-type-hint');
+  if (!hint) return;
+  hint.style.setProperty('--hint-bg', c.bg);
+  hint.style.setProperty('--hint-color', c.color);
+  hint.style.background = c.bg;
+  hint.style.color = c.color;
+  document.getElementById('am-type-icon').textContent = c.icon;
+  document.getElementById('am-type-label').textContent = c.label;
 }
 
 function editAnnouncement(id) {
@@ -1099,20 +1494,21 @@ function editAnnouncement(id) {
   }
   document.getElementById('am-active').classList.toggle('on', !!(a.IS_ACTIVE||a.is_active));
   document.getElementById('am-banner').classList.toggle('on', !!(a.IS_BANNER||a.is_banner));
-  document.getElementById('am-urgent').classList.toggle('on', !!(a.IS_URGENT||a.is_urgent));
+  updateAnnTypeHint();
 }
 
 async function submitAnn(e) {
   e.preventDefault();
   const id = document.getElementById('am-id').value;
+  const annType = document.getElementById('am-type').value;
   const body = {
     title: document.getElementById('am-title-f').value,
     content: document.getElementById('am-content').value,
-    type: document.getElementById('am-type').value,
+    type: annType,
     expiresAt: document.getElementById('am-expires').value || null,
     isActive: document.getElementById('am-active').classList.contains('on'),
     isBanner: document.getElementById('am-banner').classList.contains('on'),
-    isUrgent: document.getElementById('am-urgent').classList.contains('on')
+    isUrgent: annType === 'error'
   };
   if (id) body.id = id;
   try {
@@ -1139,13 +1535,17 @@ async function loadBanners() {
     const data = await res.json();
     const banners = (Array.isArray(data)?data:[]).filter(a => (a.IS_BANNER||a.is_banner) && (a.IS_ACTIVE||a.is_active));
     const container = document.getElementById('banners');
-    container.innerHTML = banners.slice(0,3).map(b => `
-      <div class="banner ${(b.IS_URGENT||b.is_urgent)?'urgent':'info'}" onclick="location.href='#announcements'">
-        <span class="ms">${(b.IS_URGENT||b.is_urgent)?'warning':'info'}</span>
+    container.innerHTML = banners.slice(0,3).map(b => {
+      const bt = b.TYPE||b.type||'info';
+      const bannerClass = bt==='error'?'urgent':bt==='warning'?'warning':bt==='success'?'success':'info';
+      const bannerIcon  = bt==='error'?'error':bt==='warning'?'warning':bt==='success'?'check_circle':'info';
+      return `
+      <div class="banner ${bannerClass}" onclick="location.href='#announcements'">
+        <span class="ms">${bannerIcon}</span>
         <span>${b.TITLE||b.title||''}</span>
         <button class="banner-close" onclick="event.stopPropagation();dismissBanner(${b.ID||b.id},this)"><span class="ms">close</span></button>
       </div>
-    `).join('');
+    `}).join('');
   } catch (e) {}
 }
 
@@ -1393,6 +1793,20 @@ async function loadUserRecharge() {
   } catch (e) { console.error(e); }
 }
 
+async function selectTier(tierId, tierName, period) {
+  const msg = 'Switch to ' + tierName + ' plan?\n\nChanges apply at the start of your next ' + (period || 'monthly') + ' billing cycle.';
+  if (!confirm(msg)) return;
+  try {
+    const userId = sessionUser && (sessionUser.userId || sessionUser.id);
+    const res = await fetch(`${API_BASE}/api/admin/users`, {
+      method: 'PUT', headers: {'Content-Type':'application/json'},
+      body: JSON.stringify({ action: 'update-tier', userId, newTierId: tierId })
+    });
+    if (res.ok) { showToast('Switched to ' + tierName + '!'); loadUserOverview(); }
+    else { const err = await res.json(); showToast(err.error || 'Could not change plan', 'error'); }
+  } catch(e) { showToast('Network error', 'error'); }
+}
+
 async function buyRecharge(packageId) {
   try {
     const res = await fetch(`${API_BASE}/api/user/recharge`, { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({packageId}) });
@@ -1428,10 +1842,14 @@ function fmtDate(d) {
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});
 }
 
-/* ── Init ── */
+/* -- Init -- */
 document.addEventListener('DOMContentLoaded', () => {
   initAuth();
   loadBanners();
+  loadProviderList();
+  loadTierOptions();
   go('overview');
 });
-</script></body></html>
+
+</script>
+</body></html>

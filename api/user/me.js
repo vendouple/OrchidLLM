@@ -39,13 +39,16 @@ export default async function handler(req, res) {
                 tierName: credits.TIER_NAME,
                 level: credits.TIER_LEVEL,
                 monthlyCredits: credits.MONTHLY_CREDITS,
-                modelAccessLevel: credits.MODEL_ACCESS_LEVEL
+                modelAccessLevel: credits.MODEL_ACCESS_LEVEL,
+                sortOrder: credits.SORT_ORDER,
+                effectiveSortOrder: credits.CANONICAL_SORT_ORDER ?? credits.SORT_ORDER
             },
             credits: {
                 balance: credits.CREDITS_BALANCE,
                 rollover: credits.CREDITS_ROLLOVER,
                 billingCycleStart: credits.BILLING_CYCLE_START,
                 billingCycleEnd: credits.BILLING_CYCLE_END,
+                billingPeriod: credits.BILLING_PERIOD || 'monthly',
                 rechargeBalances: credits.recharge_balances.map(rb => ({
                     id: rb.ID,
                     tierId: rb.TIER_ID,
