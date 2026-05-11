@@ -23,30 +23,33 @@
     }
   ],
   "routes": [
-    { "src": "/api/auth/callback/github", "dest": "/api/auth/callback/github.js" },
-    { "src": "/api/auth/callback", "dest": "/api/auth/callback.js" },
-    { "src": "/api/auth/github", "dest": "/api/auth/github.js" },
-    { "src": "/api/auth/session", "dest": "/api/auth/session.js" },
-    { "src": "/api/auth/logout", "dest": "/api/auth/logout.js" },
-    { "src": "/api/chat/completions", "dest": "/api/chat/completions.js" },
-    { "src": "/api/models", "dest": "/api/models.js" },
-    { "src": "/api/queue/status", "dest": "/api/queue/status.js" },
-    { "src": "/api/queue/([^/]+)", "dest": "/api/queue/status.js?id=$1" },
-    { "src": "/api/ping", "dest": "/api/ping.js" },
-    { "src": "/api/images/(.*)", "dest": "/api/images/$1.js" },
-    { "src": "/api/admin/catalog", "dest": "/api/admin/catalog.js" },
+    { "src": "/api/v1/models/([^/]+)", "dest": "/api/v1/models.js?model_id=$1" },
+    { "src": "/api/v1/(.*)", "dest": "/api/v1/$1.js" },
+    { "src": "/api/auth/(.*)", "dest": "/api/auth/$1.js" },
     { "src": "/api/admin/(.*)", "dest": "/api/admin/$1.js" },
     { "src": "/api/user/(.*)", "dest": "/api/user/$1.js" },
-    { "src": "/api/announcements", "dest": "/api/announcements.js" },
-    { "src": "/admin", "dest": "/admin.html" },
-    { "src": "/user", "dest": "/user.html" },
-    { "src": "/docs", "dest": "/docs.html" },
+    { "src": "/api/demo/(.*)", "dest": "/api/demo/$1.js" },
+    { "src": "/api/cron/(.*)", "dest": "/api/cron/$1.js" },
+    { "src": "/api/models", "dest": "/api/models.js" },
+    { "src": "/api/chat/completions", "dest": "/api/chat/completions.js" },
+    { "src": "/api/images/generations", "dest": "/api/images/generations.js" },
+    { "src": "/api/audio/speech", "dest": "/api/audio/speech.js" },
+    { "src": "/api/audio/transcriptions", "dest": "/api/audio/transcriptions.js" },
+    { "src": "/api/video/generations", "dest": "/api/video/generations.js" },
     { "src": "/(.*)", "dest": "/$1" }
   ],
   "crons": [
     {
-      "path": "/api/ping",
-      "schedule": "0 12 * * *"
+      "path": "/api/cron/queue-worker",
+      "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/cleanup-demo",
+      "schedule": "0 3 * * *"
+    },
+    {
+      "path": "/api/cron/rollover",
+      "schedule": "0 4 * * *"
     }
   ]
 }

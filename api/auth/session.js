@@ -1,53 +1,45 @@
 /**
- * /api/auth/session - Session Check
- * 
- * Returns current session info if authenticated.
- * Validates the HMAC-signed session cookie — no DB required.
+ * GET /api/auth/session — Check current session status
+ *
+ * Returns user info if authenticated, or { authenticated: false }.
  */
-
-import { validateSession, getSessionFromCookie } from '../../lib/auth.js';
+import { resolveAuthContext, applyCors, sendJson } from '../../lib/api-helpers.js';
 
 export default async function handler(req, res) {
-    if (req.method !== 'GET') {
-        return res.status(405).json({ error: 'Method not allowed' });
+    applyCors(req, res);
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
+
+    const auth = await resolveAuthContext(req);
+
+    if (!auth.authenticated || auth.type === 'anonymous') {
+        return sendJson(res, 200, { authenticated: false });
     }
-    
-    try {
-        // Get session from cookie
-        const sessionId = getSessionFromCookie(req);
-        
-        if (!sessionId) {
-            return res.status(200).json({ 
-                authenticated: false,
-                message: 'No session found'
-            });
-        }
-        
-        // Validate session (stateless — no DB lookup)
-        const session = await validateSession(sessionId);
-        
-        if (!session) {
-            return res.status(200).json({ 
-                authenticated: false,
-                message: 'Session expired or invalid'
-            });
-        }
-        
-        res.status(200).json({
-            authenticated: true,
-            isAdmin: session.isAdmin,
-            user: {
-                username: session.githubUsername,
-                login: session.githubUsername,
-                avatar: session.githubAvatar,
-                avatar_url: session.githubAvatar,
-                isAdmin: session.isAdmin === true,
-                is_admin: session.isAdmin === true
-            },
-            expiresAt: session.expiresAt
-        });
-    } catch (error) {
-        console.error('Session check error:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
+
+    const payload = {
+        authenticated: true,
+        type: auth.type,
+        isAdmin: auth.isAdmin || false,
+        modelAccessTier: auth.modelAccessTier || 'free',
+    };
+
+    if (auth.type === 'session' && auth.user) {
+        payload.user = {
+            id: auth.user.ID,
+            username: auth.user.USERNAME,
+            displayName: auth.user.DISPLAY_NAME,
+            email: auth.user.EMAIL,
+            avatarUrl: auth.user.AVATAR_URL,
+            role: auth.user.ROLE,
+            tierId: auth.tierId,
+            tierName: auth.tierName,
+        };
+    } else if (auth.type === 'session' && auth.session) {
+        payload.user = {
+            githubUsername: auth.session.githubUsername,
+            avatarUrl: auth.session.githubAvatar,
+            isAdmin: auth.session.isAdmin,
+        };
     }
+
+    return sendJson(res, 200, payload);
 }

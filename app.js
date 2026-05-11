@@ -133,13 +133,17 @@ export function getImageUrl(prompt, modelId, extras = {}, apiMode = 'demo', byop
 
 export async function fetchModelCatalog() {
   const fetchOptions = location.protocol === 'file:' ? {} : { cache: 'no-cache' };
-
-  const res = await fetch(`${API_BASE}/api/models`, fetchOptions);
-  if (!res.ok) {
-    const error = await res.json().catch(() => ({}));
-    throw new Error(error.message || 'Unable to read models catalog');
+  
+  // Try backend first, fallback to local
+  try {
+    const res = await fetch(`${API_BASE}/api/models`, fetchOptions);
+    if (res.ok) return res.json();
+  } catch (e) {
+    // Fallback to local
   }
-
+  
+  const res = await fetch('./models.json', fetchOptions);
+  if (!res.ok) throw new Error('Unable to read models catalog');
   return res.json();
 }
 

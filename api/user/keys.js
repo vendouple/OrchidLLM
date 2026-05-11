@@ -1,201 +1,114 @@
 /**
- * /api/user/keys
- * Manage personal API keys.
- * Supports: name, allowed_models (from catalog by model_id or 'all'),
- * credit_cap_amount + credit_cap_period (daily/weekly/monthly/none).
- * 'none' = cap is set but NEVER auto-refreshes (user must manually reset).
+ * /api/user/keys — API Key Management
+ * GET    → list user's keys
+ * POST   → create new key
+ * PUT?id → update key (label, limits, whitelist, toggles)
+ * DELETE?id → delete key
+ * POST?action=rotate&id=N → rotate key
  */
+import { withAuth } from '../../lib/middleware.js';
+import { executeQuery } from '../../lib/oracle.js';
+import { generateApiKey } from '../../lib/keys.js';
+import { sendJson, sendError, readJsonBody } from '../../lib/api-helpers.js';
 
-import { validateSession, getSessionFromCookie } from '../../lib/auth.js';
-import { executeQuery, closePool } from '../../lib/oracle.js';
-import crypto from 'crypto';
+async function handler(req, res) {
+    const userId = req.auth?.userId;
+    if (!userId) return sendError(res, 401, 'no_user', 'No user ID.');
+    const id = req.query?.id;
 
-const MAX_KEYS = 5;
-
-function normalizeNumber(value, fallback) {
-    if (value === undefined || value === null || value === '') return fallback;
-    const num = Number(value);
-    return Number.isFinite(num) ? num : fallback;
-}
-
-function normalizeCapPeriod(value) {
-    const valid = ['daily', 'weekly', 'monthly', 'none'];
-    const v = String(value || '').trim().toLowerCase();
-    return valid.includes(v) ? v : 'none';
-}
-
-function normalizeAllowedModels(value) {
-    if (!value || value === 'all' || value === '*') return '*';
-    if (Array.isArray(value)) {
-        const ids = value.map(v => String(v || '').trim()).filter(Boolean);
-        return ids.length > 0 ? JSON.stringify(ids) : '*';
+    if (req.method === 'GET') {
+        const r = await executeQuery(`
+            SELECT id, key_preview, label, is_active, credit_limit_total, credit_limit_daily,
+                credit_limit_reset, credit_used_today, credit_used_total, model_whitelist,
+                expose_balance, created_at, last_used_at, expires_at
+            FROM api_keys WHERE user_id = :userId ORDER BY created_at DESC
+        `, { userId });
+        return sendJson(res, 200, { data: r.rows });
     }
-    if (typeof value === 'string') {
-        try {
-            const parsed = JSON.parse(value);
-            if (Array.isArray(parsed)) return normalizeAllowedModels(parsed);
-        } catch { /* ignore */ }
-        return value.trim() || '*';
-    }
-    return '*';
-}
 
-export default async function handler(req, res) {
-    try {
-        const sessionId = getSessionFromCookie(req);
-        const session = await validateSession(sessionId);
+    if (req.method === 'POST') {
+        const action = req.query?.action;
 
-        if (!session || !session.userId) {
-            return res.status(401).json({ error: 'Unauthorized' });
-        }
-
-        // ── GET ──────────────────────────────────────────────────────────────
-        if (req.method === 'GET') {
-            const result = await executeQuery(`
-                SELECT
-                    id, key, name, is_active,
-                    daily_credit_limit, monthly_credit_limit, overall_credit_limit,
-                    credit_cap_amount, credit_cap_period, credit_cap_reset_at,
-                    allowed_models,
-                    created_at, last_used, usage_count,
-                    total_input_tokens, total_output_tokens
-                FROM api_keys
-                WHERE user_id = :userId
-                ORDER BY created_at DESC
-            `, { userId: session.userId });
-
-            const rows = (result.rows || []).map(row => ({
-                id: row.ID,
-                key: row.KEY,
-                name: row.NAME,
-                isActive: row.IS_ACTIVE === 1,
-                dailyCreditLimit: row.DAILY_CREDIT_LIMIT,
-                monthlyCreditLimit: row.MONTHLY_CREDIT_LIMIT,
-                overallCreditLimit: row.OVERALL_CREDIT_LIMIT,
-                creditCapAmount: row.CREDIT_CAP_AMOUNT,
-                creditCapPeriod: row.CREDIT_CAP_PERIOD || 'none',
-                creditCapResetAt: row.CREDIT_CAP_RESET_AT,
-                allowedModels: row.ALLOWED_MODELS === '*' ? 'all' : row.ALLOWED_MODELS,
-                createdAt: row.CREATED_AT,
-                lastUsed: row.LAST_USED,
-                usageCount: row.USAGE_COUNT,
-                totalInputTokens: row.TOTAL_INPUT_TOKENS,
-                totalOutputTokens: row.TOTAL_OUTPUT_TOKENS
-            }));
-
-            return res.status(200).json(rows);
-        }
-
-        // ── POST ─────────────────────────────────────────────────────────────
-        if (req.method === 'POST') {
-            const countResult = await executeQuery(
-                `SELECT COUNT(*) AS cnt FROM api_keys WHERE user_id = :userId AND is_active = 1`,
-                { userId: session.userId }
-            );
-            if ((countResult.rows?.[0]?.CNT || 0) >= MAX_KEYS) {
-                return res.status(400).json({ error: `Maximum of ${MAX_KEYS} active personal keys allowed` });
-            }
-
-            const body = req.body || {};
-            const {
-                name,
-                allowedModels,
-                creditCapAmount,
-                creditCapPeriod,
-                dailyLimit,
-                monthlyLimit,
-                overallLimit
-            } = body;
-
-            const rawKey = 'sk-' + crypto.randomBytes(24).toString('hex');
-            const keyHash = crypto.createHash('sha256').update(rawKey).digest('hex');
-
+        if (action === 'rotate' && id) {
+            // Rotate: generate new key, keep config
+            const existing = await executeQuery(
+                'SELECT label, credit_limit_total, credit_limit_daily, credit_limit_reset, model_whitelist, expose_balance FROM api_keys WHERE id = :id AND user_id = :userId',
+                { id, userId });
+            if (!existing.rows.length) return sendError(res, 404, 'not_found', 'Key not found.');
+            const row = existing.rows[0];
+            const { key, hash, preview } = generateApiKey();
             await executeQuery(`
-                INSERT INTO api_keys (
-                    key, name, key_type, user_id,
-                    daily_credit_limit, monthly_credit_limit, overall_credit_limit,
-                    credit_cap_amount, credit_cap_period,
-                    allowed_models,
-                    is_active, created_by
-                ) VALUES (
-                    :keyHash, :name, 'user', :userId,
-                    :dailyLimit, :monthlyLimit, :overallLimit,
-                    :creditCapAmount, :creditCapPeriod,
-                    :allowedModels,
-                    1, :createdBy
-                )
-            `, {
-                keyHash,
-                name: String(name || 'My Key').trim().slice(0, 100),
-                userId: session.userId,
-                dailyLimit: normalizeNumber(dailyLimit, -1),
-                monthlyLimit: normalizeNumber(monthlyLimit, -1),
-                overallLimit: normalizeNumber(overallLimit, -1),
-                creditCapAmount: normalizeNumber(creditCapAmount, -1),
-                creditCapPeriod: normalizeCapPeriod(creditCapPeriod),
-                allowedModels: normalizeAllowedModels(allowedModels),
-                createdBy: session.githubUsername
-            });
-
-            return res.status(201).json({ success: true, key: rawKey });
-        }
-
-        // ── PUT ─────────────────────────────────────────────────────────────
-        if (req.method === 'PUT') {
-            const {
-                id,
-                name,
-                allowedModels,
-                creditCapAmount,
-                creditCapPeriod,
-                dailyLimit,
-                monthlyLimit,
-                overallLimit
-            } = req.body || {};
-            if (!id) return res.status(400).json({ error: 'id required' });
-
-            await executeQuery(`
-                UPDATE api_keys SET
-                    name = :name,
-                    daily_credit_limit = :dailyLimit,
-                    monthly_credit_limit = :monthlyLimit,
-                    overall_credit_limit = :overallLimit,
-                    credit_cap_amount = :creditCapAmount,
-                    credit_cap_period = :creditCapPeriod,
-                    allowed_models = :allowedModels
+                UPDATE api_keys SET key_hash = :hash, key_preview = :preview,
+                    credit_used_today = 0, last_used_at = NULL
                 WHERE id = :id AND user_id = :userId
-            `, {
-                id,
-                userId: session.userId,
-                name: String(name || 'My Key').trim().slice(0, 100),
-                dailyLimit: normalizeNumber(dailyLimit, -1),
-                monthlyLimit: normalizeNumber(monthlyLimit, -1),
-                overallLimit: normalizeNumber(overallLimit, -1),
-                creditCapAmount: normalizeNumber(creditCapAmount, -1),
-                creditCapPeriod: normalizeCapPeriod(creditCapPeriod),
-                allowedModels: normalizeAllowedModels(allowedModels)
-            });
-
-            return res.status(200).json({ success: true });
+            `, { hash, preview, id, userId });
+            return sendJson(res, 200, { key, preview, message: 'Key rotated. Save this — it won\'t be shown again.' });
         }
 
-        // ── DELETE ───────────────────────────────────────────────────────────
-        if (req.method === 'DELETE') {
-            const id = req.query.id || req.body?.id;
-            if (!id) return res.status(400).json({ error: 'id required' });
-
-            await executeQuery(
-                `UPDATE api_keys SET is_active = 0 WHERE id = :id AND user_id = :userId`,
-                { id, userId: session.userId }
-            );
-            return res.status(200).json({ success: true });
+        // Check key limit
+        const tierRes = await executeQuery(`
+            SELECT st.max_api_keys FROM user_subscriptions us
+            JOIN subscription_tiers st ON st.id = us.tier_id
+            WHERE us.user_id = :userId AND us.status = 'active'
+        `, { userId });
+        const maxKeys = tierRes.rows[0]?.MAX_API_KEYS ?? 3;
+        const countRes = await executeQuery(
+            'SELECT COUNT(*) AS cnt FROM api_keys WHERE user_id = :userId AND is_active = 1',
+            { userId });
+        if ((countRes.rows[0]?.CNT || 0) >= maxKeys) {
+            return sendError(res, 403, 'key_limit', `Your plan allows ${maxKeys} active keys.`);
         }
 
-        res.status(405).json({ error: 'Method not allowed' });
-    } catch (error) {
-        console.error('[user/keys] error:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
-    } finally {
-        await closePool();
+        const b = await readJsonBody(req);
+        const { key, hash, preview } = generateApiKey(b.prefix);
+        await executeQuery(`
+            INSERT INTO api_keys (user_id, key_hash, key_preview, label, credit_limit_total,
+                credit_limit_daily, credit_limit_reset, model_whitelist, expose_balance, expires_at)
+            VALUES (:userId, :hash, :preview, :label, :limitTotal, :limitDaily, :limitReset,
+                :whitelist, :expose, :expires)
+        `, {
+            userId, hash, preview,
+            label: b.label || 'My Key',
+            limitTotal: b.credit_limit_total ?? null,
+            limitDaily: b.credit_limit_daily ?? null,
+            limitReset: b.credit_limit_reset || 'daily',
+            whitelist: b.model_whitelist ? JSON.stringify(b.model_whitelist) : null,
+            expose: b.expose_balance ? 1 : 0,
+            expires: b.expires_at || null,
+        });
+        return sendJson(res, 201, { key, preview, message: 'Key created. Save this — it won\'t be shown again.' });
     }
+
+    if (req.method === 'PUT') {
+        if (!id) return sendError(res, 400, 'missing_id', 'id required.');
+        const b = await readJsonBody(req);
+        const sets = [];
+        const binds = { id, userId };
+        const fields = { label:'lb', credit_limit_total:'clt', credit_limit_daily:'cld',
+            credit_limit_reset:'clr', expose_balance:'eb', expires_at:'ea' };
+        for (const [col, bind] of Object.entries(fields)) {
+            if (b[col] !== undefined) {
+                binds[bind] = col === 'expose_balance' ? (b[col] ? 1 : 0) : b[col];
+                sets.push(`${col} = :${bind}`);
+            }
+        }
+        if (b.model_whitelist !== undefined) {
+            binds.mw = b.model_whitelist ? JSON.stringify(b.model_whitelist) : null;
+            sets.push('model_whitelist = :mw');
+        }
+        if (b.is_active !== undefined) { binds.ia = b.is_active ? 1 : 0; sets.push('is_active = :ia'); }
+        if (!sets.length) return sendError(res, 400, 'no_fields', 'No fields to update.');
+        await executeQuery(`UPDATE api_keys SET ${sets.join(', ')} WHERE id = :id AND user_id = :userId`, binds);
+        return sendJson(res, 200, { message: 'Key updated.' });
+    }
+
+    if (req.method === 'DELETE') {
+        if (!id) return sendError(res, 400, 'missing_id', 'id required.');
+        await executeQuery('DELETE FROM api_keys WHERE id = :id AND user_id = :userId', { id, userId });
+        return sendJson(res, 200, { message: 'Key deleted.' });
+    }
+
+    return sendError(res, 405, 'method_not_allowed', 'Method not allowed.');
 }
+
+export default withAuth(handler);

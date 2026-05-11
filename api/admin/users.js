@@ -1,473 +1,110 @@
 /**
- * /api/admin/users
- * Expanded user management with suspend/remove/manage plans/expiry extension and
- * bulk credit reset/refund-style operations with audit logging when available.
+ * /api/admin/users — User Management
+ * GET         → list users (paginated)
+ * GET?id=N    → single user with subscription + credits
+ * PUT?id=N    → update user (role, tier, credits, suspend)
  */
+import { withAdmin } from '../../lib/middleware.js';
+import { executeQuery } from '../../lib/oracle.js';
+import { sendJson, sendError, readJsonBody } from '../../lib/api-helpers.js';
 
-import { validateSession, getSessionFromCookie } from '../../lib/auth.js';
-import { executeQuery, closePool } from '../../lib/oracle.js';
-import { expireRechargesOnDowngrade, bulkAdjustCredits } from '../../lib/credits.js';
+async function handler(req, res) {
+    const id = req.query?.id;
+    const search = req.query?.search;
+    const limit = Math.min(Number(req.query?.limit || 50), 200);
+    const offset = Number(req.query?.offset || 0);
 
-async function requireAdmin(req, res) {
-    const sessionId = getSessionFromCookie(req);
-    const session = await validateSession(sessionId);
-
-    if (!session || !session.isAdmin) {
-        res.status(401).json({ error: 'Unauthorized' });
-        return null;
-    }
-
-    return session;
-}
-
-function normalizeString(value) {
-    return String(value || '').trim();
-}
-
-function normalizeNumber(value, fallback = null) {
-    if (value === undefined || value === null || value === '') return fallback;
-    const num = Number(value);
-    return Number.isFinite(num) ? num : fallback;
-}
-
-function parseDateOrNull(value) {
-    if (value === undefined || value === null || value === '') return null;
-    const parsed = new Date(value);
-    return Number.isNaN(parsed.getTime()) ? null : parsed;
-}
-
-function isMissingTableError(error) {
-    const message = String(error?.message || '').toLowerCase();
-    return message.includes('ora-00942') || message.includes('table or view does not exist');
-}
-
-async function adminAuditTablesAvailable() {
-    try {
-        await executeQuery(`SELECT 1 FROM admin_user_operation_batches WHERE 1 = 0`);
-        return true;
-    } catch (error) {
-        if (isMissingTableError(error)) return false;
-        throw error;
-    }
-}
-
-async function logAdminUserOperation({
-    batchId = null,
-    userId,
-    operationType,
-    previousTierName = null,
-    newTierName = null,
-    previousCreditsBalance = null,
-    newCreditsBalance = null,
-    previousCreditsRollover = null,
-    newCreditsRollover = null,
-    status = 'completed',
-    message = null
-}) {
-    const hasAuditTables = await adminAuditTablesAvailable();
-    if (!hasAuditTables) return;
-
-    await executeQuery(`
-        INSERT INTO admin_user_operation_logs (
-            batch_id,
-            user_id,
-            operation_type,
-            previous_tier_name,
-            new_tier_name,
-            previous_credits_balance,
-            new_credits_balance,
-            previous_credits_rollover,
-            new_credits_rollover,
-            status,
-            message,
-            created_at
-        ) VALUES (
-            :batch_id,
-            :user_id,
-            :operation_type,
-            :previous_tier_name,
-            :new_tier_name,
-            :previous_credits_balance,
-            :new_credits_balance,
-            :previous_credits_rollover,
-            :new_credits_rollover,
-            :status,
-            :message,
-            CURRENT_TIMESTAMP
-        )
-    `, {
-        batch_id: batchId,
-        user_id: userId,
-        operation_type: operationType,
-        previous_tier_name: previousTierName,
-        new_tier_name: newTierName,
-        previous_credits_balance: previousCreditsBalance,
-        new_credits_balance: newCreditsBalance,
-        previous_credits_rollover: previousCreditsRollover,
-        new_credits_rollover: newCreditsRollover,
-        status,
-        message
-    });
-}
-
-async function getUserState(userId) {
-    const result = await executeQuery(`
-        SELECT
-            u.id,
-            u.github_id,
-            u.github_username,
-            u.github_avatar,
-            u.tier_id,
-            u.is_admin,
-            u.credits_balance,
-            u.credits_rollover,
-            u.billing_cycle_start,
-            u.billing_cycle_end,
-            u.is_banned,
-            u.created_at,
-            u.last_seen,
-            t.name AS tier_name,
-            t.tier_name AS tier_display_name,
-            t.tier_level,
-            t.tier_code,
-            t.sort_order,
-            td.tier_name AS canonical_tier_name,
-            td.tier_code AS canonical_tier_code,
-            td.sort_order AS canonical_sort_order
-        FROM users u
-        LEFT JOIN tiers t ON u.tier_id = t.id
-        LEFT JOIN tier_definitions td ON td.id = t.tier_definition_id
-        WHERE u.id = :userId
-    `, { userId });
-
-    return result.rows?.[0] || null;
-}
-
-async function createBatch(operationType, reason, filters, payload, createdBy) {
-    const hasAuditTables = await adminAuditTablesAvailable();
-    if (!hasAuditTables) return null;
-
-    const insertResult = await executeQuery(`
-        INSERT INTO admin_user_operation_batches (
-            operation_type,
-            reason,
-            filters_json,
-            payload_json,
-            created_by,
-            created_at
-        ) VALUES (
-            :operation_type,
-            :reason,
-            :filters_json,
-            :payload_json,
-            :created_by,
-            CURRENT_TIMESTAMP
-        ) RETURNING id INTO :new_id
-    `, {
-        operation_type: operationType,
-        reason: reason || operationType,
-        filters_json: JSON.stringify(filters || {}),
-        payload_json: JSON.stringify(payload || {}),
-        created_by: createdBy || 'admin',
-        new_id: { dir: 'out', type: 'NUMBER' }
-    });
-
-    return insertResult?.outBinds?.new_id?.[0] || null;
-}
-
-export default async function handler(req, res) {
-    try {
-        const session = await requireAdmin(req, res);
-        if (!session) return;
-
-        if (req.method === 'GET') {
-            const page = parseInt(req.query.page, 10) || 1;
-            const limit = parseInt(req.query.limit, 10) || 50;
-            const offset = (page - 1) * limit;
-
-            const result = await executeQuery(`
-                SELECT
-                    u.id,
-                    u.github_id,
-                    u.github_username,
-                    u.github_avatar,
-                    u.tier_id,
-                    t.name AS tier_name,
-                    t.tier_name AS tier_display_name,
-                    t.tier_level,
-                    t.tier_code,
-                    td.tier_name AS canonical_tier_name,
-                    td.tier_code AS canonical_tier_code,
-                    u.is_admin,
-                    u.credits_balance,
-                    u.credits_rollover,
-                    u.billing_cycle_start,
-                    u.billing_cycle_end,
-                    u.is_banned,
-                    u.created_at,
-                    u.last_seen
+    if (req.method === 'GET') {
+        if (id) {
+            const r = await executeQuery(`
+                SELECT u.*, us.tier_id, us.status AS sub_status, us.billing_cycle,
+                    us.current_period_start, us.current_period_end, us.pending_tier_id,
+                    st.name AS tier_name, st.model_access_tier,
+                    uc.credits_standard, uc.credits_fast, uc.credits_rollover, uc.credits_reserved
                 FROM users u
-                LEFT JOIN tiers t ON u.tier_id = t.id
-                LEFT JOIN tier_definitions td ON td.id = t.tier_definition_id
-                ORDER BY u.created_at DESC
-                OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY
-            `, { offset, limit });
-
-            const countResult = await executeQuery(`SELECT COUNT(*) AS total FROM users`);
-
-            const users = (result.rows || []).map(r => ({
-                id: r.ID, githubId: r.GITHUB_ID, githubUsername: r.GITHUB_USERNAME,
-                githubAvatar: r.GITHUB_AVATAR, tierId: r.TIER_ID,
-                tierName: r.TIER_NAME, tierDisplayName: r.TIER_DISPLAY_NAME,
-                tierLevel: r.TIER_LEVEL, tierCode: r.TIER_CODE,
-                canonicalTierName: r.CANONICAL_TIER_NAME, canonicalTierCode: r.CANONICAL_TIER_CODE,
-                isAdmin: r.IS_ADMIN, creditsBalance: r.CREDITS_BALANCE,
-                creditsRollover: r.CREDITS_ROLLOVER, billingCycleStart: r.BILLING_CYCLE_START,
-                billingCycleEnd: r.BILLING_CYCLE_END, isBanned: r.IS_BANNED,
-                createdAt: r.CREATED_AT, lastSeen: r.LAST_SEEN
-            }));
-
-            return res.status(200).json({
-                users,
-                total: countResult.rows?.[0]?.TOTAL || 0,
-                page,
-                limit
-            });
+                LEFT JOIN user_subscriptions us ON us.user_id = u.id
+                LEFT JOIN subscription_tiers st ON st.id = us.tier_id
+                LEFT JOIN user_credits uc ON uc.user_id = u.id
+                WHERE u.id = :id
+            `, { id });
+            if (!r.rows.length) return sendError(res, 404, 'not_found', 'User not found.');
+            return sendJson(res, 200, r.rows[0]);
         }
 
-        if (req.method === 'PUT') {
-            const body = req.body || {};
-            const action = normalizeString(body.action || 'update-tier').toLowerCase();
+        let sql = `SELECT u.id, u.username, u.display_name, u.email, u.avatar_url, u.role,
+            u.is_deleted, u.created_at, st.name AS tier_name
+            FROM users u
+            LEFT JOIN user_subscriptions us ON us.user_id = u.id
+            LEFT JOIN subscription_tiers st ON st.id = us.tier_id`;
+        const binds = {};
 
-            if (action === 'update-tier') {
-                const userId = normalizeNumber(body.userId, null);
-                const newTierId = normalizeNumber(body.newTierId, null);
-                const extendBillingTo = parseDateOrNull(body.extendBillingTo);
-                const resetCreditsToMonthly = !!body.resetCreditsToMonthly;
-
-                if (!userId || !newTierId) {
-                    return res.status(400).json({ error: 'userId and newTierId required' });
-                }
-
-                const currentUser = await getUserState(userId);
-                if (!currentUser) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-
-                const newTierResult = await executeQuery(`
-                    SELECT
-                        t.id,
-                        t.tier_name,
-                        t.monthly_credits,
-                        NVL(td.sort_order, t.sort_order) AS effective_sort_order
-                    FROM tiers t
-                    LEFT JOIN tier_definitions td ON td.id = t.tier_definition_id
-                    WHERE t.id = :newTierId
-                `, { newTierId });
-
-                const newTier = newTierResult.rows?.[0];
-                if (!newTier) {
-                    return res.status(404).json({ error: 'Target tier not found' });
-                }
-
-                await executeQuery(`UPDATE users SET tier_id = :newTierId WHERE id = :userId`, { newTierId, userId });
-
-                const oldSortOrder = Number(currentUser.CANONICAL_SORT_ORDER ?? currentUser.SORT_ORDER ?? 0);
-                const newSortOrder = Number(newTier.EFFECTIVE_SORT_ORDER ?? 0);
-                if (newSortOrder < oldSortOrder) {
-                    await expireRechargesOnDowngrade(userId, newTier.TIER_NAME);
-                }
-
-                if (extendBillingTo) {
-                    await executeQuery(`UPDATE users SET billing_cycle_end = :billingCycleEnd WHERE id = :userId`, {
-                        userId,
-                        billingCycleEnd: extendBillingTo
-                    });
-                }
-
-                if (resetCreditsToMonthly) {
-                    await executeQuery(`UPDATE users SET credits_balance = :creditsBalance WHERE id = :userId`, {
-                        userId,
-                        creditsBalance: Number(newTier.MONTHLY_CREDITS || 0)
-                    });
-                }
-
-                const updatedUser = await getUserState(userId);
-                await logAdminUserOperation({
-                    userId,
-                    operationType: 'update_tier',
-                    previousTierName: currentUser.CANONICAL_TIER_NAME || currentUser.TIER_DISPLAY_NAME || currentUser.TIER_NAME,
-                    newTierName: updatedUser?.CANONICAL_TIER_NAME || updatedUser?.TIER_DISPLAY_NAME || updatedUser?.TIER_NAME,
-                    previousCreditsBalance: currentUser.CREDITS_BALANCE,
-                    newCreditsBalance: updatedUser?.CREDITS_BALANCE,
-                    previousCreditsRollover: currentUser.CREDITS_ROLLOVER,
-                    newCreditsRollover: updatedUser?.CREDITS_ROLLOVER,
-                    message: `Tier updated by ${session.githubUsername || 'admin'}`
-                });
-
-                return res.status(200).json({ success: true });
-            }
-
-            if (action === 'adjust-credits') {
-                const userId = normalizeNumber(body.userId, null);
-                if (!userId) return res.status(400).json({ error: 'userId required' });
-
-                const currentUser = await getUserState(userId);
-                if (!currentUser) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-
-                const nextCreditsBalance = body.setCreditsBalance !== undefined && body.setCreditsBalance !== null
-                    ? Number(body.setCreditsBalance)
-                    : Number(currentUser.CREDITS_BALANCE || 0) + Number(body.deltaCreditsBalance || 0);
-                const nextCreditsRollover = body.setCreditsRollover !== undefined && body.setCreditsRollover !== null
-                    ? Number(body.setCreditsRollover)
-                    : Number(currentUser.CREDITS_ROLLOVER || 0) + Number(body.deltaCreditsRollover || 0);
-
-                await executeQuery(`
-                    UPDATE users
-                    SET credits_balance = :creditsBalance,
-                        credits_rollover = :creditsRollover
-                    WHERE id = :userId
-                `, {
-                    userId,
-                    creditsBalance: nextCreditsBalance,
-                    creditsRollover: nextCreditsRollover
-                });
-
-                if (body.resetRechargeBalances) {
-                    await executeQuery(`DELETE FROM user_recharge_balances WHERE user_id = :userId`, { userId });
-                }
-
-                await logAdminUserOperation({
-                    userId,
-                    operationType: 'adjust_credits',
-                    previousTierName: currentUser.CANONICAL_TIER_NAME || currentUser.TIER_DISPLAY_NAME || currentUser.TIER_NAME,
-                    newTierName: currentUser.CANONICAL_TIER_NAME || currentUser.TIER_DISPLAY_NAME || currentUser.TIER_NAME,
-                    previousCreditsBalance: currentUser.CREDITS_BALANCE,
-                    newCreditsBalance: nextCreditsBalance,
-                    previousCreditsRollover: currentUser.CREDITS_ROLLOVER,
-                    newCreditsRollover: nextCreditsRollover,
-                    message: normalizeString(body.reason) || `Credits adjusted by ${session.githubUsername || 'admin'}`
-                });
-
-                return res.status(200).json({ success: true });
-            }
-
-            if (action === 'extend-expiry') {
-                const userId = normalizeNumber(body.userId, null);
-                const billingCycleEnd = parseDateOrNull(body.billingCycleEnd);
-                if (!userId || !billingCycleEnd) {
-                    return res.status(400).json({ error: 'userId and billingCycleEnd required' });
-                }
-
-                const currentUser = await getUserState(userId);
-                if (!currentUser) {
-                    return res.status(404).json({ error: 'User not found' });
-                }
-
-                await executeQuery(`UPDATE users SET billing_cycle_end = :billingCycleEnd WHERE id = :userId`, {
-                    userId,
-                    billingCycleEnd
-                });
-
-                await logAdminUserOperation({
-                    userId,
-                    operationType: 'extend_expiry',
-                    previousTierName: currentUser.CANONICAL_TIER_NAME || currentUser.TIER_DISPLAY_NAME || currentUser.TIER_NAME,
-                    newTierName: currentUser.CANONICAL_TIER_NAME || currentUser.TIER_DISPLAY_NAME || currentUser.TIER_NAME,
-                    previousCreditsBalance: currentUser.CREDITS_BALANCE,
-                    newCreditsBalance: currentUser.CREDITS_BALANCE,
-                    previousCreditsRollover: currentUser.CREDITS_ROLLOVER,
-                    newCreditsRollover: currentUser.CREDITS_ROLLOVER,
-                    message: `Billing cycle extended to ${billingCycleEnd.toISOString()}`
-                });
-
-                return res.status(200).json({ success: true });
-            }
-
-            if (action === 'remove-user') {
-                const userId = normalizeNumber(body.userId, null);
-                if (!userId) return res.status(400).json({ error: 'userId required' });
-
-                await executeQuery(`UPDATE users SET is_banned = 1, tier_id = NULL WHERE id = :userId`, { userId });
-                await executeQuery(`UPDATE api_keys SET is_active = 0 WHERE user_id = :userId`, { userId });
-                await executeQuery(`DELETE FROM user_recharge_balances WHERE user_id = :userId`, { userId });
-
-                await logAdminUserOperation({
-                    userId,
-                    operationType: 'remove_user',
-                    status: 'completed',
-                    message: `User removed/deactivated by ${session.githubUsername || 'admin'}`
-                });
-
-                return res.status(200).json({ success: true });
-            }
-
-            return res.status(400).json({ error: 'Unsupported action' });
+        if (search) {
+            sql += ` WHERE LOWER(u.username) LIKE :search OR LOWER(u.email) LIKE :search`;
+            binds.search = `%${search.toLowerCase()}%`;
         }
+        sql += ` ORDER BY u.created_at DESC OFFSET :offset ROWS FETCH NEXT :limit ROWS ONLY`;
+        binds.offset = offset;
+        binds.limit = limit;
 
-        if (req.method === 'PATCH') {
-            const body = req.body || {};
-            const userId = normalizeNumber(body.userId, null);
-            if (!userId) return res.status(400).json({ error: 'userId required' });
-
-            const currentUser = await getUserState(userId);
-            if (!currentUser) {
-                return res.status(404).json({ error: 'User not found' });
-            }
-
-            const isBanned = body.isBanned ? 1 : 0;
-            await executeQuery(`UPDATE users SET is_banned = :isBanned WHERE id = :userId`, {
-                isBanned,
-                userId
-            });
-
-            await logAdminUserOperation({
-                userId,
-                operationType: isBanned ? 'suspend_user' : 'unsuspend_user',
-                previousTierName: currentUser.CANONICAL_TIER_NAME || currentUser.TIER_DISPLAY_NAME || currentUser.TIER_NAME,
-                newTierName: currentUser.CANONICAL_TIER_NAME || currentUser.TIER_DISPLAY_NAME || currentUser.TIER_NAME,
-                previousCreditsBalance: currentUser.CREDITS_BALANCE,
-                newCreditsBalance: currentUser.CREDITS_BALANCE,
-                previousCreditsRollover: currentUser.CREDITS_ROLLOVER,
-                newCreditsRollover: currentUser.CREDITS_ROLLOVER,
-                message: `User ${isBanned ? 'suspended' : 'unsuspended'} by ${session.githubUsername || 'admin'}`
-            });
-
-            return res.status(200).json({ success: true });
-        }
-
-        if (req.method === 'POST') {
-            const body = req.body || {};
-            const action = normalizeString(body.action).toLowerCase();
-
-            if (action !== 'bulk-adjust') {
-                return res.status(400).json({ error: 'Unsupported action' });
-            }
-
-            const result = await bulkAdjustCredits({
-                actorUsername: session.githubUsername || 'admin',
-                reason: normalizeString(body.reason) || 'Administrative bulk adjustment',
-                tierNames: Array.isArray(body.tierNames) ? body.tierNames : [],
-                createdBefore: body.createdBefore || null,
-                createdAfter: body.createdAfter || null,
-                setCreditsBalance: body.setCreditsBalance,
-                setCreditsRollover: body.setCreditsRollover,
-                deltaCreditsBalance: body.deltaCreditsBalance,
-                deltaCreditsRollover: body.deltaCreditsRollover,
-                resetRechargeBalances: !!body.resetRechargeBalances,
-                operationType: normalizeString(body.operationType) || 'credit_adjustment'
-            });
-
-            return res.status(200).json({ success: true, ...result });
-        }
-
-        res.status(405).json({ error: 'Method not allowed' });
-    } catch (error) {
-        console.error('[admin/users] error:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
-    } finally {
-        await closePool();
+        const r = await executeQuery(sql, binds);
+        return sendJson(res, 200, { data: r.rows, offset, limit });
     }
+
+    if (req.method === 'PUT') {
+        if (!id) return sendError(res, 400, 'missing_id', 'id required.');
+        const b = await readJsonBody(req);
+
+        // Update user fields
+        if (b.role !== undefined) {
+            await executeQuery('UPDATE users SET role = :role, updated_at = CURRENT_TIMESTAMP WHERE id = :id',
+                { id, role: b.role });
+        }
+
+        // Manual tier change
+        if (b.tier_id !== undefined) {
+            const existing = await executeQuery(
+                'SELECT id FROM user_subscriptions WHERE user_id = :id', { id });
+            if (existing.rows.length) {
+                await executeQuery(`UPDATE user_subscriptions SET tier_id = :tierId,
+                    status = 'active', current_period_start = CURRENT_TIMESTAMP,
+                    current_period_end = ADD_MONTHS(CURRENT_TIMESTAMP, 1)
+                    WHERE user_id = :id`, { id, tierId: b.tier_id });
+            } else {
+                await executeQuery(`INSERT INTO user_subscriptions (user_id, tier_id, status, billing_cycle, current_period_end)
+                    VALUES (:id, :tierId, 'active', 'monthly', ADD_MONTHS(CURRENT_TIMESTAMP, 1))`,
+                    { id, tierId: b.tier_id });
+            }
+        }
+
+        // Credit adjustments
+        if (b.credits_standard !== undefined || b.credits_fast !== undefined || b.credits_rollover !== undefined) {
+            const sets = ['last_updated = CURRENT_TIMESTAMP'];
+            const binds2 = { id };
+            if (b.credits_standard !== undefined) { binds2.cs = b.credits_standard; sets.push('credits_standard = :cs'); }
+            if (b.credits_fast !== undefined) { binds2.cf = b.credits_fast; sets.push('credits_fast = :cf'); }
+            if (b.credits_rollover !== undefined) { binds2.cr = b.credits_rollover; sets.push('credits_rollover = :cr'); }
+
+            const exists = await executeQuery('SELECT 1 FROM user_credits WHERE user_id = :id', { id });
+            if (exists.rows.length) {
+                await executeQuery(`UPDATE user_credits SET ${sets.join(', ')} WHERE user_id = :id`, binds2);
+            } else {
+                await executeQuery(`INSERT INTO user_credits (user_id, credits_standard, credits_fast, credits_rollover)
+                    VALUES (:id, :cs, :cf, :cr)`, { id, cs: b.credits_standard ?? 0, cf: b.credits_fast ?? 0, cr: b.credits_rollover ?? 0 });
+            }
+        }
+
+        // Suspend / unsuspend
+        if (b.is_deleted !== undefined) {
+            await executeQuery(`UPDATE users SET is_deleted = :del,
+                deleted_at = CASE WHEN :del = 1 THEN CURRENT_TIMESTAMP ELSE NULL END,
+                updated_at = CURRENT_TIMESTAMP WHERE id = :id`,
+                { id, del: b.is_deleted ? 1 : 0 });
+        }
+
+        return sendJson(res, 200, { message: 'User updated.' });
+    }
+
+    return sendError(res, 405, 'method_not_allowed', 'Method not allowed.');
 }
+
+export default withAdmin(handler);

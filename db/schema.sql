@@ -1,605 +1,566 @@
--- OrchidLLM Complete Schema v2 (Rebuilt from codebase audit)
--- Run on Oracle Cloud Autonomous DB (fresh drop)
+-- OrchidLLM Schema v3.1 — Aligned with ORCHIDLLM_PLAN.md v2.5
+-- Run on Oracle Cloud ADB after DROP ALL TABLES
+-- Nothing is hardcoded that should be a DB value.
 
--- ── TIER_DEFINITIONS ────────────────────────────────────────────────────────
-CREATE TABLE tier_definitions (
+-- ── SUBSCRIPTION_TIERS ───────────────────────────────────────────────────────
+CREATE TABLE subscription_tiers (
+    id                          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name                        VARCHAR2(100) NOT NULL UNIQUE,
+    display_color_token         VARCHAR2(100),           -- e.g. "tier-basic" → M3 color scheme
+    sort_order                  NUMBER DEFAULT 0,
+    -- Pricing
+    price_idr_monthly           NUMBER DEFAULT 0,
+    price_usd_monthly           NUMBER DEFAULT 0,
+    price_idr_yearly            NUMBER DEFAULT 0,
+    price_usd_yearly            NUMBER DEFAULT 0,
+    -- Credits
+    credits_standard_monthly    NUMBER DEFAULT 0,
+    credits_fast_monthly        NUMBER DEFAULT 0,
+    -- Queue Priority
+    queue_priority_standard     NUMBER DEFAULT 0,
+    queue_priority_fast         NUMBER DEFAULT 0,
+    queue_priority_exhausted    NUMBER DEFAULT 0,        -- 0 = still queued; -999 = locked
+    -- Rate Limits
+    rpm_normal                  NUMBER DEFAULT 3,
+    rpm_exhausted               NUMBER DEFAULT 0,        -- 0 = locked
+    -- Concurrency
+    max_concurrent_requests     NUMBER DEFAULT 1,        -- -1 = infinite
+    max_concurrent_exhausted    NUMBER DEFAULT 0,
+    -- Batch
+    batch_queue_slots           NUMBER DEFAULT 0,        -- 0 = no access
+    -- API Keys
+    max_api_keys                NUMBER DEFAULT 1,
+    -- Rollover
+    supports_rollover           NUMBER(1) DEFAULT 0,
+    rollover_percentage         NUMBER DEFAULT 0,        -- 0.0–1.0
+    rollover_max_cap            NUMBER DEFAULT 0,
+    -- Features
+    supports_compression        NUMBER(1) DEFAULT 0,
+    strict_params_option        NUMBER(1) DEFAULT 0,     -- can tier enable strict_params?
+    -- Model Access
+    model_access_tier           VARCHAR2(50) DEFAULT 'free', -- enum: free|standard|premium|premium+|max|elite
+    -- Billing Cycles
+    supports_monthly_billing    NUMBER(1) DEFAULT 1,
+    supports_yearly_billing     NUMBER(1) DEFAULT 0,
+    -- Exhaustion Behaviour
+    exhaustion_model_access     VARCHAR2(50) DEFAULT 'locked', -- free_only|standard|locked
+    exhaustion_context_lock     VARCHAR2(50) DEFAULT 'lock_to_base', -- lock_to_base|retain|custom
+    exhaustion_batch_access     NUMBER(1) DEFAULT 0,
+    exhaustion_message          VARCHAR2(500),
+    -- Status
+    is_active                   NUMBER(1) DEFAULT 1,
+    created_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at                  TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_st_sort   ON subscription_tiers(sort_order);
+CREATE INDEX idx_st_active ON subscription_tiers(is_active);
+
+-- ── SUBSCRIPTION_TIER_BILLING_OPTIONS ────────────────────────────────────────
+CREATE TABLE subscription_tier_billing_options (
+    id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    tier_id             NUMBER NOT NULL,
+    cycle               VARCHAR2(20) NOT NULL,  -- monthly|yearly|lifetime
+    is_available        NUMBER(1) DEFAULT 1,
+    discount_percentage NUMBER DEFAULT 0,
+    discount_expires_at TIMESTAMP,
+    CONSTRAINT fk_stbo_tier FOREIGN KEY (tier_id) REFERENCES subscription_tiers(id) ON DELETE CASCADE,
+    CONSTRAINT uq_stbo UNIQUE (tier_id, cycle)
+);
+
+-- ── USERS ────────────────────────────────────────────────────────────────────
+CREATE TABLE users (
+    id                      NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    username                VARCHAR2(100) NOT NULL UNIQUE,
+    display_name            VARCHAR2(100),
+    email                   VARCHAR2(255),
+    avatar_url              VARCHAR2(500),
+    role                    VARCHAR2(20) DEFAULT 'user',    -- user|admin
+    strict_params           NUMBER(1) DEFAULT 0,
+    -- Referral
+    referred_by             NUMBER,
+    referral_code           VARCHAR2(32) UNIQUE,
+    -- Notification Preferences
+    notification_prefs      CLOB DEFAULT '{"billing":true,"announcements":true,"newsletter":false}',
+    -- Soft Delete
+    is_deleted              NUMBER(1) DEFAULT 0,
+    deleted_at              TIMESTAMP,
+    deletion_scheduled_at   TIMESTAMP,
+    -- Timestamps
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_users_referrer FOREIGN KEY (referred_by) REFERENCES users(id)
+);
+CREATE INDEX idx_users_username ON users(username);
+CREATE INDEX idx_users_role     ON users(role);
+CREATE INDEX idx_users_deleted  ON users(is_deleted);
+CREATE INDEX idx_users_referral ON users(referral_code);
+
+-- ── USER_AUTH_PROVIDERS ──────────────────────────────────────────────────────
+CREATE TABLE user_auth_providers (
+    id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id          NUMBER NOT NULL,
+    provider         VARCHAR2(20) NOT NULL,     -- github|google
+    provider_user_id VARCHAR2(100) NOT NULL,
+    email            VARCHAR2(255),
+    linked_at        TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_uap_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT uq_uap UNIQUE (provider, provider_user_id)
+);
+CREATE INDEX idx_uap_user     ON user_auth_providers(user_id);
+CREATE INDEX idx_uap_provider ON user_auth_providers(provider, provider_user_id);
+
+-- ── USER_SUBSCRIPTIONS ───────────────────────────────────────────────────────
+CREATE TABLE user_subscriptions (
+    id                   NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id              NUMBER NOT NULL UNIQUE,
+    tier_id              NUMBER NOT NULL,
+    status               VARCHAR2(30) DEFAULT 'active', -- active|cancelled|expired|pending_upgrade
+    billing_cycle        VARCHAR2(20) DEFAULT 'monthly',
+    currency             VARCHAR2(10) DEFAULT 'IDR',
+    current_period_start TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    current_period_end   TIMESTAMP,
+    pending_tier_id      NUMBER,
+    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_us_user FOREIGN KEY (user_id)          REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_us_tier FOREIGN KEY (tier_id)          REFERENCES subscription_tiers(id),
+    CONSTRAINT fk_us_ptier FOREIGN KEY (pending_tier_id) REFERENCES subscription_tiers(id)
+);
+CREATE INDEX idx_us_user ON user_subscriptions(user_id);
+CREATE INDEX idx_us_tier ON user_subscriptions(tier_id);
+
+-- ── USER_CREDITS ─────────────────────────────────────────────────────────────
+CREATE TABLE user_credits (
+    id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id          NUMBER NOT NULL UNIQUE,
+    credits_standard NUMBER DEFAULT 0,
+    credits_fast     NUMBER DEFAULT 0,
+    credits_rollover NUMBER DEFAULT 0,
+    credits_reserved NUMBER DEFAULT 0,
+    last_updated     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_uc_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_uc_user ON user_credits(user_id);
+
+-- ── USER_CREDIT_LEDGER ───────────────────────────────────────────────────────
+CREATE TABLE user_credit_ledger (
+    id            NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id       NUMBER NOT NULL,
+    source        VARCHAR2(30) NOT NULL, -- sub|booster|rollover|reservation|reconcile|expiry|admin
+    amount        NUMBER NOT NULL,
+    balance_after NUMBER NOT NULL,
+    reference_id  VARCHAR2(100),
+    notes         VARCHAR2(500),
+    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_ucl_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_ucl_user ON user_credit_ledger(user_id, created_at);
+
+-- ── BOOSTER_PACKS ────────────────────────────────────────────────────────────
+CREATE TABLE booster_packs (
+    id                      NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name                    VARCHAR2(100) NOT NULL,
+    description             VARCHAR2(500),
+    eligible_tiers          CLOB DEFAULT '[]',          -- JSON array of tier IDs; empty = all
+    price_idr               NUMBER NOT NULL,
+    price_usd               NUMBER DEFAULT 0,
+    credits_standard        NUMBER DEFAULT 0,
+    credits_fast            NUMBER DEFAULT 0,
+    queue_priority_standard NUMBER DEFAULT 0,
+    queue_priority_fast     NUMBER DEFAULT 0,
+    model_access_tier       VARCHAR2(50) DEFAULT 'free',
+    context_unlock_tiers    CLOB DEFAULT '[]',
+    duration_days           NUMBER DEFAULT -1,           -- -1 = permanent while conditions met
+    is_permanent            NUMBER(1) DEFAULT 0,
+    permanent_base_tier_id  NUMBER,
+    ignore_plan_lock        NUMBER(1) DEFAULT 0,
+    max_purchases_per_user  NUMBER DEFAULT -1,
+    max_total_purchases     NUMBER DEFAULT -1,
+    available_from          TIMESTAMP,
+    available_until         TIMESTAMP,
+    is_active               NUMBER(1) DEFAULT 1,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_bp_base_tier FOREIGN KEY (permanent_base_tier_id) REFERENCES subscription_tiers(id)
+);
+CREATE INDEX idx_bp_active ON booster_packs(is_active);
+
+-- ── USER_BOOSTER_PACKS ───────────────────────────────────────────────────────
+CREATE TABLE user_booster_packs (
+    id                        NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id                   NUMBER NOT NULL,
+    pack_id                   NUMBER NOT NULL,
+    purchased_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    expires_at                TIMESTAMP,
+    credits_standard_remaining NUMBER DEFAULT 0,
+    credits_fast_remaining    NUMBER DEFAULT 0,
+    is_active                 NUMBER(1) DEFAULT 1,
+    invalidated_at            TIMESTAMP,
+    invalidation_reason       VARCHAR2(200),
+    CONSTRAINT fk_ubp_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ubp_pack FOREIGN KEY (pack_id) REFERENCES booster_packs(id)
+);
+CREATE INDEX idx_ubp_user   ON user_booster_packs(user_id, is_active);
+CREATE INDEX idx_ubp_expiry ON user_booster_packs(expires_at, is_active);
+
+-- ── PROVIDERS ────────────────────────────────────────────────────────────────
+CREATE TABLE providers (
+    id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    name             VARCHAR2(100) NOT NULL UNIQUE,
+    base_url         VARCHAR2(500) NOT NULL,
+    auth_type        VARCHAR2(30) DEFAULT 'bearer',
+    env_key_prefix   VARCHAR2(100),                     -- preferred env var prefix/name; e.g. OPENAI_KEY resolves OPENAI_KEY or OPENAI_KEY_1
+    auth_key_env     VARCHAR2(100),                     -- legacy alias for env_key_prefix; retained for admin/backward compatibility
+    status           VARCHAR2(30) DEFAULT 'active',     -- active|rate_limited|out_of_credits|dead|disabled
+    rate_limit_until TIMESTAMP,
+    notes            CLOB,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_prov_status ON providers(status);
+
+-- ── MODEL_MAKERS ──────────────────────────────────────────────────────────────
+-- Visible model labs/makers only (OpenAI, Anthropic, Google, etc.); never routing providers/aggregators.
+CREATE TABLE model_makers (
     id           NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    tier_name    VARCHAR2(50)  NOT NULL UNIQUE,
-    tier_code    VARCHAR2(20)  NOT NULL UNIQUE,
+    name         VARCHAR2(100) NOT NULL UNIQUE,
+    slug         VARCHAR2(100) NOT NULL UNIQUE,
+    icon_url     VARCHAR2(500),
+    description  CLOB,
+    website_url  VARCHAR2(500),
     sort_order   NUMBER DEFAULT 0,
-    is_active    NUMBER DEFAULT 1,
+    is_active    NUMBER(1) DEFAULT 1,
     created_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at   TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_td_sort   ON tier_definitions(sort_order);
-CREATE INDEX idx_td_active ON tier_definitions(is_active);
+CREATE INDEX idx_mm_slug   ON model_makers(slug);
+CREATE INDEX idx_mm_active ON model_makers(is_active, sort_order);
 
--- ── TIERS ───────────────────────────────────────────────────────────────────
-CREATE TABLE tiers (
-    id                       NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name                     VARCHAR2(100) NOT NULL UNIQUE,
-    tier_name                VARCHAR2(50)  NOT NULL UNIQUE,
-    tier_level               VARCHAR2(50)  NOT NULL UNIQUE,
-    tier_code                VARCHAR2(20),
-    tier_definition_id       NUMBER,
-    sort_order               NUMBER DEFAULT 0,
-    -- Pricing
-    price_idr                NUMBER DEFAULT 0,
-    price_usd                NUMBER DEFAULT 0,
-    -- Credits
-    monthly_credits          NUMBER DEFAULT 0,
-    fast_credits             NUMBER DEFAULT 0,
-    standard_credits         NUMBER DEFAULT 0,
-    -- Rollover
-    rollover_pct             NUMBER,
-    rollover_cap             NUMBER,
-    rollover_months          NUMBER DEFAULT 0,
-    -- Billing
-    billing_periods          VARCHAR2(200) DEFAULT '["monthly"]',
-    -- Queue
-    queue_priority_fast      NUMBER DEFAULT 0,
-    queue_priority_std       NUMBER DEFAULT 0,
-    queue_priority_exhausted NUMBER DEFAULT 0,
-    -- Concurrency
-    concurrent_requests      NUMBER DEFAULT 1,
-    concurrent_batches       NUMBER DEFAULT 0,
-    batch_discount_pct       NUMBER,
-    -- Access
-    model_access_level       VARCHAR2(50) DEFAULT 'free',
-    -- Flags
-    disable_buying           NUMBER(1) DEFAULT 0,
-    is_active                NUMBER DEFAULT 1,
-    created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_tiers_td FOREIGN KEY (tier_definition_id) REFERENCES tier_definitions(id)
-);
-CREATE INDEX idx_tiers_sort ON tiers(sort_order);
-CREATE INDEX idx_tiers_code ON tiers(tier_code);
-
--- ── USERS ───────────────────────────────────────────────────────────────────
-CREATE TABLE users (
-    id                    NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    github_id             VARCHAR2(64) NOT NULL UNIQUE,
-    github_username       VARCHAR2(100),
-    github_avatar         VARCHAR2(500),
-    tier_id               NUMBER,
-    is_admin              NUMBER DEFAULT 0,
-    credits_balance       NUMBER DEFAULT 0,
-    credits_rollover      NUMBER DEFAULT 0,
-    fast_credits_balance  NUMBER DEFAULT 0,
-    billing_cycle_start   TIMESTAMP,
-    billing_cycle_end     TIMESTAMP,
-    billing_period        VARCHAR2(20) DEFAULT 'monthly',
-    next_billing_date     TIMESTAMP,
-    subscription_status   VARCHAR2(20) DEFAULT 'active',
-    is_banned             NUMBER DEFAULT 0,
-    created_at            TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_seen             TIMESTAMP,
-    CONSTRAINT fk_users_tier FOREIGN KEY (tier_id) REFERENCES tiers(id)
-);
-CREATE INDEX idx_users_github ON users(github_id);
-CREATE INDEX idx_users_tier   ON users(tier_id);
-
--- ── RECHARGE_PACKAGES ───────────────────────────────────────────────────────
-CREATE TABLE recharge_packages (
+-- ── MODELS ───────────────────────────────────────────────────────────────────
+CREATE TABLE models (
     id                        NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    name                      VARCHAR2(100) NOT NULL,
-    description               VARCHAR2(500),
-    credits                   NUMBER NOT NULL,
-    credit_type               VARCHAR2(20) DEFAULT 'standard',
-    fast_credits              NUMBER DEFAULT 0,
-    standard_credits          NUMBER DEFAULT 0,
-    price_idr                 NUMBER NOT NULL,
-    original_price_idr        NUMBER,
-    price_usd                 NUMBER DEFAULT 0,
-    original_price_usd        NUMBER,
-    discount_pct              NUMBER(5,2) DEFAULT 0,
-    target_tier_name          VARCHAR2(50),
-    target_tier_definition_id NUMBER,
-    expiry_date               TIMESTAMP,
-    is_disabled               NUMBER(1) DEFAULT 0,
-    discount_start_date       TIMESTAMP,
-    discount_end_date         TIMESTAMP,
-    queue_priority_fast       NUMBER DEFAULT 0,
-    queue_priority_std        NUMBER DEFAULT 0,
-    is_active                 NUMBER DEFAULT 1,
+    display_name              VARCHAR2(255) NOT NULL,
+    model_maker_id            NUMBER,                      -- FK to visible lab/maker; not provider/aggregator
+    model_slug                VARCHAR2(255) NOT NULL UNIQUE,
+    access_tier               VARCHAR2(30) DEFAULT 'free', -- demo|free|standard|premium|premium+|max|elite|admin
+    modality                  VARCHAR2(30) DEFAULT 'text', -- text|image|audio|video|music|multimodal
+    context_window_tiers      CLOB DEFAULT '[]',           -- JSON: [{tokens,required_plan}]
+    supports_streaming        NUMBER(1) DEFAULT 1,
+    supports_vision           NUMBER(1) DEFAULT 0,
+    supports_reasoning        NUMBER(1) DEFAULT 0,
+    supports_search           NUMBER(1) DEFAULT 0,
+    supports_caching          NUMBER(1) DEFAULT 0,
+    supports_function_calling NUMBER(1) DEFAULT 0,
+    max_output_tokens         NUMBER,
+    public_description        CLOB,
+    deprecation_date          TIMESTAMP,
+    is_active                 NUMBER(1) DEFAULT 1,
     created_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at                TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by                VARCHAR2(255),
-    updated_by                VARCHAR2(255),
-    CONSTRAINT fk_rp_td FOREIGN KEY (target_tier_definition_id) REFERENCES tier_definitions(id)
+    CONSTRAINT fk_models_maker FOREIGN KEY (model_maker_id) REFERENCES model_makers(id)
 );
+CREATE INDEX idx_models_slug   ON models(model_slug);
+CREATE INDEX idx_models_tier   ON models(access_tier, is_active);
+CREATE INDEX idx_models_active ON models(is_active);
+CREATE INDEX idx_models_maker  ON models(model_maker_id);
 
--- ── USER_RECHARGE_BALANCES ──────────────────────────────────────────────────
-CREATE TABLE user_recharge_balances (
-    id                         NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id                    NUMBER NOT NULL,
-    tier_id                    NUMBER NOT NULL,
-    credits_remaining          NUMBER DEFAULT 0,
-    fast_credits_remaining     NUMBER DEFAULT 0,
-    standard_credits_remaining NUMBER DEFAULT 0,
-    credit_type                VARCHAR2(20) DEFAULT 'standard',
-    plan_tier_name             VARCHAR2(100),
-    package_id                 NUMBER,
-    purchased_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at                 TIMESTAMP,
-    CONSTRAINT fk_urb_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT fk_urb_tier FOREIGN KEY (tier_id) REFERENCES tiers(id)
+-- ── MODEL_PROVIDERS ──────────────────────────────────────────────────────────
+-- Maps each model to upstream providers with routing metadata
+CREATE TABLE model_providers (
+    id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    model_id         NUMBER NOT NULL,
+    provider_id      NUMBER NOT NULL,
+    provider_model_id VARCHAR2(255) NOT NULL,           -- the model ID used in provider API calls
+    speed_priority   NUMBER DEFAULT 0,                  -- 0=fastest; higher=slower fallback
+    context_limit    NUMBER,                            -- provider-specific context cap
+    supports_params  CLOB DEFAULT '{}',                 -- JSON {reasoning,search,vision,...}
+    max_concurrent   NUMBER DEFAULT 5,
+    status           VARCHAR2(30) DEFAULT 'active',     -- active|rate_limited|out_of_credits|dead|disabled
+    rate_limit_until TIMESTAMP,
+    last_checked     TIMESTAMP,
+    notes            CLOB,
+    is_active        NUMBER(1) DEFAULT 1,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_mp_model    FOREIGN KEY (model_id)    REFERENCES models(id) ON DELETE CASCADE,
+    CONSTRAINT fk_mp_provider FOREIGN KEY (provider_id) REFERENCES providers(id),
+    CONSTRAINT uq_mp          UNIQUE (model_id, provider_id)
 );
-CREATE INDEX idx_urb_user ON user_recharge_balances(user_id, expires_at);
+CREATE INDEX idx_mp_model    ON model_providers(model_id, is_active, speed_priority);
+CREATE INDEX idx_mp_provider ON model_providers(provider_id, status);
+CREATE INDEX idx_mp_status   ON model_providers(status);
 
--- ── ANNOUNCEMENTS ───────────────────────────────────────────────────────────
-CREATE TABLE announcements (
-    id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    title       VARCHAR2(255) NOT NULL,
-    content     CLOB NOT NULL,
-    type        VARCHAR2(20) DEFAULT 'info',
-    is_active   NUMBER DEFAULT 1,
-    is_banner   NUMBER DEFAULT 0,
-    is_urgent   NUMBER DEFAULT 0,
-    dismissible NUMBER DEFAULT 1,
-    expires_at  TIMESTAMP,
-    read_by     CLOB,
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by  VARCHAR2(100)
+-- ── MODEL_TOKEN_MULTIPLIERS ──────────────────────────────────────────────────
+CREATE TABLE model_token_multipliers (
+    id                   NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    model_id             NUMBER NOT NULL,
+    context_tier_min     NUMBER NOT NULL,               -- e.g. 0, 33000, 200000
+    context_tier_max     NUMBER,                        -- null = no upper bound
+    multiplier_input     NUMBER DEFAULT 1.0,
+    multiplier_output    NUMBER DEFAULT 1.0,
+    multiplier_cache_read  NUMBER DEFAULT 1.0,
+    multiplier_cache_write NUMBER DEFAULT 1.0,
+    notes                VARCHAR2(500),
+    CONSTRAINT fk_mtm_model FOREIGN KEY (model_id) REFERENCES models(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_mtm_model ON model_token_multipliers(model_id);
 
--- ── API_KEYS ────────────────────────────────────────────────────────────────
+-- ── API_KEYS ─────────────────────────────────────────────────────────────────
 CREATE TABLE api_keys (
     id                   NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    key                  VARCHAR2(64) NOT NULL UNIQUE,
-    name                 VARCHAR2(100) DEFAULT 'Untitled Key',
-    key_type             VARCHAR2(20) DEFAULT 'user',
-    user_id              NUMBER,
-    rpm                  NUMBER DEFAULT 5,
-    rpd                  NUMBER DEFAULT 20,
-    input_token_limit    NUMBER DEFAULT 10000,
-    output_token_limit   NUMBER DEFAULT -1,
-    daily_credit_limit   NUMBER DEFAULT -1,
-    monthly_credit_limit NUMBER DEFAULT -1,
-    overall_credit_limit NUMBER DEFAULT -1,
-    credit_cap_amount    NUMBER DEFAULT -1,
-    credit_cap_period    VARCHAR2(20) DEFAULT 'none',
-    credit_cap_reset_at  TIMESTAMP,
-    queue_priority       NUMBER DEFAULT 0,
-    providers            VARCHAR2(4000),
-    allowed_models       VARCHAR2(4000),
-    model_access_level   VARCHAR2(50) DEFAULT 'all',
-    expires_at           TIMESTAMP,
+    user_id              NUMBER NOT NULL,
+    key_hash             VARCHAR2(64) NOT NULL UNIQUE,  -- SHA-256 of key, never store plaintext
+    key_preview          VARCHAR2(30) NOT NULL,         -- "sk-orch-abc...xyz"
+    label                VARCHAR2(100) DEFAULT 'My Key',
+    is_active            NUMBER(1) DEFAULT 1,
+    credit_limit_total   NUMBER,                        -- null = unlimited
+    credit_limit_daily   NUMBER,
+    credit_limit_reset   VARCHAR2(20) DEFAULT 'daily',  -- daily|weekly|monthly|never
+    credit_used_today    NUMBER DEFAULT 0,
+    credit_used_total    NUMBER DEFAULT 0,
+    model_whitelist      CLOB,                          -- JSON array of model slugs; null = all
+    expose_balance       NUMBER(1) DEFAULT 0,
     created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by           VARCHAR2(255),
-    last_used            TIMESTAMP,
-    usage_count          NUMBER DEFAULT 0,
-    is_active            NUMBER DEFAULT 1,
-    total_input_tokens   NUMBER DEFAULT 0,
-    total_output_tokens  NUMBER DEFAULT 0,
+    last_used_at         TIMESTAMP,
+    expires_at           TIMESTAMP,
     CONSTRAINT fk_ak_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
 );
+CREATE INDEX idx_ak_user   ON api_keys(user_id, is_active);
+CREATE INDEX idx_ak_hash   ON api_keys(key_hash);
 CREATE INDEX idx_ak_active ON api_keys(is_active, expires_at);
-CREATE INDEX idx_ak_type   ON api_keys(key_type);
-CREATE INDEX idx_ak_user   ON api_keys(user_id);
 
--- ── CREDIT_TRANSACTIONS ─────────────────────────────────────────────────────
-CREATE TABLE credit_transactions (
-    id          NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id     NUMBER NOT NULL,
-    amount      NUMBER NOT NULL,
-    type        VARCHAR2(50) NOT NULL,
-    description VARCHAR2(500),
-    created_at  TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_ct_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
-);
-CREATE INDEX idx_ct_user ON credit_transactions(user_id, created_at);
-
--- ── USAGE_LOGS ──────────────────────────────────────────────────────────────
-CREATE TABLE usage_logs (
-    id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    identifier       VARCHAR2(255) NOT NULL,
-    api_key_id       NUMBER,
-    endpoint         VARCHAR2(100) NOT NULL,
-    model            VARCHAR2(100),
-    input_tokens     NUMBER DEFAULT 0,
-    output_tokens    NUMBER DEFAULT 0,
-    ip_address       VARCHAR2(45),
-    fingerprint_hash VARCHAR2(64),
-    user_agent       VARCHAR2(500),
+-- ── DEMO_KEYS ────────────────────────────────────────────────────────────────
+CREATE TABLE demo_keys (
+    id               VARCHAR2(36) PRIMARY KEY,            -- UUID = the key itself
+    platform         VARCHAR2(20) DEFAULT 'web_desktop',  -- web_desktop|web_mobile
+    requests_today   NUMBER DEFAULT 0,
+    total_requests   NUMBER DEFAULT 0,
+    last_request_day DATE DEFAULT TRUNC(SYS_EXTRACT_UTC(SYSTIMESTAMP)),
     created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_ul_key FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
+    last_used_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
-CREATE INDEX idx_ul_id_date  ON usage_logs(identifier, created_at);
-CREATE INDEX idx_ul_key      ON usage_logs(api_key_id);
-CREATE INDEX idx_ul_fp       ON usage_logs(fingerprint_hash, created_at);
-CREATE INDEX idx_ul_ip       ON usage_logs(ip_address, created_at);
+CREATE INDEX idx_dk_last_used ON demo_keys(last_used_at);
+CREATE INDEX idx_dk_request_day ON demo_keys(last_request_day);
 
--- ── SESSIONS (stateless — kept for reference/compat) ────────────────────────
-CREATE TABLE sessions (
-    id              VARCHAR2(64) PRIMARY KEY,
-    github_id       NUMBER,
-    github_username VARCHAR2(100),
-    github_avatar   VARCHAR2(500),
-    is_admin        NUMBER DEFAULT 0,
-    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    expires_at      TIMESTAMP,
-    last_accessed   TIMESTAMP
-);
-CREATE INDEX idx_sess_github  ON sessions(github_id);
-CREATE INDEX idx_sess_expires ON sessions(expires_at);
-
--- ── DEMO_SESSIONS ───────────────────────────────────────────────────────────
-CREATE TABLE demo_sessions (
-    id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    composite_hash   VARCHAR2(64) NOT NULL UNIQUE,
-    fingerprint_hash VARCHAR2(64),
-    ip_address       VARCHAR2(45),
-    user_agent       VARCHAR2(500),
-    api_key_id       NUMBER,
-    first_seen       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    last_seen        TIMESTAMP,
-    request_count    NUMBER DEFAULT 0,
-    is_blocked       NUMBER DEFAULT 0,
-    CONSTRAINT fk_ds_key FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
-);
-CREATE INDEX idx_ds_fp      ON demo_sessions(fingerprint_hash, is_blocked);
-CREATE INDEX idx_ds_last    ON demo_sessions(last_seen);
-CREATE INDEX idx_ds_blocked ON demo_sessions(is_blocked);
-
--- ── MODEL_CATALOG (legacy fallback) ─────────────────────────────────────────
-CREATE TABLE model_catalog (
-    id                       NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    category                 VARCHAR2(40) NOT NULL,
-    model_id                 VARCHAR2(255) NOT NULL,
-    display_name             VARCHAR2(255) NOT NULL,
-    description              VARCHAR2(1000),
-    context_window           VARCHAR2(64),
-    capabilities_json        VARCHAR2(4000),
-    tags_json                VARCHAR2(4000),
-    compatible_providers_json VARCHAR2(4000),
-    supported_parameters     CLOB,
-    parameter_whitelist      CLOB,
-    available_tiers          CLOB,
-    timeout_ms               NUMBER DEFAULT 60000,
-    deprecates_at            TIMESTAMP,
-    deprecation_date         TIMESTAMP,
-    deprecation_note         VARCHAR2(500),
-    model_access_level       VARCHAR2(50) DEFAULT 'free',
-    in_multiplier            NUMBER DEFAULT 1.0,
-    out_multiplier           NUMBER DEFAULT 1.0,
-    cache_read_multiplier    NUMBER(10,6) DEFAULT 1.0,
-    cache_write_multiplier   NUMBER(10,6) DEFAULT 1.0,
-    is_pro                   NUMBER DEFAULT 0,
-    supports_caching         NUMBER(1) DEFAULT 0,
-    supports_batch           NUMBER DEFAULT 0,
-    is_active                NUMBER DEFAULT 1,
-    created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by               VARCHAR2(255),
-    updated_by               VARCHAR2(255),
-    CONSTRAINT uq_mc UNIQUE (category, model_id)
-);
-CREATE INDEX idx_mc_cat    ON model_catalog(category, is_active);
-CREATE INDEX idx_mc_depr   ON model_catalog(deprecates_at);
-
--- ── MODEL_PROVIDER_MAPPINGS (legacy) ────────────────────────────────────────
-CREATE TABLE model_provider_mappings (
-    id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    model_catalog_id       NUMBER NOT NULL,
-    provider_name          VARCHAR2(64) NOT NULL,
-    provider_model_id      VARCHAR2(255) NOT NULL,
-    backend_model_id       VARCHAR2(255),
-    provider_context_window VARCHAR2(64),
-    metadata_json          CLOB,
-    mapping_multipliers    CLOB,
-    priority               NUMBER DEFAULT 0,
-    is_active              NUMBER(1) DEFAULT 1,
-    supports_batch         NUMBER DEFAULT 0,
-    in_multiplier          NUMBER,
-    out_multiplier         NUMBER,
-    allowed_params_json    CLOB,
-    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by             VARCHAR2(255),
-    updated_by             VARCHAR2(255),
-    CONSTRAINT fk_mpm_mc FOREIGN KEY (model_catalog_id) REFERENCES model_catalog(id),
-    CONSTRAINT uq_mpm UNIQUE (model_catalog_id, provider_name, provider_model_id)
-);
-CREATE INDEX idx_mpm_mc  ON model_provider_mappings(model_catalog_id, is_active, priority);
-CREATE INDEX idx_mpm_prov ON model_provider_mappings(provider_name, is_active, priority);
-
--- ── CANONICAL_MODELS ────────────────────────────────────────────────────────
--- All columns required by lib/model-catalog.js AND api/admin/catalog.js
-CREATE TABLE canonical_models (
-    id                     NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    -- Identity (both columns kept for compat; model_slug = primary slug ID)
-    model_id               VARCHAR2(255),
-    model_slug             VARCHAR2(255),
-    name                   VARCHAR2(255),
-    display_name           VARCHAR2(255),
-    category               VARCHAR2(40) DEFAULT 'text',
-    description            VARCHAR2(1000),
-    -- Context
-    context_window         NUMBER,
-    default_context_window NUMBER,
-    -- Runtime
-    timeout_ms             NUMBER DEFAULT 60000,
-    -- Multipliers
-    in_multiplier          NUMBER DEFAULT 1.0,
-    out_multiplier         NUMBER DEFAULT 1.0,
-    cache_read_multiplier  NUMBER(10,6) DEFAULT 1.0,
-    cache_write_multiplier NUMBER(10,6) DEFAULT 1.0,
-    -- Flags
-    supports_caching       NUMBER(1) DEFAULT 0,
-    supports_batch         NUMBER DEFAULT 0,
-    model_access_level     VARCHAR2(50) DEFAULT 'free',
-    is_active              NUMBER DEFAULT 1,
-    -- Deprecation
-    deprecation_date       TIMESTAMP,
-    deprecates_at          TIMESTAMP,
-    deprecation_note       VARCHAR2(500),
-    expires_at             TIMESTAMP,
-    -- Metadata
-    metadata_json          CLOB,
-    provider               VARCHAR2(100),
-    input_price            NUMBER DEFAULT 0,
-    output_price           NUMBER DEFAULT 0,
-    -- Audit
-    created_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at             TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by             VARCHAR2(255),
-    updated_by             VARCHAR2(255)
-);
-CREATE INDEX idx_cm_active   ON canonical_models(is_active);
-CREATE INDEX idx_cm_cat      ON canonical_models(category, is_active);
-CREATE INDEX idx_cm_slug     ON canonical_models(model_slug);
-CREATE INDEX idx_cm_access   ON canonical_models(model_access_level);
-
--- ── CANONICAL_MODEL_TIERS ───────────────────────────────────────────────────
-CREATE TABLE canonical_model_tiers (
-    id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    canonical_model_id  NUMBER NOT NULL,
-    tier_definition_id  NUMBER NOT NULL,
-    is_active           NUMBER DEFAULT 1,
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cmt_m  FOREIGN KEY (canonical_model_id) REFERENCES canonical_models(id) ON DELETE CASCADE,
-    CONSTRAINT fk_cmt_td FOREIGN KEY (tier_definition_id) REFERENCES tier_definitions(id) ON DELETE CASCADE,
-    CONSTRAINT uq_cmt    UNIQUE (canonical_model_id, tier_definition_id)
-);
-CREATE INDEX idx_cmt_m  ON canonical_model_tiers(canonical_model_id);
-CREATE INDEX idx_cmt_td ON canonical_model_tiers(tier_definition_id);
-
--- ── CANONICAL_MODEL_SUPPORTED_PARAMS ────────────────────────────────────────
-CREATE TABLE canonical_model_supported_params (
-    id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    canonical_model_id NUMBER NOT NULL,
-    param_name         VARCHAR2(100) NOT NULL,
-    sort_order         NUMBER DEFAULT 0,
-    is_active          NUMBER DEFAULT 1,
-    CONSTRAINT fk_cmsp_m  FOREIGN KEY (canonical_model_id) REFERENCES canonical_models(id) ON DELETE CASCADE,
-    CONSTRAINT uq_cmsp    UNIQUE (canonical_model_id, param_name)
-);
-CREATE INDEX idx_cmsp_m ON canonical_model_supported_params(canonical_model_id);
-
--- ── CANONICAL_MODEL_PARAM_WHITELIST ─────────────────────────────────────────
-CREATE TABLE canonical_model_param_whitelist (
-    id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    canonical_model_id NUMBER NOT NULL,
-    param_name         VARCHAR2(100) NOT NULL,
-    allowed_value      VARCHAR2(255) NOT NULL,
-    sort_order         NUMBER DEFAULT 0,
-    is_active          NUMBER DEFAULT 1,
-    CONSTRAINT fk_cmpw_m FOREIGN KEY (canonical_model_id) REFERENCES canonical_models(id) ON DELETE CASCADE
-);
-CREATE INDEX idx_cmpw_m ON canonical_model_param_whitelist(canonical_model_id, param_name);
-
--- ── CANONICAL_MODEL_PROVIDER_ROUTES ─────────────────────────────────────────
--- Both context_window and provider_context_window kept (model-catalog.js uses provider_context_window)
-CREATE TABLE canonical_model_provider_routes (
-    id                      NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    canonical_model_id      NUMBER NOT NULL,
-    provider_name           VARCHAR2(100) NOT NULL,
-    provider_model_id       VARCHAR2(255) NOT NULL,
-    route_label             VARCHAR2(100),
-    context_window          NUMBER,
-    provider_context_window NUMBER,
-    timeout_ms              NUMBER DEFAULT 30000,
-    priority                NUMBER DEFAULT 0,
-    supports_batch          NUMBER DEFAULT 0,
-    supports_caching        NUMBER DEFAULT 0,
-    in_multiplier           NUMBER DEFAULT 1,
-    out_multiplier          NUMBER DEFAULT 1,
-    cache_read_multiplier   NUMBER DEFAULT 0.001,
-    cache_write_multiplier  NUMBER DEFAULT 1,
-    metadata_json           CLOB,
-    expires_at              TIMESTAMP,
-    deprecation_date        TIMESTAMP,
-    deprecation_note        VARCHAR2(500),
-    is_active               NUMBER DEFAULT 1,
-    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by              VARCHAR2(255),
-    updated_by              VARCHAR2(255),
-    CONSTRAINT fk_cmpr_m FOREIGN KEY (canonical_model_id) REFERENCES canonical_models(id) ON DELETE CASCADE
-);
-CREATE INDEX idx_cmpr_m    ON canonical_model_provider_routes(canonical_model_id);
-CREATE INDEX idx_cmpr_prov ON canonical_model_provider_routes(provider_name);
-CREATE INDEX idx_cmpr_act  ON canonical_model_provider_routes(is_active);
-
--- ── CANONICAL_MODEL_ROUTE_PARAMS ─────────────────────────────────────────────
-CREATE TABLE canonical_model_route_params (
-    id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    canonical_route_id NUMBER NOT NULL,
-    param_name         VARCHAR2(100) NOT NULL,
-    support_mode       VARCHAR2(20) DEFAULT 'allowed',
-    allowed_value      VARCHAR2(255),
-    sort_order         NUMBER DEFAULT 0,
-    is_active          NUMBER DEFAULT 1,
-    CONSTRAINT fk_cmrp_r FOREIGN KEY (canonical_route_id) REFERENCES canonical_model_provider_routes(id) ON DELETE CASCADE
-);
-CREATE INDEX idx_cmrp_r ON canonical_model_route_params(canonical_route_id);
-
--- ── CANONICAL_MODEL_ALIASES ─────────────────────────────────────────────────
-CREATE TABLE canonical_model_aliases (
-    id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    canonical_model_id NUMBER NOT NULL,
-    alias_model_id     VARCHAR2(255) NOT NULL,
-    is_primary_alias   NUMBER DEFAULT 0,
-    notes              VARCHAR2(500),
-    is_active          NUMBER DEFAULT 1,
-    sort_order         NUMBER DEFAULT 0,
-    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cma_m FOREIGN KEY (canonical_model_id) REFERENCES canonical_models(id) ON DELETE CASCADE,
-    CONSTRAINT uq_cma   UNIQUE (canonical_model_id, alias_model_id)
-);
-CREATE INDEX idx_cma_m ON canonical_model_aliases(canonical_model_id);
-
--- ── CANONICAL_MODEL_MULTIPLIERS (new: array of multiplier definitions) ───────
-CREATE TABLE canonical_model_multipliers (
-    id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    canonical_model_id NUMBER NOT NULL,
-    multiplier_label   VARCHAR2(100) NOT NULL,
-    multiplier_type    VARCHAR2(20) DEFAULT 'input',
-    multiplier_value   NUMBER DEFAULT 1.0,
-    sort_order         NUMBER DEFAULT 0,
-    is_active          NUMBER(1) DEFAULT 1,
-    created_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_cmm_m  FOREIGN KEY (canonical_model_id) REFERENCES canonical_models(id) ON DELETE CASCADE,
-    CONSTRAINT uq_cmm    UNIQUE (canonical_model_id, multiplier_label, multiplier_type)
-);
-CREATE INDEX idx_cmm_m ON canonical_model_multipliers(canonical_model_id, is_active);
-
--- ── USER_MODEL_PREFERENCES ──────────────────────────────────────────────────
-CREATE TABLE user_model_preferences (
-    id                 NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    user_id            NUMBER NOT NULL,
-    model_id           VARCHAR2(255) NOT NULL,
-    heavy_action       VARCHAR2(10) DEFAULT 'RAW',
-    massive_action     VARCHAR2(10) DEFAULT 'BLOCK',
-    worker_model_id    VARCHAR2(255),
-    compression_prompt CLOB,
-    updated_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_ump_u FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-    CONSTRAINT uq_ump   UNIQUE (user_id, model_id)
-);
-
--- ── PROVIDER_KEYS ───────────────────────────────────────────────────────────
-CREATE TABLE provider_keys (
-    id                   NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    provider_name        VARCHAR2(64) NOT NULL,
-    key_name             VARCHAR2(120) NOT NULL,
-    api_key              VARCHAR2(4000) NOT NULL,
-    is_active            NUMBER DEFAULT 1,
-    priority             NUMBER DEFAULT 0,
-    usage_counter_type   VARCHAR2(64) DEFAULT 'tokens',
-    daily_limit          NUMBER DEFAULT -1,
-    minute_limit         NUMBER DEFAULT -1,
-    tokens_daily_limit   NUMBER DEFAULT -1,
-    units_daily_limit    NUMBER DEFAULT -1,
-    requests_today       NUMBER DEFAULT 0,
-    tokens_today         NUMBER DEFAULT 0,
-    units_today          NUMBER DEFAULT 0,
-    reset_interval       VARCHAR2(20) DEFAULT 'daily',
-    resets_at            TIMESTAMP,
-    created_at           TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    created_by           VARCHAR2(255),
-    last_used            TIMESTAMP,
-    last_error           VARCHAR2(1000),
-    last_rate_limit_json CLOB
-);
-CREATE INDEX idx_pk_prov ON provider_keys(provider_name, is_active);
-CREATE INDEX idx_pk_pri  ON provider_keys(provider_name, priority, last_used);
-
--- ── PROVIDER_USAGE_LOGS ─────────────────────────────────────────────────────
-CREATE TABLE provider_usage_logs (
-    id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    provider_name       VARCHAR2(64) NOT NULL,
-    provider_key_id     NUMBER,
-    key_name            VARCHAR2(120),
-    endpoint            VARCHAR2(120),
-    model               VARCHAR2(255),
-    status_code         NUMBER,
-    prompt_tokens       NUMBER DEFAULT 0,
-    completion_tokens   NUMBER DEFAULT 0,
-    total_tokens        NUMBER DEFAULT 0,
-    usage_units         NUMBER DEFAULT 0,
-    usage_counter_type  VARCHAR2(64),
-    rate_limit_snapshot CLOB,
-    identifier          VARCHAR2(255),
-    api_key_id          NUMBER,
-    error_message       VARCHAR2(1000),
-    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_pul_pk FOREIGN KEY (provider_key_id) REFERENCES provider_keys(id)
-);
-CREATE INDEX idx_pul_prov ON provider_usage_logs(provider_name, created_at);
-CREATE INDEX idx_pul_key  ON provider_usage_logs(provider_key_id, created_at);
-
--- ── REQUEST_QUEUE ───────────────────────────────────────────────────────────
+-- ── REQUEST_QUEUE ────────────────────────────────────────────────────────────
 CREATE TABLE request_queue (
-    id            VARCHAR2(80) PRIMARY KEY,
-    endpoint      VARCHAR2(120) NOT NULL,
-    identifier    VARCHAR2(255),
-    api_key_id    NUMBER,
-    model         VARCHAR2(255),
-    priority      NUMBER DEFAULT 0,
-    provider_name VARCHAR2(64),
-    status        VARCHAR2(32) DEFAULT 'queued',
-    status_code   NUMBER,
-    error_message VARCHAR2(1000),
-    created_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    started_at    TIMESTAMP,
-    finished_at   TIMESTAMP,
-    heartbeat_at  TIMESTAMP,
-    CONSTRAINT fk_rq_key FOREIGN KEY (api_key_id) REFERENCES api_keys(id)
+    id               VARCHAR2(80) PRIMARY KEY,
+    user_id          NUMBER,
+    api_key_id       NUMBER,
+    model_id         NUMBER,
+    provider_id      NUMBER,
+    priority         NUMBER DEFAULT 0,
+    status           VARCHAR2(20) DEFAULT 'pending',    -- pending|in_flight|completed|failed
+    payload_ref      VARCHAR2(500),
+    reserved_credits NUMBER DEFAULT 0,
+    actual_credits   NUMBER,
+    created_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    dispatched_at    TIMESTAMP,
+    completed_at     TIMESTAMP,
+    CONSTRAINT fk_rq_user FOREIGN KEY (user_id) REFERENCES users(id)
 );
-CREATE INDEX idx_rq_status ON request_queue(endpoint, status, priority, created_at);
-CREATE INDEX idx_rq_prov   ON request_queue(provider_name, status, heartbeat_at);
+CREATE INDEX idx_rq_status   ON request_queue(status, priority DESC, created_at);
+CREATE INDEX idx_rq_user     ON request_queue(user_id, status);
 
--- ── ADMIN_USER_OPERATION_BATCHES ────────────────────────────────────────────
-CREATE TABLE admin_user_operation_batches (
+-- ── BATCH_REQUESTS ───────────────────────────────────────────────────────────
+CREATE TABLE batch_requests (
+    id                      NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id                 NUMBER NOT NULL,
+    api_key_id              NUMBER,
+    model_id                NUMBER,
+    provider_batch_job_id   VARCHAR2(200),
+    payload                 CLOB,
+    status                  VARCHAR2(20) DEFAULT 'pending', -- pending|submitted|polling|completed|failed
+    queue_priority          NUMBER DEFAULT 0,
+    discount_rate           NUMBER DEFAULT 0.5,
+    reserved_credits        NUMBER DEFAULT 0,
+    actual_credits_charged  NUMBER,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    submitted_at            TIMESTAMP,
+    completed_at            TIMESTAMP,
+    response_payload        CLOB,
+    CONSTRAINT fk_br_user FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+);
+CREATE INDEX idx_br_user   ON batch_requests(user_id, status);
+CREATE INDEX idx_br_status ON batch_requests(status, created_at);
+
+-- ── USER_COMPRESSION_SETTINGS ────────────────────────────────────────────────
+CREATE TABLE user_compression_settings (
+    id                    NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id               NUMBER NOT NULL,
+    model_id              NUMBER NOT NULL,
+    tier_index            NUMBER NOT NULL,              -- 1,2,3 matching context tier
+    enabled               NUMBER(1) DEFAULT 0,
+    compression_model_id  NUMBER,
+    base_prompt_locked    CLOB,                         -- admin-set read-only base prompt for this tier/model
+    system_prompt_append  CLOB,
+    CONSTRAINT fk_ucs_user  FOREIGN KEY (user_id)             REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_ucs_model FOREIGN KEY (model_id)            REFERENCES models(id),
+    CONSTRAINT fk_ucs_cmod  FOREIGN KEY (compression_model_id) REFERENCES models(id),
+    CONSTRAINT uq_ucs       UNIQUE (user_id, model_id, tier_index)
+);
+CREATE INDEX idx_ucs_user ON user_compression_settings(user_id, model_id);
+
+-- ── USER_CONTEXT_TIER_PREFERENCES ────────────────────────────────────────────
+CREATE TABLE user_context_tier_preferences (
+    id         NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id    NUMBER NOT NULL,
+    model_id   NUMBER NOT NULL,
+    tier_index NUMBER NOT NULL,
+    behaviour  VARCHAR2(20) DEFAULT 'allow',            -- allow|compress|error
+    CONSTRAINT fk_uctp_user  FOREIGN KEY (user_id)  REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_uctp_model FOREIGN KEY (model_id) REFERENCES models(id),
+    CONSTRAINT uq_uctp       UNIQUE (user_id, model_id, tier_index)
+);
+
+-- ── ANNOUNCEMENTS / CHANGELOG ────────────────────────────────────────────────
+-- Unified announcement + changelog system. Type controls where/how an entry appears.
+CREATE TABLE announcements (
+    id                      NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    title                   VARCHAR2(255) NOT NULL,
+    description             CLOB,
+    type                    VARCHAR2(20) DEFAULT 'announcement', -- announcement|changelog|both
+    tone                    VARCHAR2(20) DEFAULT 'info',         -- info|warning|error|success|neutral|changelog
+    version_tag             VARCHAR2(100),                       -- e.g. v1.4.2 or Model Update - May 2026
+    related_announcement_id NUMBER,
+    is_banner               NUMBER(1) DEFAULT 0,
+    banner_expires_at       TIMESTAMP,
+    is_active               NUMBER(1) DEFAULT 1,
+    created_at              TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_by              NUMBER,
+    CONSTRAINT fk_ann_user FOREIGN KEY (created_by) REFERENCES users(id),
+    CONSTRAINT fk_ann_related FOREIGN KEY (related_announcement_id) REFERENCES announcements(id)
+);
+CREATE INDEX idx_ann_active  ON announcements(is_active, is_banner, created_at);
+CREATE INDEX idx_ann_type    ON announcements(type, is_active, created_at);
+CREATE INDEX idx_ann_related ON announcements(related_announcement_id);
+
+-- ── ADMIN_NOTIFICATIONS ──────────────────────────────────────────────────────
+-- DB-only admin alerts for v1; no email/webhook delivery in this phase.
+CREATE TABLE admin_notifications (
     id             NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    operation_type VARCHAR2(50) NOT NULL,
-    reason         VARCHAR2(500),
-    filters_json   CLOB,
-    payload_json   CLOB,
-    created_by     VARCHAR2(100),
-    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    type           VARCHAR2(50) DEFAULT 'system',          -- system|provider|billing|security|routing|user
+    severity       VARCHAR2(20) DEFAULT 'info',            -- info|warning|error|critical
+    title          VARCHAR2(255) NOT NULL,
+    message        CLOB,
+    entity_type    VARCHAR2(50),
+    entity_id      VARCHAR2(100),
+    metadata       CLOB DEFAULT '{}',
+    is_read        NUMBER(1) DEFAULT 0,
+    read_at        TIMESTAMP,
+    read_by        NUMBER,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_admn_read_by FOREIGN KEY (read_by) REFERENCES users(id)
 );
+CREATE INDEX idx_admn_read     ON admin_notifications(is_read, created_at);
+CREATE INDEX idx_admn_severity ON admin_notifications(severity, created_at);
+CREATE INDEX idx_admn_type     ON admin_notifications(type, created_at);
 
--- ── ADMIN_USER_OPERATION_LOGS ───────────────────────────────────────────────
-CREATE TABLE admin_user_operation_logs (
-    id                       NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    batch_id                 NUMBER,
-    user_id                  NUMBER,
-    operation_type           VARCHAR2(50),
-    previous_tier_name       VARCHAR2(100),
-    new_tier_name            VARCHAR2(100),
-    previous_credits_balance NUMBER,
-    new_credits_balance      NUMBER,
-    previous_credits_rollover NUMBER,
-    new_credits_rollover     NUMBER,
-    status                   VARCHAR2(20),
-    message                  VARCHAR2(500),
-    created_at               TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT fk_aol_batch FOREIGN KEY (batch_id) REFERENCES admin_user_operation_batches(id),
-    CONSTRAINT fk_aol_user  FOREIGN KEY (user_id)  REFERENCES users(id)
+-- ── USER_DISMISSED_ANNOUNCEMENTS ─────────────────────────────────────────────
+CREATE TABLE user_dismissed_announcements (
+    id              NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id         NUMBER NOT NULL,
+    announcement_id NUMBER NOT NULL,
+    dismissed_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_uda_user FOREIGN KEY (user_id)         REFERENCES users(id) ON DELETE CASCADE,
+    CONSTRAINT fk_uda_ann  FOREIGN KEY (announcement_id) REFERENCES announcements(id) ON DELETE CASCADE,
+    CONSTRAINT uq_uda UNIQUE (user_id, announcement_id)
 );
-CREATE INDEX idx_aol_batch ON admin_user_operation_logs(batch_id);
-CREATE INDEX idx_aol_user  ON admin_user_operation_logs(user_id);
+CREATE INDEX idx_uda_user ON user_dismissed_announcements(user_id);
 
--- ── SYSTEM_SETTINGS ─────────────────────────────────────────────────────────
+-- ── REQUEST_LOGS (30 day retention) ──────────────────────────────────────────
+CREATE TABLE request_logs (
+    id              NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    user_id         NUMBER,
+    api_key_id      NUMBER,
+    model_id        NUMBER,
+    provider_id     NUMBER,
+    endpoint        VARCHAR2(100) NOT NULL,
+    status          VARCHAR2(10) DEFAULT 'success',     -- success|fail
+    credits_charged NUMBER DEFAULT 0,
+    created_at      TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_rl_user    ON request_logs(user_id, created_at);
+CREATE INDEX idx_rl_created ON request_logs(created_at);
+
+-- ── ROUTING_LOGS (15 day retention) ──────────────────────────────────────────
+CREATE TABLE routing_logs (
+    id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    request_id          VARCHAR2(80),
+    user_id             NUMBER,
+    key_ref_hash        VARCHAR2(64),                   -- obfuscated API/demo/session key reference; never plaintext
+    providers_attempted CLOB,                           -- JSON array of obfuscated route references
+    params_stripped     CLOB,                           -- JSON array
+    final_provider_id   NUMBER,
+    routing_reason      VARCHAR2(200),
+    queue_wait_ms       NUMBER,
+    ttft_ms             NUMBER,
+    created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE INDEX idx_rogl_created ON routing_logs(created_at);
+CREATE INDEX idx_rogl_req     ON routing_logs(request_id);
+CREATE INDEX idx_rogl_key_ref ON routing_logs(key_ref_hash, created_at);
+CREATE INDEX idx_rogl_user    ON routing_logs(user_id, created_at);
+
+-- ── REFERRAL_TRANSACTIONS ────────────────────────────────────────────────────
+CREATE TABLE referral_transactions (
+    id               NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    referrer_user_id NUMBER NOT NULL,
+    referred_user_id NUMBER NOT NULL,
+    purchase_id      VARCHAR2(100),
+    credit_reward    NUMBER DEFAULT 0,
+    granted_at       TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_rt_referrer  FOREIGN KEY (referrer_user_id) REFERENCES users(id),
+    CONSTRAINT fk_rt_referred  FOREIGN KEY (referred_user_id) REFERENCES users(id)
+);
+CREATE INDEX idx_rt_referrer ON referral_transactions(referrer_user_id);
+
+-- ── SYSTEM_SETTINGS ──────────────────────────────────────────────────────────
 CREATE TABLE system_settings (
     id            NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     setting_key   VARCHAR2(100) NOT NULL UNIQUE,
-    setting_value VARCHAR2(4000),
+    setting_value CLOB,
     description   VARCHAR2(500),
-    is_active     NUMBER DEFAULT 1,
+    is_active     NUMBER(1) DEFAULT 1,
     updated_at    TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    updated_by    VARCHAR2(255)
+    updated_by    NUMBER,
+    CONSTRAINT fk_ss_user FOREIGN KEY (updated_by) REFERENCES users(id)
 );
 CREATE INDEX idx_ss_key ON system_settings(setting_key);
 
--- ── SEED: system_settings ───────────────────────────────────────────────────
+-- ── ADMIN_SQL_QUERY_LOGS ─────────────────────────────────────────────────────
+CREATE TABLE admin_sql_query_logs (
+    id                  NUMBER GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
+    admin_user_id       NUMBER,
+    query_text          CLOB NOT NULL,
+    destructive_override NUMBER(1) DEFAULT 0,
+    row_count           NUMBER DEFAULT 0,
+    duration_ms         NUMBER DEFAULT 0,
+    executed_at         TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    CONSTRAINT fk_asql_user FOREIGN KEY (admin_user_id) REFERENCES users(id)
+);
+CREATE INDEX idx_asql_user ON admin_sql_query_logs(admin_user_id, executed_at);
+
+-- ── SEED DATA ────────────────────────────────────────────────────────────────
+-- Common maker records; admins can extend this list before adding catalog models.
+INSERT INTO model_makers (name, slug, sort_order) VALUES ('OpenAI', 'openai', 10);
+INSERT INTO model_makers (name, slug, sort_order) VALUES ('Anthropic', 'anthropic', 20);
+INSERT INTO model_makers (name, slug, sort_order) VALUES ('Google', 'google', 30);
+INSERT INTO model_makers (name, slug, sort_order) VALUES ('Meta', 'meta', 40);
+INSERT INTO model_makers (name, slug, sort_order) VALUES ('Mistral AI', 'mistral-ai', 50);
+
+-- Tiers and billing options are admin-configured via /api/admin/tiers
+-- No seed tiers — create them from the admin panel.
+
+-- System settings
 INSERT INTO system_settings (setting_key, setting_value, description) VALUES
-    ('model_access_levels', '["free","plus","pro","max","elite"]', 'Ordered model access tiers');
+    ('default_signup_tier', 'Free', 'Name of the default tier assigned to new users on signup');
 INSERT INTO system_settings (setting_key, setting_value, description) VALUES
-    ('default_billing_period', 'monthly', 'Default billing period for new subscriptions');
+    ('demo_requests_per_day', '20', 'Max demo key requests per day');
 INSERT INTO system_settings (setting_key, setting_value, description) VALUES
-    ('credit_types_enabled', 'fast,standard', 'Active credit types');
+    ('demo_context_cap', '33000', 'Max context tokens for demo key users');
+INSERT INTO system_settings (setting_key, setting_value, description) VALUES
+    ('heartbeat_interval_seconds', '15', 'SSE heartbeat interval while request is queued');
+INSERT INTO system_settings (setting_key, setting_value, description) VALUES
+    ('batch_discount_rate', '0.5', 'Default batch request discount (0.5 = 50% off)');
+INSERT INTO system_settings (setting_key, setting_value, description) VALUES
+    ('admin_github_handles', 'vendouple', 'Comma-separated GitHub usernames with admin role');
+
 COMMIT;

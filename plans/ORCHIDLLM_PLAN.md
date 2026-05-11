@@ -1,10 +1,12 @@
 # OrchidLLM — Comprehensive Product & Architecture Plan
-> **Status:** Draft v2.0 | Last updated: 2026-05-10
+>
+> **Status:** Draft v2.8 | Last updated: 2026-05-11
 > **Author:** James (Owner) + AI-assisted planning
 
 ---
 
 ## Table of Contents
+
 1. [Project Overview](#1-project-overview)
 2. [Architecture Overview](#2-architecture-overview)
 3. [API Endpoint System](#3-api-endpoint-system)
@@ -27,7 +29,7 @@
 19. [Auth System](#19-auth-system)
     - [19a. Account Center](#19a-account-center)
 20. [Frontend — Dashboard & Consumer App](#20-frontend--dashboard--consumer-app)
-21. [Announcement System](#21-announcement-system)
+21. [Announcement & Changelog System](#21-announcement--changelog-system)
 22. [Admin System](#22-admin-system)
 23. [Affiliate / Referral System](#23-affiliate--referral-system)
 24. [Database Schema Outline](#24-database-schema-outline)
@@ -48,6 +50,7 @@
 | **Consumer App** | A user-facing chat interface with personalities, minigames, and social features. Built on top of the same API gateway. |
 
 ### Core Philosophy
+
 - Upstream providers are free or cheap but **unstable**. Orchid absorbs that instability.
 - Users pay for **stability, priority, features, and higher limits** — not raw model access.
 - **Nothing is hardcoded** that should be a DB value. Admin configures everything.
@@ -201,10 +204,12 @@ models
 ├── id
 ├── display_name              e.g. "Claude Opus 4.5"
 ├── model_slug                e.g. "claude-opus-4-5"
-├── access_tier               enum: free|standard|premium|premium+|max|elite|admin
+├── model_maker_id            FK → model_makers (e.g. Anthropic, OpenAI, Google)
+├── access_tier               enum: demo|free|standard|premium|premium+|max|elite|admin
 ├── context_window_tiers      JSON: [{ tokens: 33000, required_plan: "basic" }, ...]
 ├── modality                  enum: text|image|audio|video|music|multimodal
 ├── is_active                 bool
+├── deprecation_date          date | null  (soft-disabled on frontend once reached)
 ├── supports_streaming        bool
 ├── supports_vision           bool
 ├── supports_reasoning        bool
@@ -224,8 +229,8 @@ model_providers
 ├── model_id                  FK → models
 ├── provider_id               FK → providers
 ├── speed_priority            int
-│   ⚠️ REVERSED SCALE: 0 = fastest, higher = slower
-│   Admin tooltip: "0 is fastest. Higher = slower fallback."
+│   Provider speed rating. Higher number = faster provider.
+│   Admin tooltip: "Higher = faster. Free users can be routed to lower-speed providers; paid/fast-credit users are prioritised to higher-speed providers."
 ├── context_limit             int (provider-specific cap for this model)
 ├── supports_params           JSON { reasoning: true, search: false, ... }
 ├── max_concurrent            int (hard cap this provider allows)
@@ -267,6 +272,43 @@ CRON every N minutes:
 
 ## 6. Provider Routing & Aggregation
 
+### Provider Key Storage
+
+**All provider API keys are stored exclusively in `.env`. No provider keys are stored in the database.**
+
+Multiple keys per provider are supported for rotation and throughput. Naming convention:
+
+```env
+OPENAI_KEY_1=sk-...
+OPENAI_KEY_2=sk-...
+ANTHROPIC_KEY_1=sk-ant-...
+# etc.
+```
+
+The router treats these as a pool. On each request it picks the least-recently-used healthy key. If a key is rate-limited it is flagged temporarily and skipped; the next key in the pool is tried. This allows parallel throughput across multiple API keys for the same provider.
+
+### Provider Speed Configuration (`.env` driven)
+
+Each upstream provider has a provider-specific speed value in `.env`. The value is numeric and **higher = faster**. This is separate from queue priority: queue priority decides which user request is processed first, while provider speed decides which healthy upstream provider should be attempted first for that request.
+
+Naming convention:
+
+```env
+# Provider API key
+OPENROUTER_API_KEY=
+
+# Provider speed rating; higher = faster
+OPENROUTER_API_KEY_SPEED=80
+```
+
+If both DB and `.env` values exist, `.env` is the deploy-time override used by the router. Admin/database values remain useful as defaults and for UI display.
+
+Routing behaviour:
+
+- Paid users and users spending fast credits prefer the highest-speed eligible provider first.
+- Free/demo users can be routed to lower-speed eligible providers first, preserving faster providers for paying traffic.
+- Providers must still pass health, context-limit, capability, rate-limit, and concurrency checks before speed is considered.
+
 ### Routing Decision Tree (per request)
 
 ```
@@ -276,11 +318,16 @@ CRON every N minutes:
    b. context_limit >= message_token_count
    c. (paid + strict_params) supports ALL required params
       OR (free / strict_params off) any available
-3. Sort by speed_priority ASC (0 = fastest first)
-4. Pick first provider where current_in_flight < max_concurrent
-5. Increment current_in_flight
-6. Dispatch request
-7. On completion → decrement current_in_flight
+3. Resolve provider speed:
+   a. `.env` provider-specific `<PROVIDER_ENV>_SPEED` if present
+   b. otherwise `model_providers.speed_priority` DB fallback
+4. Sort eligible providers by tier mode:
+   a. paid / fast-credit traffic → provider speed DESC (highest/faster first)
+   b. free / demo traffic → provider speed ASC (lower/slower first)
+5. Pick first provider where current_in_flight < max_concurrent
+6. Increment current_in_flight
+7. Dispatch request
+8. On completion → decrement current_in_flight
 ```
 
 ### Context Window Routing Optimisation
@@ -308,9 +355,48 @@ IF all providers fail:
 
 > **Critical rule: If any request fails for any reason, zero credits are charged.**
 
----
+### Provider Obfuscation Policy
 
-## 7. Billing, Credits & Plans
+**Providers are never exposed to users — anywhere.** This is a hard platform rule, not a per-feature toggle.
+
+| Surface | Rule |
+|---------|------|
+| API responses | No provider name, base URL, or identifying info in any response body or header |
+| Request logs (user-visible) | Shows: model name, model maker (via `model_makers` table), endpoint, status, credits charged. **Never shows: provider, key, routing path.** |
+| Routing logs | Full detail stored server-side for admin/debugging. **Admin-only. Never surfaced to users.** Key references are obfuscated (see below). |
+| Model cards | Providers listed as `Endpoint A`, `Endpoint B`, etc. (see §20 Model Catalog Maker). No real provider names. |
+| Error messages | Translated/normalised by each provider adapter before reaching the user. See error translation rules below. |
+| HTTP headers | All upstream provider headers stripped before responding to client. No `x-provider-*` or origin headers forwarded. |
+
+**Error Translation Rules:**
+
+Provider-specific error codes are translated by each adapter into one of two categories:
+
+| Category | Behaviour | Examples |
+|----------|-----------|---------|
+| **User-actionable** | Upstreamed with a translated, provider-neutral message | Context length exceeded, tool calling not supported on this model, image input not supported, invalid request format, content policy rejection |
+| **Internal / infrastructure** | Generic message only — no provider detail leaked | Rate limit hit, provider overloaded, auth failure, provider down, unknown error |
+
+```
+Examples of translated user-actionable messages:
+  provider: "anthropic: context_length_exceeded" → user sees: "Request exceeds the maximum context length for this model."
+  provider: "openai: tool_use_not_supported"     → user sees: "Tool calling is not supported by the selected model configuration."
+  provider: "google: image_not_supported"        → user sees: "Image input is not supported by the selected model configuration."
+
+Examples of suppressed internal messages:
+  provider: "rate_limited: too many requests"    → user sees: "Service temporarily unavailable. Please retry."
+  provider: "anthropic: overloaded_error"        → user sees: "Service temporarily unavailable. Please retry."
+```
+
+Adapters are responsible for classifying and translating their own error codes. The aggregator enforces that no raw provider error text passes through unprocessed.
+
+**What users CAN filter/see:**
+
+- The model name (e.g. `claude-opus-4-5`)
+- The model maker / lab via `model_makers` table (e.g. `Anthropic`, `OpenAI`, `Google`) — shown with icon and name
+- Their own usage history (model, status, credits, timestamp)
+
+**Model maker vs Provider:** A *provider* is who hosts/serves the model (e.g. OpenRouter, Together AI, the lab directly). The *model maker* is who created the model (stored in `model_makers` table). Only the maker is visible to users.
 
 ### Currency Support
 
@@ -692,6 +778,7 @@ Booster pack credits are **never wiped** on plan upgrade/downgrade. They persist
 ### Checkout Flow
 
 Cart/checkout style (not one-click):
+
 - User browses packs filtered to their current tier.
 - Reviews: credit breakdown, queue priority, model access, expiry date.
 - Referral/affiliate code field on checkout page.
@@ -994,13 +1081,15 @@ Demo users only see `demo`-tier models. Registered free users see `demo` + `free
 
 ### Log Retention Policy
 
-| Log Type | Retention | Contents |
-|----------|-----------|---------|
-| `request_logs` | 30 days | Status, model, endpoint, credits charged, timestamp |
-| `routing_logs` | 15 days | Provider chain, fallbacks, params stripped, queue wait ms, TTFT ms |
-| User activity view | 30 days | Summarised — no payload content, no routing detail shown |
+| Log Type | Retention | Visible To | Contents |
+|----------|-----------|------------|---------|
+| `request_logs` | 30 days | User + Admin | Status, **model name**, **model maker**, endpoint, credits charged, timestamp. **Provider never shown.** |
+| `routing_logs` | 15 days | Admin only | Provider chain (provider ID only, never name), obfuscated key reference (hashed short ID, not index or raw key), user_id, fallback sequence, params stripped, queue wait ms, TTFT ms. **Never surfaced to users.** |
+| User activity view | 30 days | User | Summarised view of `request_logs` — no payload, no routing detail, no provider info |
 
 Detailed payload logs (request/response body) not stored by default. Admin can enable per-user with consent flag for debugging.
+
+> All upstream provider headers are stripped before the response reaches the user. No `x-provider-*`, rate-limit, or origin headers are forwarded. See §6 Provider Obfuscation Policy.
 
 ---
 
@@ -1152,6 +1241,14 @@ users (additions)
 
 ### Tech: Material 3 Expressive
 
+Use the Material 3 Expressive web bundle as an ES module on frontend pages that need M3E components:
+
+```html
+<script type="module" src="https://cdn.jsdelivr.net/npm/@m3e/web@2.5.2/dist/all.min.js/+esm"></script>
+```
+
+Local vendored assets may remain available for offline/dev fallback, but production pages should prefer the pinned CDN module unless there is a deployment reason not to.
+
 ### Dynamic Accent Color Per Tier
 
 Each `subscription_tiers` row has a `display_color_token` field. Frontend reads the user's active tier and applies the corresponding M3 color scheme. **No hardcoded hex values in frontend.**
@@ -1183,6 +1280,7 @@ Tier color transitions are **animated** on upgrade confirmation.
 ### Model Detail Sheet
 
 Clicking a model opens a detail sheet showing:
+
 - Provider(s), access tier, context tiers available.
 - Token multipliers (input / output / cache read / cache write).
 - User's enabled context tier toggles (sequential unlock enforced).
@@ -1194,7 +1292,117 @@ Clicking a model opens a detail sheet showing:
 
 Dashboard shows a persistent nudge when rollover cap is hit: *"You've hit your rollover cap — spend your credits before the cycle ends to avoid losing them."*
 
-### Consumer App Integration
+### Page Architecture
+
+The frontend is **four HTML pages** sharing a common asset base:
+
+| Page | File | Purpose |
+|------|------|---------|
+| Chat / Index | `index.html` | Public-facing chat interface, demo sessions, future playground. Entry point for all visitors. |
+| Dashboard | `users.html` | Full user dashboard: overview, models, billing, account, API keys, logs. |
+| Login | `login.html` | Auth intermediary. Handles GitHub OAuth redirect. On success, returns user to `index.html`. |
+| Admin | `admin.html` | Internal admin panel. Role-gated. |
+
+**`index.html` — File responsibilities:**
+
+- `index.html` — markup / shell
+- `index.js` — all UI logic for the chat page (demo key handling, message rendering, model dropdown)
+- `app.js` — API talker only; routes requests from `index.html` through the backend gateway. **Do not modify `app.js` for UI concerns.**
+
+> Current state: `index.html` is intentionally barebones (intermediary + demo). Errors should be fixed but feature scope should not expand until Phase 5.
+
+**`login.html` flow:**
+
+```
+User clicks login on index.html
+  → /login.html
+  → GitHub OAuth redirect
+  → OAuth callback → session created
+  → Redirect back to index.html
+From index.html: profile icon dropup → /users.html (dashboard)
+```
+
+**`users.html` — Sections:**
+All sections listed in the Dashboard Sections table (§20 below). Includes model customisation, billing, account, API key management, overview.
+
+**`admin.html` — Sections:**
+
+| Section | Detail |
+|---------|--------|
+| Overview | Platform stats: total users, active sessions, revenue (stub), provider health summary |
+| Usage Logs | Full 15d routing detail + 30d activity, filterable by user / model / status |
+| Request Queue | Live view of in-flight and queued requests, per-user, cancellable |
+| Demo Session Keys | List all active demo keys, view usage, **purge** (hard delete) or **suspend** (block requests without deletion) |
+| Users | Search users, view plan/credits/keys/logs, manually upgrade/downgrade tier, extend subscription, reset/refund credits, suspend accounts. Batch operations supported (multi-select → bulk action). |
+| Tiers | Full CRUD on subscription tiers: name, price (IDR + USD), credit allocations, RPM, queue priority, API key limit, concurrent request limit, context caps, rollover config, colour token |
+| Booster Packages | Create / edit / expire packs: credit amount (standard + fast split), queue priority, model access grant, expiry duration, per-tier availability, purchase limit, permanent flag |
+| Model Catalogue | See §20 Model Catalog Maker below |
+| API Keys | View all API keys platform-wide, filter by user, plan, status. Suspend or revoke individual keys. Bulk suspend. |
+| Announcements | Create / edit / expire banners. Set tone, title, markdown description, active window, max 3 simultaneous banners enforced here. |
+| SQL Query | Direct SQL query interface to Oracle DB. **Admin only.** Queries are read-only by default (SELECT); destructive queries require an explicit override toggle per session. All queries logged with admin user ID and timestamp. |
+
+### Admin ↔ User View Toggle
+
+If the authenticated user has `role = "admin"`, a persistent **Switch to User View / Switch to Admin View** button is shown (e.g. top-right chip). This lets the admin verify the user-facing experience without logging out. The toggle switches the active page context; it does not change the user's role or session.
+
+---
+
+### Model Catalog Maker
+
+The model catalogue is the most advanced configuration surface. Key rules:
+
+**Provider keys are `.env`-only. No provider API keys are stored in the DB.**
+
+The system supports key rotation per provider: multiple keys for the same provider can be listed in `.env` (e.g. `OPENAI_KEY_1`, `OPENAI_KEY_2`). The router distributes requests across available keys and falls back to the next key if one is rate-limited or erroring.
+
+**Per-model config (admin):**
+
+| Field | Detail |
+|-------|--------|
+| Display name | Model name shown to users |
+| Provider | Dropdown of configured `.env` providers |
+| Access tier | `demo` / `free` / `standard` / `premium` / `premium+` / `max` / `elite` / `admin` |
+| Context window thresholds | Infinite rows: each threshold has a `token_min`, multiplier overrides (input/output/cache read/cache write), and access tier required to unlock. Must be sequential — gaps not allowed. |
+| Supported capabilities | Multi-select: `vision`, `tool_calling`, `streaming`, `batch`, `caching`, `reasoning`, `search`, `image_generation`, `tts`, `transcription`, `music_generation`, `video_generation` |
+| Parameters supported | Flag which inference params the provider supports (temperature, top_p, reasoning_effort, etc.) |
+| Deprecation date | Optional. Once reached: model is soft-disabled on frontend (greyed, tooltip "Deprecated"). Still accessible via API for existing users with a deprecation warning header. |
+| Description | Markdown, shown on model detail card |
+| Speed rating | Integer 0–N. **Higher = faster**. Admin tooltip: *"Higher = faster. Free/demo traffic may use lower-speed providers; paid traffic prioritises higher-speed providers."* Used by router to prioritise providers by user tier. |
+
+**Provider capability conflict resolution** (when user requests params not all providers support):
+
+```
+User request comes in with params [streaming, image, tools]
+
+Step 1: Find providers for this model that are healthy (not rate-limited / disabled)
+Step 2: If user has strict_params=ON (paid only):
+         → Require ALL requested params to be supported
+         → If no single provider satisfies: FAIL (no credits charged)
+Step 3: If strict_params=OFF:
+         → Warn user via response header: X-Orchid-Unsupported-Params: [list]
+         → Priority order for param coverage:
+             streaming > image > tool_calling > reasoning > search > (others)
+         → Pick provider with highest coverage score
+         → If tie: pick by speed rating (lowest number wins)
+Step 4: If no providers are available at all:
+         → 503, no credits charged
+```
+
+**Model card — anonymous provider capability table:**
+
+The public/user-facing model detail card does NOT reveal provider names. Instead it shows:
+
+```
+| Endpoint   | Capabilities              |
+|------------|---------------------------|
+| Endpoint A | Streaming, Vision, Tools  |
+| Endpoint B | Streaming, Vision         |
+| Endpoint C | Streaming                 |
+```
+
+Labels are auto-generated (`Endpoint A`, `Endpoint B`, …) and stable per session. The user can see which capability set is available but cannot identify the underlying provider.
+
+---
 
 Consumer app and API dashboard are in the same frontend deployment. Users navigate between them or go directly to the dashboard by URL.
 
@@ -1218,36 +1426,73 @@ Consumer app and API dashboard are in the same frontend deployment. Users naviga
 
 ---
 
-## 21. Announcement System
+## 21. Announcement & Changelog System
 
-### Record (DB)
+Announcements and changelogs are a **unified system** — the same DB table, same admin UI, different `type` tags. An admin can post a pure changelog entry, a pure announcement, or tag a single post as both. Announcements can also hyperlink to a related changelog entry.
+
+### Entry Types & Preset Colours
+
+| Type | Preset Colour | Use Case |
+|------|--------------|---------|
+| `announcement` | Tone-driven (see below) | Platform news, maintenance, policy changes |
+| `changelog` | Teal / Cyan | Model updates, new features, system improvements, version notes |
+| `announcement + changelog` | Tone colour (banner) + Teal badge | Urgent news that also has release notes; both tags shown |
+
+**Announcement tones** (applied when `type` includes `announcement`):
+
+| Tone | Colour | Use Case |
+|------|--------|---------|
+| `info` | Blue | General information, non-urgent news |
+| `warning` | Amber | Upcoming maintenance, degraded service |
+| `error` | Red | Outage, critical issue |
+| `success` | Green | Issue resolved, service restored |
+| `neutral` | Gray | Low-importance notices |
+| `changelog` | Teal / Cyan | Changelog-only entries (no urgency implied) |
+
+> A `changelog`-only entry is **not** shown as a banner by default — it appears only in the Announcements/Changelog page and bell list. Tagging it as `announcement + changelog` promotes it to banner-eligible.
+
+### DB Record
 
 ```
 announcements
 ├── id
-├── title                  text
-├── description            markdown | null
-├── tone                   enum: info | warning | error | success | neutral
-├── is_banner              bool
-├── banner_expires_at      timestamp | null
-├── is_active              bool
+├── title                   text
+├── description             markdown | null
+├── type                    enum: announcement | changelog | both
+├── tone                    enum: info | warning | error | success | neutral | changelog
+├── version_tag             string | null   e.g. "v1.4.2", "Model Update – May 2026"
+│                           (shown as a small chip on changelog entries)
+├── related_announcement_id FK → announcements | null
+│                           (allows an announcement to hyperlink to a changelog entry)
+├── is_banner               bool   (false by default for changelog-only entries)
+├── banner_expires_at       timestamp | null
+├── is_active               bool
 ├── created_at
-└── created_by             FK → users (admin)
+└── created_by              FK → users (admin)
 ```
 
 ### Banner Rules
 
 - Max **3 active banners** simultaneously (most recent 3 by `created_at` if more exist).
-- Banners are **thin, unobtrusive** — single line: title + tone colour strip + dismiss button.
+- Banners are **thin, unobtrusive** — single line: title + tone colour strip + type chip (`changelog` / `announcement`) + dismiss button.
 - Clicking banner → navigates to Announcements page → auto-expands clicked item.
 - Dismiss → stored in `user_dismissed_announcements` → never shown again to that user.
+- Changelog-only entries (`is_banner = false`) are never shown as banners regardless of settings.
 
 ### Bell Icon
 
 - Located at bottom of sidebar/nav.
-- Red badge count = undismissed announcements.
-- Expands to preview list; click item to expand full description.
+- Red badge count = undismissed announcements + unread changelog entries.
+- Bell list groups by type: banners/announcements first, then changelog entries below a divider.
+- `version_tag` chip shown inline on changelog entries in the list.
 - Items with null or very short description display inline (no expand toggle needed).
+
+### Announcements / Changelog Page
+
+- Single unified page, filterable by type (`All` / `Announcements` / `Changelog`).
+- Changelog entries show `version_tag` as a prominent chip.
+- Cross-linked entries: if an announcement has a `related_announcement_id` pointing to a changelog entry (or vice versa), a **"See release notes →"** / **"See announcement →"** link is shown inline.
+- Admin creates both types from the same form, with type selector and optional version tag field.
 
 ---
 
@@ -1257,21 +1502,33 @@ announcements
 
 `users.role = "admin"`. Same GitHub OAuth login flow. Role enforced by middleware on all `/admin` routes.
 
+> Full per-section breakdown of `admin.html` is in **§20 — Page Architecture**. This section covers access rules and backend capabilities only.
+
 ### Admin Capabilities
 
 | Feature | Description |
 |---------|-------------|
-| Manual plan upgrades | Set user's tier, bypass billing |
-| Provider management | Add/edit/disable providers, manage API keys at rest, view health |
+| Manual plan upgrades | Set user's tier, bypass billing; takes effect immediately or next cycle |
+| Subscription management | Extend subscription, refund credits, reset credits to tier default |
+| Provider management | Enable/disable providers, view health, rotation config via `.env` |
 | Tier configuration | Full CRUD on subscription tiers and all parameters |
 | Booster pack management | Create / edit / expire packs |
-| Model management | Add models, link providers, set multipliers, set access tiers |
-| Announcement management | Create / expire banners and announcements |
+| Model management | Full model catalogue maker (see §20) |
+| Announcement management | Create / expire banners and changelog entries; tag as `announcement`, `changelog`, or both; set version tag; hyperlink entries to each other; enforce 3-banner limit |
 | Pricing config | Base credit costs, multipliers, context tier prices, batch discount rate |
-| User lookup | View user's plan, credits, keys, logs |
+| User lookup | View user's plan, credits, keys, logs; suspend accounts |
+| Batch user operations | Multi-select users → bulk suspend / tier change / credit reset / key revoke |
+| Demo key management | Purge (hard delete) or suspend demo keys |
+| API key oversight | View all keys platform-wide, filter by user/plan/status, bulk suspend/revoke |
 | Provider health dashboard | Real-time status, in-flight counts, rate limit expiry, out-of-credits alerts (>1 day flag) |
+| Admin notifications | In-panel notification bell (DB-backed, `admin_notifications` table). Alerts for provider out-of-credits >1 day, provider dead, extended rate limits. No email in v1. |
 | Log viewer | Full routing detail (15d); users see only summarised activity |
+| SQL query tool | Direct Oracle SQL from admin panel; SELECT by default, destructive queries require per-session override toggle; all queries logged |
 | Affiliate settings | Referral rates *(future)* |
+
+### Admin ↔ User Toggle
+
+Documented in §20. Admin can switch to user view at any time to verify the user-facing experience without ending their admin session.
 
 ---
 
@@ -1356,11 +1613,28 @@ user_booster_packs
   credits_standard_remaining, credits_fast_remaining,
   is_active, invalidated_at, invalidation_reason
 
-models                      (see §5)
+model_makers
+  id, name,               -- e.g. "Anthropic", "OpenAI", "Google DeepMind"
+  slug,                   -- e.g. "anthropic", "openai", "google" — used for filtering
+  icon_url,               -- logo/icon for UI dropdown and model cards
+  description,            -- short blurb shown on filter UI
+  website_url,
+  created_at
+
+models
+  -- see §5 for full field list
+  -- model_maker_id FK → model_makers (replaces free-text model_maker field)
+  -- provider association is in model_providers; never exposed directly to users
 
 providers
-  id, name, base_url, auth_type, auth_key_encrypted,
-  status, notes, created_at
+  id, name, base_url,
+  -- NO api_key stored here: all provider keys live in .env only
+  -- env_key_prefix: used to resolve keys from .env (e.g. "OPENAI" → reads OPENAI_KEY_1, OPENAI_KEY_2, ...)
+  env_key_prefix,
+  status: active | rate_limited | out_of_credits | dead | disabled,
+  speed_rating,       -- higher = faster. Admin tooltip shown in catalogue.
+  notes,
+  created_at
 
 model_providers             (see §5)
 model_token_multipliers     (see §9)
@@ -1389,6 +1663,21 @@ user_dismissed_announcements
 
 announcements               (see §21)
 
+admin_sql_query_logs
+  id, admin_user_id, query_text, executed_at,
+  destructive_override: bool, row_count, duration_ms
+
+admin_notifications
+  id,
+  type: provider_out_of_credits | provider_dead | provider_rate_limited_extended | system_alert,
+  provider_id,              -- FK → providers (nullable for non-provider alerts)
+  message,                  -- human-readable detail
+  severity: info | warning | error,
+  is_read: bool,
+  created_at,
+  read_at: timestamp | null
+  [shown in admin panel notification bell; no email in v1]
+
 request_logs
   id, user_id, api_key_id, model_id, provider_id,
   endpoint, status: success | fail,
@@ -1397,7 +1686,11 @@ request_logs
 
 routing_logs
   id, request_id,
-  providers_attempted: JSON,
+  provider_id,                  -- internal ID only, never the provider name
+  key_ref_hash,                 -- short obfuscated hash of the key used (NOT the key index or raw key)
+                                -- sufficient to correlate key issues in debugging without exposing key identity
+  user_id,                      -- for cross-referencing without exposing to user
+  providers_attempted: JSON,    -- list of provider_ids tried in order
   params_stripped: JSON,
   final_provider_id, routing_reason,
   queue_wait_ms, ttft_ms,
@@ -1441,6 +1734,13 @@ ORACLE_DB_CONNECTION_STRING=
 # Redis (queue + RPM counters + demo key daily counters + in-flight tracking)
 REDIS_URL=
 
+# Provider Speed Ratings — higher number = faster provider.
+# Add one `<PROVIDER_ENV>_SPEED` value for each provider key env var you configure.
+# Example: free/demo traffic may be routed to lower speed values; paid traffic prefers higher values.
+OPENROUTER_API_KEY_SPEED=80
+GROQ_API_KEY_SPEED=70
+POLLINATIONS_API_KEY_SPEED=20
+
 # Encryption (for provider API keys stored at rest)
 ENCRYPTION_KEY=
 
@@ -1461,6 +1761,7 @@ FEATURE_CONSUMER_APP=false
 ## 26. Phased Rollout Plan
 
 ### Phase 0 — Foundation
+
 - [ ] Database schema + migrations
 - [ ] Auth (GitHub OAuth, admin role middleware)
 - [ ] Provider management (DB + admin UI)
@@ -1469,6 +1770,7 @@ FEATURE_CONSUMER_APP=false
 - [ ] `.env`-driven base URL config
 
 ### Phase 1 — Core API Gateway
+
 - [ ] Queue system (Redis sorted set, priority-based)
 - [ ] Provider router with health tracking, fallback, in-flight counting
 - [ ] `POST /v1/chat/completions` (streaming + non-streaming)
@@ -1480,6 +1782,7 @@ FEATURE_CONSUMER_APP=false
 - [ ] Request logs + routing logs
 
 ### Phase 2 — Billing & Plans
+
 - [ ] Subscription tier CRUD (admin panel)
 - [ ] Manual plan upgrade (admin)
 - [ ] Credit system (standard, fast, rollover, booster pools)
@@ -1492,6 +1795,7 @@ FEATURE_CONSUMER_APP=false
 - [ ] Pre-reservation + reconciliation
 
 ### Phase 3 — Advanced Features
+
 - [ ] Compression pipeline (sequential backend)
 - [ ] Compression settings UI (per model, per tier, independent model per tier)
 - [ ] Context window tier unlock + sequential enforcement
@@ -1503,6 +1807,7 @@ FEATURE_CONSUMER_APP=false
 - [ ] Announcement system + bell notifications
 
 ### Phase 4 — Frontend Polish
+
 - [ ] Material 3 Expressive dashboard
 - [ ] Dynamic tier accent colors (DB-driven, animated transitions)
 - [ ] Model detail sheet + lock icons + per-tier compression config UI
@@ -1512,6 +1817,7 @@ FEATURE_CONSUMER_APP=false
 - [ ] Public model catalog page (marketing, no auth)
 
 ### Phase 5 — Consumer App
+
 - [ ] Demo key system fully live on chat app landing page (already scaffolded in Phase 1)
 - [ ] Authenticated chat: logged-in users routed through their own API key automatically
 - [ ] Chat interface (conversation view, model selector showing demo > free > ... tier order)
@@ -1522,17 +1828,82 @@ FEATURE_CONSUMER_APP=false
 - [ ] Free tier API key access gated (consumer app only, no raw key for free tier)
 
 ### Phase 6 — Growth
+
 - [ ] Real payment integration (Midtrans for IDR, Stripe for USD)
 - [ ] Affiliate / referral system
 - [ ] Google OAuth
-- [ ] More provider integrations
 - [ ] Admin analytics dashboard
+
+### Phase 7 — Provider Integration (Final Phase)
+
+This is the last major engineering phase. All previous phases run against stub/mock providers or a small set of manually-configured endpoints. Phase 7 implements the full aggregator and distributor layer reading from provider documentation.
+
+**Aggregator / Distributor Manager:**
+
+The aggregator is the core internal service that manages all outbound provider traffic. It sits between the queue worker and the external provider APIs.
+
+| Responsibility | Detail |
+|---------------|--------|
+| Provider doc integration | For each provider, implement their specific API format per their official docs (OpenAI-compatible, Anthropic native, custom, etc.) |
+| Request translation | Normalise all inbound OpenAI-compatible requests into the format each provider expects. Translate responses back to OpenAI-compatible format. |
+| Key pool management | Round-robin `.env` key selection per provider; rate-limit detection and backoff; automatic failover to next key |
+| Response normalisation | Strip all upstream provider headers and identifying information before returning to caller (see §6 Obfuscation Policy) |
+| In-flight tracking | Maintain per-provider in-flight counts in Redis; enforce `max_concurrent` per provider |
+| Health monitoring | Detect rate limits (429), auth failures (401/403), out-of-credit signals, and hard errors. Update `providers.status` accordingly. |
+| Admin alerts | Notify admin if a provider has been in `out_of_credits` or `dead` state for >1 day on any request attempt |
+| Audit trail | Every outbound request logged to `routing_logs` (admin-only, 15d retention) with provider ID, **obfuscated key reference** (shortened hash — never the actual key or index number), user_id, latency, and outcome |
+
+**Provider support scope — adapter-per-provider architecture:**
+
+Every provider gets its **own adapter module**. Adapters are isolated from each other and communicate only with the main aggregator via a standard interface. This isolation is intentional: each provider has different rate limit formats, error codes, polling mechanisms (some use async job polling for image/video/music generation, others stream synchronously), and auth patterns.
+
+```
+aggregator/
+  adapters/
+    openai.js          ← OpenAI REST + streaming
+    anthropic.js       ← Anthropic Messages API (native)
+    google.js          ← Gemini API
+    openrouter.js      ← OpenRouter (OpenAI-compatible passthrough + extras)
+    together.js        ← Together AI
+    ...                ← one file per provider family
+  aggregator.js        ← main orchestrator; calls adapters, enforces obfuscation,
+                          handles key pool rotation, health tracking, logging
+```
+
+Each adapter implements a standard interface:
+
+- `request(payload, key)` → normalised response
+- `translateError(rawError)` → `{ category: 'user_actionable' | 'internal', message: string }`
+- `isRateLimited(response)` → bool
+- `isAsync` → bool (true for providers that return a job ID to poll)
+- `pollResult(jobId, key)` → normalised response (async providers only)
+
+Polling jobs (image, video, music, TTS generation from async providers) are managed per-adapter and do not block the main queue worker thread.
+
+**Aggregator responsibilities:**
+
+- Calls the correct adapter based on `model_providers.env_key_prefix`
+- Enforces key pool rotation and health flags
+- Strips all upstream headers; passes only normalised response to caller
+- Logs to `routing_logs` with obfuscated key reference (`key_ref_hash`)
+- Fires `admin_notifications` records for provider health events
+- Enforces that no raw provider error text escapes — all errors pass through adapter's `translateError`
+
+**Security:**
+
+- All outbound requests routed through aggregator only — no direct client → provider path
+- Provider base URLs and key prefixes in `.env`; resolved at runtime, never returned to client
+- TLS enforced on all outbound connections
+- Internal metadata fields stripped from payload before forwarding
+
+> Provider priority list for Phase 7 decided at Phase 7 kickoff.
 
 ---
 
 ## 27. Decision Log (Q&A Sets A–C)
 
 ### Set A
+
 - ✅ Queue base priority `n` is DB-configured per tier — not hardcoded.
 - ✅ Compression is sequential backend. TTFT slower; spinner shown client-side.
 - ✅ Permanent packs survive upgrades; lost only on downgrade below purchase tier. `ignore_plan_lock` for promo exceptions.
@@ -1541,6 +1912,7 @@ FEATURE_CONSUMER_APP=false
 - ✅ Exhausted paid users treated per tier config — typically same as free. Context locked back to exhaustion limit.
 
 ### Set B
+
 - ✅ Compression compresses **full context** — no "recent N messages" retention. API; caller manages own window.
 - ✅ Streaming + compression: TTFT delayed, stream shows nothing, spinner shown. Tokens flow once primary starts.
 - ✅ Booster pack stacking: **separate pools**, order: Booster packs → Rollover → Sub credits. Highest priority fast first.
@@ -1552,6 +1924,7 @@ FEATURE_CONSUMER_APP=false
 - ✅ Consumer app: **integrated** with dashboard.
 
 ### Set C
+
 - ✅ Log retention: request summary 30d, verbose/routing 15d. Users see own 30d activity (summarised).
 - ✅ Streaming + queue: SSE stays open during queue wait. Heartbeat prevents timeout.
 - ✅ Credit pre-reservation: estimated credits reserved; insufficient balance = rejected before queue.
@@ -1560,6 +1933,7 @@ FEATURE_CONSUMER_APP=false
 - ✅ Unauthenticated: cannot hit any API endpoint. Public model catalog is a frontend page only.
 
 ### Set D
+
 - ✅ Demo key persists via **cookie (primary) + localStorage (secondary)**. If localStorage is cleared, the cookie restores the key on next load. Deleting both resets the demo session.
 - ✅ Mobile and PC are **separate demo key namespaces** (`platform` enum). Cross-device sync requires account creation.
 - ✅ Different browsers on the same device receive **independent demo keys** by design — no reconciliation without an account.
@@ -1569,6 +1943,29 @@ FEATURE_CONSUMER_APP=false
 - ✅ Consumer app current state: **barebones intermediary** (demo + redirect to dashboard). Authenticated chat via auto-resolved API key in Phase 5.
 - ✅ Playground and roleplay features are **Phase 5**. Social/sharing features are Phase 6+.
 
+### Set E
+
+- ✅ **Provider API keys are `.env`-only** — never stored in DB. `providers` table holds only `env_key_prefix` to resolve keys at runtime.
+- ✅ **Multi-key rotation per provider**: multiple `.env` keys (e.g. `OPENAI_KEY_1`, `OPENAI_KEY_2`) pooled and rotated round-robin; rate-limited keys flagged and skipped.
+- ✅ **Four-page frontend architecture**: `index.html` (chat/demo), `users.html` (dashboard), `login.html` (OAuth intermediary), `admin.html` (admin panel).
+- ✅ **`index.html` file split**: `index.js` owns UI logic, `app.js` is API talker only. Do not expand `index.html` scope until Phase 5.
+- ✅ **Login flow**: `index.html` → `login.html` → GitHub OAuth → back to `index.html` → profile dropup → `users.html`.
+- ✅ **Admin ↔ User view toggle**: single button for admin users to switch between admin panel and user dashboard view without logging out.
+- ✅ **SQL query tool in admin**: SELECT by default; destructive queries require per-session override toggle. All queries logged to `admin_sql_query_logs`.
+- ✅ **Provider capability priority** (when strict_params off): `streaming > image > tool_calling > reasoning > search > others`. Best coverage score wins; ties broken by speed rating.
+- ✅ **Anonymous endpoint table on model cards**: providers labeled `Endpoint A`, `Endpoint B`, etc. — provider names never exposed to users.
+- ✅ **Deprecation date on models**: once reached, model soft-disabled on frontend (greyed + tooltip); still API-accessible with deprecation warning header.
+- ✅ **Speed rating convention**: Higher number = faster. Provider-specific `<PROVIDER_ENV>_SPEED` values in `.env` override DB defaults; free/demo traffic can prefer lower-speed providers while paid/fast-credit traffic prefers higher-speed providers.
+
+### Set F
+
+- ✅ **Provider adapters are per-provider** — one adapter module per provider family. Each handles its own rate limit format, error codes, and polling logic (async providers like image/video gen have their own `pollResult()` method). All adapters communicate with the central aggregator via a standard interface.
+- ✅ **Error translation is adapter responsibility** — user-actionable errors (context length exceeded, tool calling unsupported, image not supported, invalid request) are translated and surfaced to the user with provider-neutral messages. Internal errors (overloaded, rate limited, auth failure) return a generic "Service temporarily unavailable." Raw provider error text never reaches the user.
+- ✅ **Admin alerts are DB-only in v1** — written to `admin_notifications` table, shown via in-panel notification bell. No email notifications yet. Types: `provider_out_of_credits`, `provider_dead`, `provider_rate_limited_extended`, `system_alert`.
+- ✅ **`routing_logs` key reference is obfuscated** — stores a `key_ref_hash` (short hash of the key used), not the key index or raw key. Sufficient for correlating key-specific issues in debugging. Also stores `user_id` and `provider_id` for cross-referencing.
+- ✅ **`model_maker` is a FK table** — `model_makers` table with `id`, `name`, `slug`, `icon_url`, `description`, `website_url`. `models.model_maker_id` FK → `model_makers`. Enables icon+name dropdown in admin catalogue and beautiful filter UI for users.
+- ✅ **Phase 7 provider priority** — decided at Phase 7 kickoff, not pre-planned.
+
 ---
 
 ## 28. Open TODOs
@@ -1576,6 +1973,7 @@ FEATURE_CONSUMER_APP=false
 - [ ] **James:** Fill in tier pricing table in §7 (IDR/USD prices, credit amounts, priority values, accent colours).
 - [ ] **James:** Finalise tier names (Free / Basic / Plus / Pro / Elite or similar).
 - [ ] **James:** Decide which specific models are available on the `demo` tier.
+- [ ] **James:** Define `.env` naming convention for multi-key providers (e.g. `OPENAI_KEY_1` / `OPENAI_KEY_2` assumed).
 - [ ] Define heartbeat ping interval for queue-waiting SSE connections *(suggest: 15 seconds)*.
 - [ ] Define per-request-type timeout thresholds *(suggest: chat ~30s, image ~120s, video ~300s)*.
 - [ ] Confirm `ADMIN_GITHUB_HANDLES` format in `.env` — comma-separated list assumed.
@@ -1587,7 +1985,9 @@ FEATURE_CONSUMER_APP=false
 - [ ] Confirm username uniqueness rules (min length, allowed characters, reserved words like "admin", "orchid").
 - [ ] Confirm Oracle driver mode: **thin** (no native deps, recommended for cloud ADB) vs **thick** (requires Instant Client). Thin mode preferred unless specific features require thick.
 - [ ] Fill in `ORACLE_DB_CONNECTION_STRING` in `.env` once Oracle Cloud ADB instance is provisioned.
+- [ ] Confirm SQL query tool scope: should read-only SELECT always be permitted, or require a separate role flag above `admin`?
+- [ ] Decide param priority order: `streaming > image > tool_calling > reasoning > search` assumed — confirm or reorder.
 
 ---
 
-*v2.2 — Oracle DB config, GitHub OAuth env vars, SESSION_SECRET documented. Added §19a Account Center (profile, history, deletion flow, session management). Added `user_auth_providers` multi-provider table. §19 Auth expanded with Google OAuth roadmap and account linking. §20 dashboard sections updated.*
+*v2.8 — Provider speed convention changed to higher number = faster. Added `.env` provider-specific `<PROVIDER_ENV>_SPEED` configuration, documented DB fallback behaviour, and updated routing rules so free/demo traffic can use lower-speed providers while paid/fast-credit traffic prioritises higher-speed providers.*

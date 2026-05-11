@@ -1,46 +1,21 @@
 /**
- * /api/auth/github - GitHub OAuth Initiation
- * 
- * GET without code: Redirects to GitHub for authentication
+ * GET /api/auth/github — Initiate GitHub OAuth flow
  */
-
-import { 
-    generateState, 
-    getGitHubAuthUrl,
-    sendRedirect
-} from '../../lib/auth.js';
+import { generateState, getGitHubAuthUrl, sendRedirect } from '../../lib/auth.js';
+import { applyCors, serializeCookie, appendSetCookie } from '../../lib/api-helpers.js';
 
 export default async function handler(req, res) {
-    if (req.method !== 'GET') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
-    
-    try {
-        if (!process.env.GITHUB_CLIENT_ID || !process.env.GITHUB_CLIENT_SECRET) {
-            return res.status(500).json({ 
-                error: 'GitHub OAuth not configured',
-                message: 'GITHUB_CLIENT_ID and GITHUB_CLIENT_SECRET must be set in Vercel environment variables.'
-            });
-        }
+    applyCors(req, res);
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
 
-        // Generate state for CSRF protection
+    try {
         const state = generateState();
-        
-        // Store state in a cookie for validation
-        res.setHeader('Set-Cookie', [
-            `oauth_state=${state}`,
-            'Path=/',
-            'HttpOnly',
-            'Secure',
-            'SameSite=Lax',
-            'Max-Age=600' // 10 minutes
-        ].join('; '));
-        
-        // Redirect to GitHub
+        appendSetCookie(res, serializeCookie('oauth_state', state, { maxAge: 600 }));
         const authUrl = getGitHubAuthUrl(state, req);
         sendRedirect(res, authUrl);
-    } catch (error) {
-        console.error('GitHub auth error:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
+    } catch (err) {
+        console.error('[auth/github]', err.message);
+        res.statusCode = 500;
+        res.end(JSON.stringify({ error: { message: 'OAuth configuration error.' } }));
     }
 }

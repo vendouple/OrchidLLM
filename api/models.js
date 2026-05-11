@@ -1,38 +1,21 @@
 /**
- * /api/models - Model Catalog
- * 
- * Returns admin-managed model catalog from DB only.
+ * /api/models — Frontend model catalog (legacy endpoint for index.html)
+ * Returns all active models (no auth required for public catalog)
  */
-
-import { closePool, isDbConfigured } from '../lib/oracle.js';
-import { getActiveModelCatalogCategories } from '../lib/model-catalog.js';
+import { applyCors, sendJson, sendError } from '../lib/api-helpers.js';
+import { listAccessibleModels } from '../lib/api-core.js';
+import { isDbConfigured } from '../lib/oracle.js';
 
 export default async function handler(req, res) {
-    if (req.method !== 'GET') {
-        return res.status(405).json({ error: 'Method not allowed' });
-    }
-    
-    try {
-        if (!isDbConfigured()) {
-            return res.status(503).json({
-                error: 'Database unavailable',
-                message: 'Model catalog is DB-only and requires Oracle DB configuration.'
-            });
-        }
+    applyCors(req, res);
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
+    if (req.method !== 'GET') return sendError(res, 405, 'method_not_allowed', 'GET only.');
 
-        const categories = await getActiveModelCatalogCategories();
-        res.status(200).json({ categories });
-    } catch (error) {
-        if (error?.code === 'MODEL_CATALOG_TABLE_MISSING') {
-            return res.status(503).json({
-                error: 'Model catalog table missing',
-                message: 'Run db/migrate_provider_queue.sql to create model_catalog and model_provider_mappings.'
-            });
-        }
-
-        console.error('Models error:', error);
-        res.status(500).json({ error: 'Internal server error', message: error.message });
-    } finally {
-        await closePool();
+    if (!isDbConfigured()) {
+        // Fallback: serve models.json
+        return sendJson(res, 200, { object: 'list', data: [], fallback: true });
     }
+
+    const models = await listAccessibleModels({ authenticated: false, modelAccessTier: 'demo' });
+    return sendJson(res, 200, { object: 'list', data: models });
 }

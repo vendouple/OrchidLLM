@@ -979,7 +979,8 @@ function renderModelList(filter='') {
     if (m.caching) metaParts.push(`<span class="cap-chip"><span class="ms">memory</span>Caching</span>`);
     if (m.timeoutMs) metaParts.push(`<span class="cap-chip"><span class="ms">timer</span>${Math.round(m.timeoutMs / 1000)}s timeout</span>`);
     if (Array.isArray(m.providers) && m.providers.length) {
-      metaParts.push(`<span class="cap-chip"><span class="ms">hub</span>${escHtml(m.providers.join(', '))}</span>`);
+      const endpointLabel = `${m.providers.length} anonymous endpoint${m.providers.length === 1 ? '' : 's'}`;
+      metaParts.push(`<span class="cap-chip"><span class="ms">hub</span>${escHtml(endpointLabel)}</span>`);
     }
     if (Array.isArray(m.tags) && m.tags.length) {
       metaParts.push(`<span class="cap-chip"><span class="ms">sell</span>${escHtml(m.tags.join(', '))}</span>`);
@@ -2181,7 +2182,7 @@ function setAuthUi(session) {
 
   if (session && session.authenticated) {
     const u = session.user;
-    const dashboardHref = '/user.html';
+    const dashboardHref = '/users.html';
     const dashboardLabel = 'Go to Dashboard';
 
     // Trigger row
@@ -2214,7 +2215,7 @@ function setAuthUi(session) {
       if (dr) dr.textContent = session.isAdmin ? 'Admin' : 'Member';
       if (dal) dal.style.display = session.isAdmin ? 'flex' : 'none';
       if (dul) dul.style.display = 'flex';
-      if (dul) dul.href = '/user.html';
+      if (dul) dul.href = '/users.html';
     }
     if (trigger) trigger.setAttribute('aria-expanded', 'false');
   } else {

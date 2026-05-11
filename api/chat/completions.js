@@ -1,677 +1,202 @@
 /**
- * /api/chat/completions - Chat Completions Proxy
+ * /api/chat/completions — Chat Completions Gateway
  *
- * Refactored to support:
- * - Provider registry with OpenAI-compatible and non-compatible adapters.
- * - Multiple upstream keys per provider with per-key usage counters.
- * - Priority queue scheduling before dispatching to providers.
- * - Response normalization for providers that do not return OpenAI shape.
+ * Full request lifecycle per ORCHIDLLM_PLAN §18:
+ * Auth → RPM → Model Access → Context Check → Credit Reserve → Route → Stream/Return
  */
-
-import {
-    detectKeyType,
-    validateApiKey,
-    isModelAllowed
-} from '../../lib/keys.js';
-import { checkRateLimit, logUsage, checkDemoSession, checkTokenLimits } from '../../lib/usage.js';
+import { applyCors, resolveAuthContext, sendJson, sendError, readJsonBody, getBearerToken } from '../../lib/api-helpers.js';
+import { getModelRecord, checkModelAccess, checkContextAccess, checkDemoKeyLimit, touchDemoKey, touchApiKeyUsage, logRequest, logRouting, makeKeyRefHash } from '../../lib/api-core.js';
+import { selectProvider, getMultipliers, calculateCost, handleProviderFailure } from '../../lib/router.js';
+import { forwardChatCompletion, extractUsage } from '../../lib/providers.js';
 import { countMessagesTokens, estimateOutputTokens } from '../../lib/tokenizer.js';
-import { generateCompositeHash } from '../../lib/fingerprint.js';
-import { closePool, isDbConfigured } from '../../lib/oracle.js';
-import {
-    getActiveModelById,
-    mapProviderCandidatesForModel
-} from '../../lib/model-catalog.js';
-import {
-    buildProviderCandidates,
-    PROVIDER_ENDPOINTS
-} from '../../lib/provider-registry.js';
-import { recordProviderUsage } from '../../lib/provider-keys.js';
-import {
-    executeProviderChatCompletion,
-    extractProviderUsage
-} from '../../lib/providers.js';
-import {
-    normalizeQueuePriority,
-    enqueueRequest,
-    completeQueueItem,
-    cancelQueueItem,
-    getQueueStatus
-} from '../../lib/queue.js';
-import {
-    filterCandidatesByKeyAccess,
-    buildRoutableCandidates,
-    waitForQueueTurn,
-    orderCandidatesForExecution
-} from '../../providers/distributor.js';
-import { deductCredits } from '../../lib/credits.js';
-import { routeRequest } from '../../lib/context-router.js';
-
-// Hard wall for the entire upstream round-trip (connect + headers + full body).
-// Keep well below Vercel's 300 s function limit.
-const UPSTREAM_TIMEOUT_MS = Number(process.env.UPSTREAM_FETCH_TIMEOUT_MS || 60000);
-// Hard wall for each DB call.
-const DB_TIMEOUT_MS = Number(process.env.DB_TIMEOUT_MS || 8000);
-
-// ─── helpers ──────────────────────────────────────────────────────────────────
-
-/**
- * Race a DB promise against a hard timeout; resolve to fallback on timeout.
- */
-function withDbTimeout(promise, fallback, label = 'DB') {
-    let timeoutId;
-
-    return Promise.race([
-        promise,
-        new Promise(resolve =>
-            timeoutId = setTimeout(() => {
-                console.warn(`[completions] ${label} timed out after ${DB_TIMEOUT_MS}ms — fail open`);
-                resolve(fallback);
-            }, DB_TIMEOUT_MS)
-        )
-    ]).finally(() => {
-        if (timeoutId) {
-            clearTimeout(timeoutId);
-        }
-    });
-}
-
-// ─── handler ──────────────────────────────────────────────────────────────────
+import { reserveCredits, reconcileCredits, releaseReservation, getEffectivePriority } from '../../lib/billing.js';
+import { enqueueRequest, waitForQueueTurn, completeQueueItem, failQueueItem } from '../../lib/queue.js';
+import { checkRateLimit } from '../../lib/redis.js';
+import { isDbConfigured } from '../../lib/oracle.js';
 
 export default async function handler(req, res) {
-    if (req.method !== 'POST') {
-        return res.status(405).json({ error: 'Method not allowed' });
+    applyCors(req, res);
+    if (req.method === 'OPTIONS') { res.statusCode = 204; return res.end(); }
+    if (req.method !== 'POST') return sendError(res, 405, 'method_not_allowed', 'POST only.');
+
+    const auth = await resolveAuthContext(req, { allowAnonymousDemo: true });
+    if (!auth.authenticated) {
+        return sendError(res, 401, 'unauthorized', 'Authentication required.');
     }
 
-    // ── Identify caller ──────────────────────────────────────────────────────
-    const authHeader     = req.headers['authorization'];
-    const rawKey         = authHeader?.replace('Bearer ', '').trim() || '';
-    const clientIP       = (req.headers['x-forwarded-for'] || '').split(',')[0].trim()
-                           || req.connection?.remoteAddress || 'unknown';
-    const fingerprintStr = req.headers['x-fingerprint'];
-    const userAgent      = req.headers['user-agent'] || 'unknown';
+    // RPM check
+    const rpmKey = auth.userId ? `rpm:${auth.userId}` : `rpm:demo:${auth.demoKey?.demoKeyId || 'anon'}`;
+    const rpmLimit = auth.rpm || 3;
+    const rpmCheck = await checkRateLimit(rpmKey, rpmLimit, 60, { requireDurable: false });
+    if (!rpmCheck.allowed) {
+        return sendError(res, 429, 'rate_limit', 'Rate limit exceeded. Please slow down.');
+    }
 
-    const dbAvailable = isDbConfigured();
-    let usedDb = false;
+    if (auth.type === 'demo') {
+        const demoLimit = await checkDemoKeyLimit(auth.demoKey?.demoKeyId);
+        if (!demoLimit.allowed) {
+            return sendError(res, 429, 'demo_limit_exceeded', `Demo daily limit reached (${demoLimit.limit} requests/day).`);
+        }
+    }
 
-    // ── Single abort controller covering the ENTIRE upstream call ────────────
-    // Cleared only after headers AND body have been fully consumed.
-    const upstreamCtrl = new AbortController();
-    const upstreamTimer = setTimeout(() => {
-        upstreamCtrl.abort();
-        console.error('[completions] Upstream timeout — aborting after', UPSTREAM_TIMEOUT_MS, 'ms');
-    }, UPSTREAM_TIMEOUT_MS);
+    const body = await readJsonBody(req);
+    const modelSlug = body.model;
+    if (!modelSlug) return sendError(res, 400, 'missing_model', 'model field is required.');
 
-    let queueId = null;
-    let selectedCandidate = null;
+    if (!isDbConfigured()) {
+        return sendError(res, 503, 'db_unavailable', 'Service temporarily unavailable.');
+    }
 
+    // Model access check
+    const modelRow = await getModelRecord(modelSlug);
+    const accessCheck = checkModelAccess(auth, modelRow);
+    if (!accessCheck.allowed) {
+        return sendError(res, accessCheck.status, accessCheck.code, accessCheck.message);
+    }
+
+    // Token count + context check
+    const inputTokens = await countMessagesTokens(body.messages || []);
+    const demoContextCap = Number(process.env.DEMO_CONTEXT_CAP || 33000);
+    if (auth.type === 'demo' && inputTokens > demoContextCap) {
+        return sendError(res, 403, 'context_limit_exceeded', 'Context limit exceeded. Demo requests are capped at 33,000 tokens.');
+    }
+    const contextCheck = checkContextAccess(auth, modelRow, inputTokens);
+    if (!contextCheck.allowed) {
+        return sendError(res, contextCheck.status, contextCheck.code, contextCheck.message);
+    }
+
+    // Parameter handling + provider routing
+    const requestedParams = Object.keys(body).filter(k => !['model', 'messages', 'stream', '_requiredParams', '_orchidMeta'].includes(k));
+    const explicitRequiredParams = Array.isArray(body._requiredParams) ? body._requiredParams : [];
+    const requiredParams = [...new Set([...requestedParams, ...explicitRequiredParams])];
+    const strictParams = auth.type === 'api_key' && auth.apiKey?.strictParamsEnabled;
+    const preferFastProviders = auth.type !== 'demo'
+        && (auth.modelAccessTier || 'free') !== 'free';
+    const provider = await selectProvider(modelSlug, inputTokens, {
+        strictParams,
+        requiredParams,
+        preferFastProviders,
+    });
+    if (!provider) {
+        return sendError(res, strictParams ? 400 : 503, strictParams ? 'unsupported_parameters' : 'no_provider',
+            strictParams ? 'No available provider supports all requested parameters for this model.' : 'No provider available for this model. Please try again later.');
+    }
+    const droppedParams = provider.droppedParams || [];
+    const forwardBody = { ...body };
+    for (const param of droppedParams) delete forwardBody[param];
+    if (!strictParams && auth.apiKey?.strictParamsOption && droppedParams.length) {
+        res.setHeader('X-OrchidLLM-Param-Dropped', droppedParams.join(','));
+        res.setHeader('X-Orchid-Unsupported-Params', droppedParams.join(','));
+    }
+
+    // Credit reservation (skip for demo)
+    const multipliers = await getMultipliers(modelSlug, inputTokens);
+    const estimatedOutput = estimateOutputTokens(inputTokens, modelSlug);
+    const estimatedCost = calculateCost({ input: inputTokens, output: estimatedOutput }, multipliers);
+    let reserved = false;
+
+    if (auth.type !== 'demo' && auth.userId) {
+        reserved = await reserveCredits(auth.userId, estimatedCost);
+        if (!reserved) {
+            return sendError(res, 402, 'insufficient_credits', 'Insufficient credits. Please upgrade or purchase a booster pack.');
+        }
+    }
+
+    // Queue
+    const queueEntry = await enqueueRequest({
+        userId: auth.userId, apiKeyId: auth.apiKey?.id,
+        modelId: modelRow?.ID, providerId: provider.providerId,
+        priority: auth.userId ? await getEffectivePriority(auth.userId, auth.apiKey?.tierId || auth.user?.tierId).catch(() => 0) : 0,
+        reservedCredits: estimatedCost,
+    });
+
+    const queueTurn = await waitForQueueTurn(queueEntry.id, {
+        maxConcurrent: auth.apiKey?.maxConcurrent || 1,
+        userId: auth.userId,
+    });
+
+    if (!queueTurn.acquired) {
+        if (auth.userId && reserved) await releaseReservation(auth.userId, estimatedCost);
+        await failQueueItem(queueEntry.id);
+        return sendError(res, 429, 'queue_full', queueTurn.reason === 'concurrency_limit' || queueTurn.lastReason === 'concurrency_limit'
+            ? 'Concurrent request limit reached.' : 'Queue is full. Please try again.');
+    }
+
+    // Dispatch to provider
+    const startMs = Date.now();
     try {
-        // ── Key / session resolution ─────────────────────────────────────────
-        let keyInfo    = null;
-        let identifier = null;
-
-        if (rawKey) {
-            const keyType = detectKeyType(rawKey);
-
-            if (keyType.type === 'byop') {
-                keyInfo    = { type: 'byop', actualKey: keyType.actualKey, bypassLimits: true };
-                identifier = `byop:${rawKey.substring(0, 20)}`;
-
-            } else if (keyType.needsDbValidation) {
-                if (!dbAvailable) {
-                    return res.status(503).json({
-                        error: 'Database unavailable',
-                        message: 'API key validation requires a database. Use BYOP mode (prefix your Pollinations key with BYOP_) or try again later.'
-                    });
-                }
-                usedDb = true;
-                const validated = await withDbTimeout(validateApiKey(rawKey), null, 'validateApiKey');
-                if (!validated) {
-                    return res.status(401).json({ error: 'Invalid API key' });
-                }
-                keyInfo    = validated;
-                identifier = `key:${rawKey}`;
-
-            } else {
-                return res.status(401).json({ error: 'Unknown key format' });
-            }
-
-        } else {
-            // Demo / anonymous
-            let fingerprint = {};
-            if (fingerprintStr) {
-                try { fingerprint = JSON.parse(fingerprintStr); } catch { /* ignore */ }
-            }
-            const compositeHash = generateCompositeHash(fingerprint, clientIP, userAgent);
-
-            if (dbAvailable) {
-                usedDb = true;
-                const demoSession = await withDbTimeout(
-                    checkDemoSession(compositeHash, fingerprint, clientIP, userAgent),
-                    { isBlocked: false, apiKeyId: null, key: null },
-                    'checkDemoSession'
-                );
-                if (demoSession.isBlocked) {
-                    return res.status(429).json({
-                        error: 'Session blocked',
-                        message: 'Your session has been blocked due to suspicious activity'
-                    });
-                }
-                keyInfo = {
-                    type: 'demo', id: demoSession.apiKeyId,
-                    rpm: 5, rpd: 20,
-                    inputTokenLimit: 10000, outputTokenLimit: -1,
-                    bypassLimits: false
-                };
-            } else {
-                // No DB — graceful anonymous demo
-                keyInfo = {
-                    type: 'demo', id: null,
-                    rpm: 5, rpd: 20,
-                    inputTokenLimit: 10000, outputTokenLimit: -1,
-                    bypassLimits: false
-                };
-            }
-            identifier = `demo:${compositeHash}`;
-        }
-
-        // ── Rate limiting ────────────────────────────────────────────────────
-        if (!keyInfo.bypassLimits && usedDb) {
-            const rl = await withDbTimeout(
-                checkRateLimit(identifier, keyInfo.rpm, keyInfo.rpd),
-                { allowed: true, remaining: -1 },
-                'checkRateLimit'
-            );
-            if (!rl.allowed) {
-                return res.status(429).json({
-                    error: 'Rate limit exceeded',
-                    reason: rl.reason, resetAt: rl.resetAt, remaining: 0
-                });
-            }
-        }
-
-        // ── Parse body ───────────────────────────────────────────────────────
-        const body = req.body || {};
-        const { model, messages, stream, provider: requestedProvider } = body;
-        let requestedModelId = String(model || '').trim();
-        const isByopFastTrack = keyInfo.type === 'byop';
-        const isDemoPinnedMode = keyInfo.type === 'demo';
-        const isPollinationsPinnedMode = isByopFastTrack || isDemoPinnedMode;
-        const effectiveRequestedProvider = isPollinationsPinnedMode ? 'pollinations' : requestedProvider;
-
-        if (!requestedModelId || !messages) {
-            return res.status(400).json({
-                error: 'Missing required fields',
-                message: 'model and messages are required'
-            });
-        }
-
-        if (!dbAvailable) {
-            return res.status(503).json({
-                error: 'Database unavailable',
-                message: 'Model routing requires Oracle DB because the model catalog is DB-only.'
-            });
-        }
-
-        let activeModel = null;
-        try {
-            activeModel = await withDbTimeout(
-                getActiveModelById(requestedModelId),
-                null,
-                'getActiveModelById'
-            );
-        } catch (catalogError) {
-            if (catalogError?.code === 'MODEL_CATALOG_TABLE_MISSING') {
-                return res.status(503).json({
-                    error: 'Model catalog table missing',
-                    message: 'Run db/migrate_provider_queue.sql to create model_catalog and model_provider_mappings.'
-                });
-            }
-
-            throw catalogError;
-        }
-
-        if (!activeModel) {
-            return res.status(400).json({
-                error: 'Invalid model',
-                message: `Model '${requestedModelId}' is not active in model_catalog.`
-            });
-        }
-
-        // ── Model access (global keys only) ───────────────────────────────────
-        if (!keyInfo.bypassLimits && keyInfo.type !== 'demo' && !isModelAllowed(keyInfo, requestedModelId)) {
-            return res.status(403).json({
-                error: 'Model not allowed',
-                message: `No access to ${requestedModelId}`
-            });
-        }
-
-        // ── Token limits ─────────────────────────────────────────────────────
-        let inputTokens = 0;
-        if (!keyInfo.bypassLimits && keyInfo.inputTokenLimit !== -1) {
-            inputTokens = await countMessagesTokens(messages);
-            const estimatedOutput = estimateOutputTokens(inputTokens, requestedModelId);
-            const tc = await checkTokenLimits(keyInfo, inputTokens, estimatedOutput);
-            if (!tc.allowed) {
-                return res.status(400).json({ error: 'Token limit exceeded', message: tc.reason });
-            }
-        }
-
-        // ── Dynamic Context Routing ──────────────────────────────────────────
-        let routedMessages = messages;
-        let routeMultiplier = 1.0;
-        
-        if (dbAvailable && keyInfo.userId && !keyInfo.bypassLimits) {
-            if (inputTokens === 0) {
-                inputTokens = await countMessagesTokens(messages);
-            }
-            
-            const routeResult = await withDbTimeout(
-                routeRequest({ messages, modelRow: activeModel, userId: keyInfo.userId }),
-                { action: 'RAW', multiplier: 1.0, messages },
-                'routeRequest'
-            );
-            
-            if (routeResult.action === 'BLOCK') {
-                return res.status(400).json({ error: 'Context threshold exceeded', message: 'Context size blocked by your routing preferences.' });
-            }
-            
-            if (routeResult.action === 'COMPRESS') {
-                routedMessages = routeResult.compressedMessages;
-                requestedModelId = routeResult.workerModel.id;
-                activeModel = routeResult.workerModel;
-                
-                // Recalculate token count for the compressed prompt
-                inputTokens = await countMessagesTokens(routedMessages);
-            } else {
-                routeMultiplier = routeResult.multiplier || 1.0;
-            }
-        }
-
-        // ── Build provider candidates ────────────────────────────────────────
-        const allowedProviders = Array.isArray(keyInfo.providers)
-            ? keyInfo.providers
-            : [];
-
-        const providerCandidates = buildProviderCandidates({
-            model: requestedModelId,
-            requestedProvider: effectiveRequestedProvider,
-            allowedProviders,
-            endpointKey: PROVIDER_ENDPOINTS.CHAT_COMPLETIONS
+        const providerResponse = await forwardChatCompletion({
+            baseUrl: provider.baseUrl,
+            authKeyEnv: provider.authKeyEnv,
+            providerModelId: provider.providerModelId,
+            requestBody: forwardBody,
         });
 
-        if (providerCandidates.length === 0) {
-            return res.status(403).json({
-                error: 'Provider not allowed',
-                message: 'No provider is allowed by this key for the requested model/provider'
-            });
+        if (!providerResponse.ok) {
+            const status = providerResponse.status;
+            await handleProviderFailure(provider.id, status);
+            if (auth.userId && reserved) await releaseReservation(auth.userId, estimatedCost);
+            await failQueueItem(queueEntry.id);
+            await logRequest({ userId: auth.userId, apiKeyId: auth.apiKey?.id, modelId: modelRow?.ID, providerId: provider.providerId, endpoint: '/chat/completions', status: 'fail' });
+            return sendError(res, 503, 'provider_error', 'Service temporarily unavailable. Please retry.');
         }
 
-        const accessibleCandidates = filterCandidatesByKeyAccess(providerCandidates, keyInfo);
+        const ttftMs = Date.now() - startMs;
+        const contentType = providerResponse.headers.get('content-type') || '';
 
-        if (accessibleCandidates.length === 0) {
-            return res.status(403).json({
-                error: 'Provider not allowed',
-                message: 'No provider is allowed by this key for the requested model/provider'
-            });
-        }
-
-        const mappedCandidatesResult = await withDbTimeout(
-            mapProviderCandidatesForModel(requestedModelId, accessibleCandidates),
-            { reason: 'mapping_resolution_timeout', model: activeModel, candidates: [] },
-            'mapProviderCandidatesForModel'
-        );
-
-        if (mappedCandidatesResult?.reason === 'model_not_found') {
-            return res.status(400).json({
-                error: 'Invalid model',
-                message: `Model '${requestedModelId}' is not active in model_catalog.`
-            });
-        }
-
-        const mappedCandidates = Array.isArray(mappedCandidatesResult?.candidates)
-            ? mappedCandidatesResult.candidates
-            : [];
-
-        if (mappedCandidates.length === 0) {
-            const reason = mappedCandidatesResult?.reason || 'mapping_missing';
-            return res.status(503).json({
-                error: 'No upstream provider available',
-                reason,
-                message: `No active provider mapping found for model '${requestedModelId}'.`
-            });
-        }
-
-        const routableCandidates = await buildRoutableCandidates({
-            providerCandidates: mappedCandidates,
-            keyInfo,
-            allowDb: dbAvailable,
-            endpointKey: PROVIDER_ENDPOINTS.CHAT_COMPLETIONS
-        });
-
-        if (routableCandidates.length === 0) {
-            return res.status(503).json({
-                error: 'No upstream provider available',
-                message: 'No provider key is currently available for this request'
-            });
-        }
-
-        // ── Queue scheduling (skip entirely for BYOP fast-track) ────────────
-        if (isByopFastTrack) {
-            selectedCandidate = routableCandidates.find(candidate => candidate.providerId === 'pollinations') || null;
-            res.setHeader('x-provider-fasttrack', 'byop-pollinations');
-        } else {
-            let queuePriority = normalizeQueuePriority(
-                keyInfo.queuePriority !== undefined
-                    ? keyInfo.queuePriority
-                    : 0
-            );
-
-            // ── Credit Deduction (Pre-flight estimated) ─────────────────────────
-            let deductedCreditsInfo = null;
-            if (dbAvailable && keyInfo.userId && !keyInfo.bypassLimits) {
-                const estOutput = estimateOutputTokens(inputTokens, requestedModelId);
-                // Credits are deducted before queue slot selection so queue priority can be
-                // calculated. Use the first routable candidate as the conservative provider
-                // estimate and merge route multipliers when available; the final provider can
-                // still differ if queue scheduling selects another route.
-                const estimatedCreditCandidate = routableCandidates[0] || null;
-                const estimatedModelRow = estimatedCreditCandidate?.mappingMultipliers
-                    ? { ...activeModel, ...estimatedCreditCandidate.mappingMultipliers }
-                    : activeModel;
-                const deduction = await withDbTimeout(
-                    deductCredits({
-                        userId: keyInfo.userId,
-                        promptTokens: inputTokens,
-                        completionTokens: estOutput,
-                        modelRow: estimatedModelRow,
-                        isBatch: false,
-                        isCached: false,
-                        providerName: estimatedCreditCandidate?.providerId || null,
-                        contextSizeTokens: inputTokens
-                    }),
-                    null,
-                    'deductCredits'
-                );
-                
-                if (deduction && !deduction.allowed) {
-                    return res.status(402).json({ error: 'Insufficient credits', message: 'Not enough credits to process request.' });
-                }
-                
-                if (deduction) {
-                    queuePriority = deduction.queuePriority;
-                    deductedCreditsInfo = deduction;
-                }
-            }
-
-            const queueEntry = await enqueueRequest({
-                endpoint: '/chat/completions',
-                identifier,
-                apiKeyId: keyInfo.id,
-                model: requestedModelId,
-                priority: queuePriority
-            });
-
-            queueId = queueEntry.id;
-            if (queueId) {
-                res.setHeader('x-queue-id', queueId);
-            }
-
-            selectedCandidate = await waitForQueueTurn({
-                queueId,
-                endpoint: '/chat/completions',
-                candidates: routableCandidates
-            });
-        }
-
-        if (!selectedCandidate) {
-            const queueStatus = queueId ? await getQueueStatus(queueId) : null;
-            if (queueId) {
-                await cancelQueueItem(queueId, 'queue_wait_timeout');
-            }
-
-            return res.status(503).json({
-                error: 'All providers are busy',
-                message: 'Queue timeout reached before a provider slot was available',
-                queueId,
-                queueStatus
-            });
-        }
-
-        const { provider: _requestedProvider, ...forwardBody } = body;
-        forwardBody.messages = routedMessages;
-
-        const candidatesInAttemptOrder = isPollinationsPinnedMode
-            ? [selectedCandidate]
-            : orderCandidatesForExecution(selectedCandidate, routableCandidates);
-
-        let providerResult = null;
-        let lastProviderError = null;
-
-        for (const candidate of candidatesInAttemptOrder) {
-            const requestBody = { ...forwardBody, model: candidate.upstreamModel };
-
-            try {
-                providerResult = await executeProviderChatCompletion({
-                    providerId: candidate.providerId,
-                    upstreamModel: candidate.upstreamModel,
-                    requestBody,
-                    credential: candidate.credential,
-                    signal: upstreamCtrl.signal
-                });
-
-                selectedCandidate = candidate;
-                break;
-            } catch (providerError) {
-                lastProviderError = providerError;
-
-                await recordProviderUsage({
-                    providerId: candidate.providerId,
-                    credential: candidate.credential,
-                    endpoint: '/chat/completions',
-                    model: candidate.upstreamModel,
-                    statusCode: providerError.status || 502,
-                    usage: {
-                        counterType: candidate.credential?.usageCounterType || candidate.providerDefinition?.usageCounterType || 'tokens',
-                        promptTokens: 0,
-                        completionTokens: 0,
-                        totalTokens: 0,
-                        providerUnits: 0,
-                        rateLimitSnapshot: null
-                    },
-                    errorMessage: providerError.message,
-                    identifier,
-                    apiKeyId: keyInfo.id
-                });
-            }
-        }
-
-        if (!providerResult) {
-            const status = Number(lastProviderError?.status || 503);
-
-            if (queueId) {
-                await completeQueueItem({
-                    queueId,
-                    status: 'error',
-                    statusCode: status,
-                    errorMessage: lastProviderError?.message || 'No upstream provider available'
-                });
-            }
-
-            return res.status(status).json({
-                error: 'No upstream provider available',
-                status,
-                message: lastProviderError?.message || 'All configured providers failed to process this request'
-            });
-        }
-
-        res.setHeader('x-provider-speed-tier', selectedCandidate?.providerDefinition?.speedTier ?? 3);
-        res.setHeader('x-provider-free-tier', selectedCandidate?.providerDefinition?.enableFreeTier ?? false);
-        res.setHeader('x-provider-env-keys', (selectedCandidate?.providerDefinition?.envKeyCandidates ?? []).join(','));
-
-        // ── Consume response body (still under the same abort timer) ─────────
-        if (stream && providerResult.mode === 'stream') {
-            res.setHeader('Content-Type',  'text/event-stream');
+        // Streaming response
+        if (body.stream && contentType.includes('text/event-stream')) {
+            res.setHeader('Content-Type', 'text/event-stream');
             res.setHeader('Cache-Control', 'no-cache');
-            res.setHeader('Connection',    'keep-alive');
+            res.setHeader('Connection', 'keep-alive');
 
-            const reader = providerResult.response.body.getReader();
+            const reader = providerResponse.body.getReader();
             const decoder = new TextDecoder();
-            let outputTokens = 0;
-            let promptTokensFromStream = inputTokens;
+            let fullText = '';
 
             try {
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
-
-                    const chunk = decoder.decode(value);
-
-                    const completionMatch = chunk.match(/"completion_tokens":\s*(\d+)/);
-                    if (completionMatch) {
-                        outputTokens = parseInt(completionMatch[1], 10);
-                    }
-
-                    const promptMatch = chunk.match(/"prompt_tokens":\s*(\d+)/);
-                    if (promptMatch) {
-                        promptTokensFromStream = parseInt(promptMatch[1], 10);
-                    }
-
-                    res.write(value);
-                }
-            } catch (readErr) {
-                if (readErr.name === 'AbortError') {
-                    res.write('data: [DONE]\n\n');
+                    const chunk = decoder.decode(value, { stream: true });
+                    res.write(chunk);
+                    fullText += chunk;
                 }
             } finally {
-                res.end();
+                reader.releaseLock();
             }
 
-            if (usedDb) {
-                const clientFacingModel = selectedCandidate?.globalModelId || requestedModelId;
-                logUsage({
-                    identifier, apiKeyId: keyInfo.id, endpoint: '/chat/completions',
-                    model: clientFacingModel,
-                    inputTokens: promptTokensFromStream,
-                    outputTokens,
-                    ip: clientIP,
-                    fingerprintHash: identifier.startsWith('demo:') ? identifier.replace('demo:', '') : null,
-                    userAgent
-                }).catch(() => {});
-            }
-
-            await recordProviderUsage({
-                providerId: selectedCandidate.providerId,
-                credential: selectedCandidate.credential,
-                endpoint: '/chat/completions',
-                model: selectedCandidate.upstreamModel,
-                statusCode: providerResult.response.status,
-                usage: extractProviderUsage({
-                    providerId: selectedCandidate.providerId,
-                    providerDefinition: selectedCandidate.providerDefinition,
-                    credential: selectedCandidate.credential,
-                    responseHeaders: providerResult.response.headers,
-                    responseData: {
-                        usage: {
-                            prompt_tokens: promptTokensFromStream,
-                            completion_tokens: outputTokens,
-                            total_tokens: promptTokensFromStream + outputTokens
-                        }
-                    },
-                    fallbackPromptTokens: promptTokensFromStream,
-                    fallbackCompletionTokens: outputTokens
-                }),
-                identifier,
-                apiKeyId: keyInfo.id
-            });
-
-            if (queueId) {
-                await completeQueueItem({
-                    queueId,
-                    status: 'done',
-                    statusCode: 200
-                });
-            }
-
-        } else {
-            const data = providerResult.normalizedData || {};
-            const clientFacingModel = selectedCandidate?.globalModelId || requestedModelId;
-
-            if (data && typeof data === 'object') {
-                data.model = clientFacingModel;
-                data.provider_speed_tier = selectedCandidate?.providerDefinition?.speedTier ?? 3;
-                data.provider_free_tier = selectedCandidate?.providerDefinition?.enableFreeTier ?? false;
-                data.provider_env_keys = selectedCandidate?.providerDefinition?.envKeyCandidates ?? [];
-            }
-
-            const outputTokens = data.usage?.completion_tokens || 0;
-            const actualInput  = data.usage?.prompt_tokens || inputTokens;
-
-            if (usedDb) {
-                logUsage({
-                    identifier, apiKeyId: keyInfo.id, endpoint: '/chat/completions',
-                    model: clientFacingModel,
-                    inputTokens: actualInput,
-                    outputTokens,
-                    ip: clientIP,
-                    fingerprintHash: identifier.startsWith('demo:') ? identifier.replace('demo:', '') : null,
-                    userAgent
-                }).catch(() => {});
-            }
-
-            await recordProviderUsage({
-                providerId: selectedCandidate.providerId,
-                credential: selectedCandidate.credential,
-                endpoint: '/chat/completions',
-                model: selectedCandidate.upstreamModel,
-                statusCode: providerResult.response.status,
-                usage: extractProviderUsage({
-                    providerId: selectedCandidate.providerId,
-                    providerDefinition: selectedCandidate.providerDefinition,
-                    credential: selectedCandidate.credential,
-                    responseHeaders: providerResult.response.headers,
-                    responseData: data,
-                    fallbackPromptTokens: actualInput,
-                    fallbackCompletionTokens: outputTokens
-                }),
-                identifier,
-                apiKeyId: keyInfo.id
-            });
-
-            if (queueId) {
-                await completeQueueItem({
-                    queueId,
-                    status: 'done',
-                    statusCode: 200
-                });
-            }
-
-            res.status(200).json(data);
+            res.end();
+            // Reconcile (estimated usage for streaming)
+            const actualCost = estimatedCost;
+            if (auth.userId && reserved) await reconcileCredits(auth.userId, estimatedCost, actualCost);
+            await completeQueueItem({ queueId: queueEntry.id, actualCredits: actualCost });
+            if (auth.type === 'demo') await touchDemoKey(auth.demoKey?.demoKeyId);
+            if (auth.apiKey?.id) await touchApiKeyUsage(auth.apiKey.id, actualCost);
+            await logRequest({ userId: auth.userId, apiKeyId: auth.apiKey?.id, modelId: modelRow?.ID, providerId: provider.providerId, endpoint: '/chat/completions', status: 'success', creditsCharged: actualCost });
+            await logRouting({ requestId: queueEntry.id, userId: auth.userId, keyRefHash: makeKeyRefHash(auth), providersAttempted: [provider.providerId], finalProviderId: provider.providerId, routingReason: preferFastProviders ? 'provider_speed_fast' : 'provider_speed_slow', queueWaitMs: queueTurn.waitMs, ttftMs, paramsStripped: droppedParams });
+            return;
         }
+
+        // Non-streaming response
+        const data = await providerResponse.json();
+        const usage = extractUsage(data);
+        const actualCost = calculateCost(usage, multipliers);
+
+        if (auth.userId && reserved) await reconcileCredits(auth.userId, estimatedCost, actualCost);
+        await completeQueueItem({ queueId: queueEntry.id, actualCredits: actualCost });
+        if (auth.type === 'demo') await touchDemoKey(auth.demoKey?.demoKeyId);
+        if (auth.apiKey?.id) await touchApiKeyUsage(auth.apiKey.id, actualCost);
+        await logRequest({ userId: auth.userId, apiKeyId: auth.apiKey?.id, modelId: modelRow?.ID, providerId: provider.providerId, endpoint: '/chat/completions', status: 'success', creditsCharged: actualCost });
+        await logRouting({ requestId: queueEntry.id, userId: auth.userId, keyRefHash: makeKeyRefHash(auth), providersAttempted: [provider.providerId], finalProviderId: provider.providerId, routingReason: preferFastProviders ? 'provider_speed_fast' : 'provider_speed_slow', queueWaitMs: queueTurn.waitMs, ttftMs, paramsStripped: droppedParams });
+
+        return sendJson(res, 200, data);
 
     } catch (err) {
-        console.error('[completions] handler error:', err.name, err.message);
-
-        if (queueId) {
-            await completeQueueItem({
-                queueId,
-                status: err.name === 'AbortError' ? 'error' : 'error',
-                statusCode: err.name === 'AbortError' ? 504 : 500,
-                errorMessage: err.message
-            });
-        }
-
-        if (!res.headersSent) {
-            if (err.name === 'AbortError') {
-                res.status(504).json({ error: 'Gateway timeout', message: `Request aborted after ${UPSTREAM_TIMEOUT_MS / 1000}s` });
-            } else {
-                res.status(500).json({ error: 'Internal server error', message: err.message });
-            }
-        }
-    } finally {
-        // Always clear the upstream timer to avoid leaks
-        clearTimeout(upstreamTimer);
-        if (usedDb) {
-            await closePool();
-        }
+        console.error('[chat/completions] Dispatch error:', err.message);
+        if (auth.userId && reserved) await releaseReservation(auth.userId, estimatedCost);
+        await failQueueItem(queueEntry.id);
+        await logRequest({ userId: auth.userId, apiKeyId: auth.apiKey?.id, modelId: modelRow?.ID, endpoint: '/chat/completions', status: 'fail' });
+        return sendError(res, 503, 'service_error', 'Service temporarily unavailable. Please retry.');
     }
 }
