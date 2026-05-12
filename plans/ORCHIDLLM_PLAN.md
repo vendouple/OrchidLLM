@@ -330,7 +330,45 @@ Routing behaviour:
 8. On completion → decrement current_in_flight
 ```
 
-### Context Window Routing Optimisation
+### Traffic-Aware Routing
+
+The aggregator continuously monitors platform traffic load and adjusts routing behaviour to protect the experience of paying users during peaks.
+
+**Traffic state** is tracked in Redis as a rolling metric (e.g. requests/minute over the last 5 minutes):
+
+| Traffic State | Definition | Behaviour |
+|--------------|-----------|-----------|
+| `low` | Below normal baseline | All users routed normally; no restrictions tightened |
+| `normal` | Typical operating load | Standard routing rules apply |
+| `high` | Sustained elevated load | Free/demo users throttled toward slower providers and longer queue wait; paid users unaffected |
+| `peak` | Near-capacity | Free/demo users may be softly deprioritised further; batch jobs deferred until load drops; paying users still receive fastest eligible provider |
+
+> The aggregator never hard-blocks free/demo users during high traffic — it only adjusts their provider speed preference and queue position. Paid users should not notice high-traffic periods.
+
+**Traffic state is not exposed to users.** It is logged internally and visible to admin in the provider health dashboard.
+
+### Booster Package vs Subscription — Queue Priority
+
+When both a subscription tier and a booster package are active on the same account, the following priority rules apply:
+
+```
+Subscription queue priority always takes precedence over booster queue priority.
+
+Example:
+  User has: Plus subscription (queue_priority = 70) + Booster pack (queue_priority = 85)
+  Effective queue priority = max(subscription, booster) = 85
+  BUT:
+  If the subscription tier grants fast credits, those are consumed first before booster fast credits.
+  Booster fast credits are a reserve — consumed only once subscription allocation is exhausted.
+```
+
+Priority ordering (high → low):
+1. Subscription users (higher tier = higher priority)
+2. Booster-only users (no subscription, active booster pack)
+3. Free registered users
+4. Demo key users
+
+> During high traffic, booster users get faster access than free users but the queue still serves subscription users ahead of booster-only users. This ensures subscription value is protected.
 
 Routing is driven by `model_providers.context_limit` — no hardcoded token thresholds in code.
 
@@ -502,6 +540,8 @@ subscription_tiers
 
 ## 8. Compression System
 
+> ⚠️ **Placement rule:** All compression and context window configuration is **per model card only**. It is **not** a global setting and must not appear in the Settings section of the dashboard. Each model has independent config — what a user sets on Claude Opus 4.5 has zero effect on GPT-4o. Any agent or developer working on this UI must enforce this: the Settings page contains only account-level toggles (`strict_params`, general preferences). Compression lives on the model card, period.
+
 ### Overview
 
 Compression is a **backend-sequential pipeline** that reduces context size before sending to the primary model. Unlocked at Basic tier by default (configurable per tier via `supports_compression`).
@@ -565,7 +605,7 @@ user_compression_settings
 └── base_prompt_locked       text (admin-set, read-only to user)
 ```
 
-This configuration lives in the **Models tab** of the dashboard. Each model expands to show compression config per context tier — model dropdown + prompt editor per tier.
+This configuration lives on the **individual model card** inside the Models section of the dashboard. Each model card expands to show compression config per context tier — compression model dropdown + prompt editor per tier. **This is not accessible from Settings. It does not exist globally.**
 
 ### Admin Base Compression Prompt
 
@@ -915,6 +955,17 @@ On each request:
   → Increment counter
   → IF counter > rpm_limit → 429 response (no credit charge)
 ```
+
+### Redis Key Reference
+
+| Key Pattern | TTL | Purpose |
+|------------|-----|---------|
+| `rpm:{user_id}` | 60s | RPM counter per user |
+| `demo:{uuid}:daily` | End of UTC day | Demo key daily request counter |
+| `inflight:{provider_id}` | No TTL (decremented on completion) | Per-provider in-flight count |
+| `traffic:rpm_rolling` | 5 min rolling window | Platform-wide request rate for traffic state detection |
+| `traffic:state` | 30s TTL (refreshed by aggregator) | Current traffic state: `low` \| `normal` \| `high` \| `peak` |
+| `queue:user:{user_id}` | No TTL (sorted set score = priority) | User position in request queue |
 
 ### RPM Limits (DB-configured)
 
@@ -1269,24 +1320,28 @@ Tier color transitions are **animated** on upgrade confirmation.
 |---------|---------|
 | Home | Usage summary, credit meters (standard / fast / rollover / booster), active packs, recent activity |
 | Chat | Consumer app entry point (demo for guests, full chat for logged-in users — Phase 5) |
-| Models | Public catalog + authenticated detail view |
+| Models | Public catalog + authenticated detail view. Each model card is the **single location** for per-model context tier toggles, compression config, and budget behaviour (Allow / Compress / Error). |
 | API Keys | CRUD + per-key config (limits, whitelist, expose_balance) |
 | Billing | Plan status, credits breakdown, booster store, invoices (future) |
-| Settings | Compression config per model, strict_params toggle, context preferences |
+| Settings | `strict_params` toggle (paid only), account-level preferences. **Compression and context window config are NOT here — they live on each model card.** |
 | Account | Profile, email, avatar, connected providers, active sessions, notification prefs, request history, danger zone (account deletion) — see §19a |
 | Announcements | Banner list, expandable, dismissible |
 | Logs | 30d request activity + 15d routing detail |
 
-### Model Detail Sheet
+### Model Detail Sheet (Model Card)
 
-Clicking a model opens a detail sheet showing:
+The model card is the **sole location** for per-model context and compression configuration. Nothing related to context tiers, compression, or budget behaviour exists anywhere else in the UI (not in Settings, not globally). Each model is configured in isolation — settings on one model card do not affect any other model.
 
-- Provider(s), access tier, context tiers available.
-- Token multipliers (input / output / cache read / cache write).
-- User's enabled context tier toggles (sequential unlock enforced).
-- Per-tier compression config: compression model dropdown + prompt editor (one per context tier, independently configurable).
-- Budget action selector (Allow / Compress / Error) per context tier.
-- Lock icons with upgrade CTA for tiers above the user's plan.
+Clicking a model opens its card showing:
+
+- Provider(s) as anonymous endpoint labels, access tier, context tiers available for this model.
+- Token multipliers (input / output / cache read / cache write) — shown at the user's current plan tier.
+- User's enabled context tier toggles (sequential unlock enforced — cannot skip a tier).
+- Per-tier compression config: compression model dropdown + prompt editor (one per context tier, independently configurable). Each tier may use a completely different compression model.
+- Budget action selector (**Allow** / **Compress** / **Error**) per context tier — set independently per tier.
+- Lock icons with upgrade CTA for tiers above the user's current plan.
+
+> **For implementors:** if you are building any part of this UI and find yourself adding compression or context config outside of the model card, stop — it is in the wrong place.
 
 ### Rollover Cap Nudge
 
@@ -1990,4 +2045,4 @@ Polling jobs (image, video, music, TTS generation from async providers) are mana
 
 ---
 
-*v2.8 — Provider speed convention changed to higher number = faster. Added `.env` provider-specific `<PROVIDER_ENV>_SPEED` configuration, documented DB fallback behaviour, and updated routing rules so free/demo traffic can use lower-speed providers while paid/fast-credit traffic prioritises higher-speed providers.*
+*v2.9.1 — **Clarification patch:** Compression and context window config is per-model-card only, never global, never in Settings. Added ⚠️ placement rule callout to §8. Settings dashboard section stripped of compression references. Models dashboard section updated to own the config. Model Detail Sheet section expanded with explicit implementor warning. No logic changes — placement clarification only.*
