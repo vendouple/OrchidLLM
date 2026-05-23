@@ -1,6 +1,6 @@
 # OrchidLLM — Comprehensive Product & Architecture Plan
 >
-> **Status:** Draft v2.8 | Last updated: 2026-05-11
+> **Status:** Draft v3.1.3 | Last updated: 2026-05-21
 > **Author:** James (Owner) + AI-assisted planning
 
 ---
@@ -122,13 +122,16 @@ All endpoint paths are relative to `API_BASE_URL`. The gateway reads this at boo
 ### Parameter Handling Rules
 
 ```
-IF user is on FREE tier:
+IF user is on FREE or DEMO tier:
   → Strip all unsupported parameters silently
-  → Route to any available provider
+  → Speed rating is IGNORED — free/demo routing is eligibility-only
+  → Only route to providers where <PROVIDER_ENV>_FREE=true in .env
+  → If no free-eligible provider is available → 503 (no credit charge)
 
 IF user is on PAID tier + strict_params = false (default):
   → Strip unsupported params, proceed
   → Add response header: X-OrchidLLM-Param-Dropped: <param_name>
+  → Route to any available provider (speed-preference applies normally)
 
 IF user is on PAID tier + strict_params = true:
   → Only route to providers supporting ALL requested parameters
@@ -136,6 +139,8 @@ IF user is on PAID tier + strict_params = true:
 ```
 
 `strict_params` is a paid-only account toggle. Default: `false`.
+
+**Provider free-eligibility is set per provider in `.env` via `<PROVIDER_ENV>_FREE=true|false`.** A provider with `_FREE=false` is reserved for paid subscribers only — free/demo traffic is never routed there regardless of model availability. Speed values (`<PROVIDER_ENV>_SPEED`) are read but not used when routing free/demo users — only `_FREE` eligibility matters.
 
 ---
 
@@ -305,9 +310,9 @@ If both DB and `.env` values exist, `.env` is the deploy-time override used by t
 
 Routing behaviour:
 
-- Paid users and users spending fast credits prefer the highest-speed eligible provider first.
-- Free/demo users can be routed to lower-speed eligible providers first, preserving faster providers for paying traffic.
-- Providers must still pass health, context-limit, capability, rate-limit, and concurrency checks before speed is considered.
+- Paid users prefer the highest-speed eligible provider first (speed DESC).
+- Free/demo users are routed only to providers where `<PROVIDER_ENV>_FREE=true`. Speed is irrelevant and ignored for free/demo — the first free-eligible available provider wins.
+- Providers must still pass health, context-limit, capability, rate-limit, and concurrency checks before speed is considered (paid) or free-eligibility is checked (free/demo).
 
 ### Routing Decision Tree (per request)
 
@@ -316,14 +321,19 @@ Routing behaviour:
 2. Filter model_providers by:
    a. status = active
    b. context_limit >= message_token_count
-   c. (paid + strict_params) supports ALL required params
-      OR (free / strict_params off) any available
-3. Resolve provider speed:
-   a. `.env` provider-specific `<PROVIDER_ENV>_SPEED` if present
-   b. otherwise `model_providers.speed_priority` DB fallback
-4. Sort eligible providers by tier mode:
-   a. paid / fast-credit traffic → provider speed DESC (highest/faster first)
-   b. free / demo traffic → provider speed ASC (lower/slower first)
+   c. IF user is FREE or DEMO:
+        → Only include providers where <PROVIDER_ENV>_FREE=true
+        → Skip steps 3–4 speed logic entirely (speed is irrelevant for free/demo)
+      IF user is PAID + strict_params = true:
+        → Only include providers supporting ALL requested params
+      IF user is PAID + strict_params = false:
+        → Include any provider; unsupported params are stripped
+3. Resolve provider speed (PAID users only):
+   a. <PROVIDER_ENV>_SPEED from .env if present
+   b. otherwise model_providers.speed_priority DB fallback
+4. Sort eligible providers (PAID users only):
+   → Speed DESC (highest/fastest first)
+   (Free/demo: no sort — first free-eligible available provider wins)
 5. Pick first provider where current_in_flight < max_concurrent
 6. Increment current_in_flight
 7. Dispatch request
@@ -363,6 +373,7 @@ Example:
 ```
 
 Priority ordering (high → low):
+
 1. Subscription users (higher tier = higher priority)
 2. Booster-only users (no subscription, active booster pack)
 3. Free registered users
@@ -751,6 +762,13 @@ Rollover IS KEPT if:
 
 ## 12. Booster / Recharge Pack System
 
+> ⚠️ **Key distinction — Store Offer vs Pack Credits:**
+>
+> - `available_from` / `available_until` = the window during which the pack is **visible and purchasable** in the store. This is the store offer expiring, NOT the credits.
+> - Booster pack credits **do not expire after purchase**. Once bought, credits persist in the user's wallet until fully consumed or until the account is deleted.
+> - Badges like `[⏳ 24 HOURS LEFT]` refer to how long the **deal remains purchasable**, not how long the credits last.
+> - There is no "permanent" toggle and no credit countdown timer on purchased packs.
+
 ### Pack Record (DB)
 
 ```
@@ -767,18 +785,17 @@ booster_packs
 ├── queue_priority_fast       int
 ├── model_access_tier         enum
 ├── context_unlock_tiers      JSON (same structure as tier context unlocks)
-├── duration_days             int (-1 = permanent while conditions met)
-├── is_permanent              bool
-├── permanent_base_tier_id    FK → subscription_tiers | null
-│   Pack persists as long as user is on this tier or above
 ├── ignore_plan_lock          bool
-│   true = pack stays even if user drops below base tier (promo packs)
+│   true  = pack credits survive any plan change (used for Free-tier promo packs)
+│   false = pack is invalidated if user drops below the tier it was purchased on
 ├── max_purchases_per_user    int (-1 = unlimited)
 ├── max_total_purchases       int (-1 = unlimited)
-├── available_from            timestamp | null
-├── available_until           timestamp | null
+├── available_from            timestamp | null   ← store offer window open (not credit expiry)
+├── available_until           timestamp | null   ← store offer window close (not credit expiry)
 └── is_active                 bool
 ```
+
+> `available_until` controls when the **store stops showing the pack**. Credits purchased before that date do not expire — they remain in the user's wallet until spent.
 
 ### Pack Stacking
 
@@ -794,35 +811,173 @@ Depletion order:
   6. Subscription standard credits
 ```
 
-### Permanent Pack Invalidation
+### Pack Invalidation on Plan Change
+
+Booster pack credits are **never wiped on plan upgrade**. On downgrade, only packs with `ignore_plan_lock = false` are invalidated:
 
 ```
-IF is_permanent = true AND ignore_plan_lock = false:
-  Pack VALID while:  user_plan >= permanent_base_tier_id
-  Pack INVALID when: user_plan < permanent_base_tier_id
+ignore_plan_lock = false (default):
+  Pack VALID while: user_plan >= tier pack was purchased on
+  Pack INVALID when: user drops below that tier
+  Pack RESTORED if: user returns to that tier or above
 
-IF is_permanent = true AND ignore_plan_lock = true:
-  Pack VALID regardless of plan changes (promo / new user packs)
+  Example:
+    UPGRADE:   Basic → Plus    → pack still valid
+    DOWNGRADE: Plus  → Basic   → pack still valid (same tier as purchase)
+    DOWNGRADE: Basic → Free    → pack INVALIDATED
+    LATER:     Free  → Basic   → pack RESTORED
 
-Example:
-  UPGRADE:   Basic → Plus   → pack still valid (Plus ≥ Basic)
-  DOWNGRADE: Plus  → Basic  → pack still valid (Basic = purchase tier)
-  DOWNGRADE: Basic → Free   → pack INVALIDATED (Free < Basic)
-  LATER:     Free  → Basic  → pack RESTORED (back at purchase tier)
+ignore_plan_lock = true (Free-tier promo packs):
+  Pack VALID regardless of any plan change
+  Used for: Welcome Packs, Free-tier boosters, promotional packs
 ```
 
 ### Credit Survival on Plan Change
 
-Booster pack credits are **never wiped** on plan upgrade/downgrade. They persist until exhausted or expired, subject to `ignore_plan_lock` rules above.
+Booster pack credits persist until fully consumed. They do not expire on a timer after purchase — only plan-lock invalidation (above) can remove them before they are spent.
 
 ### Checkout Flow
 
 Cart/checkout style (not one-click):
 
 - User browses packs filtered to their current tier.
-- Reviews: credit breakdown, queue priority, model access, expiry date.
+- Reviews: credit breakdown, queue priority, model access grant.
 - Referral/affiliate code field on checkout page.
 - Confirms payment in IDR or USD.
+
+### Split-Fuel Booster Packs
+
+A single Booster Pack purchase can provision **multiple separate credit wallets** in one transaction — a "Split-Fuel" bundle. This lets one pack grant different credit types with different priorities and model access levels.
+
+**Example — "The Power User Bundle" (Rp 50,000):**
+
+| Wallet | Credits | Queue Priority | Model Access |
+|--------|---------|---------------|-------------|
+| Wallet A (Fast) | 10,000 | 6 | Premium+ (e.g. Opus) |
+| Wallet B (Standard) | 40,000 | 2 | Standard (e.g. Haiku) |
+
+**Burn logic:** The system routes to the correct wallet based on the model requested. Requesting Opus burns Wallet A; requesting Haiku burns Wallet B. If Wallet A is exhausted, Opus requests fall back to standard wallet credit at standard priority.
+
+**DB extension:** Each `booster_packs` row can have multiple `booster_pack_wallets` child rows, each with their own `credits_amount`, `queue_priority`, and `model_access_tier`. A single-wallet pack is just one child row (existing behaviour unchanged).
+
+```
+booster_pack_wallets
+├── id
+├── pack_id              FK → booster_packs
+├── label                e.g. "Fast", "Standard", "Bulk"
+├── credits_amount       int
+├── queue_priority       int
+├── model_access_tier    enum
+└── context_unlock_tiers JSON | null
+```
+
+### Free Tier Booster Exception
+
+Booster packs **explicitly labelled for the Free tier** (`eligible_tiers` includes free, `ignore_plan_lock = true`) do **not** lock or invalidate on any plan change — because there is no tier below Free to downgrade to.
+
+```
+Free Tier booster lifecycle:
+  User buys "Weekend Pass" (20k premium credits) → remains Free tier
+  Those credits are consumed normally — no expiry timer after purchase
+  Once exhausted → seamlessly reverts to standard Free limits
+  If user upgrades to Basic → booster credits port over
+  If Paid user cancels entirely → any Paid-Tier boosters with ignore_plan_lock=false are wiped
+```
+
+### Personalization & Targeting Engine
+
+The dashboard shows Booster Packs and Subscription deals **only to users who meet backend-configured conditions**. This is the automated targeting engine — rules are fully configurable by admin per pack/deal.
+
+#### A. Activity & Usage Targeting
+
+| Segment | Condition | Strategy |
+|---------|-----------|---------|
+| Highly Active | API request within past `[X]` hours/days (configurable) | Offer bulk Standard credits — they're burning fast |
+| Inactive / Churn Risk | No request in 14+ days (configurable) | Offer a discounted Premium fast-lane pack to re-engage |
+
+#### B. Loyalty & Tenure Targeting
+
+| Segment | Condition | Strategy |
+|---------|-----------|---------|
+| Long-Term | Continuous active subscription for `[X]` consecutive months | Exclusive discounted packs or a one-time free credit drop |
+| Upgrade Incentive | On Basic for 3+ months | Heavily discounted upgrade offer to Plus for next billing cycle |
+| New Subscriber | First-time buyer | "Welcome Pack" visible in store for 14 days only — after that the store offer disappears (`available_until`). Credits purchased before cutoff do not expire. |
+
+#### C. Churn Prevention — Cancellation Flow
+
+When a user clicks **"Cancel Subscription"**, do **not** immediately cancel. Trigger a dynamic save offer based on their tier:
+
+```
+CANCELLATION CLICK →
+  Show save modal:
+    Option A: "Stay on [Tier] and get 30% off your next billing cycle"
+    Option B: "Get an instant 50,000 extra credits if you keep your subscription active today"
+  IF accepted → apply offer, cancel cancellation
+  IF declined → proceed with cancellation at end of billing cycle
+```
+
+Offer content and amounts are admin-configurable per tier.
+
+#### D. Subscription Billing Cycle Promos
+
+| Rule | Detail |
+|------|--------|
+| Duration discounts | Admin sets percentage discount for Quarterly / Annual commit (e.g. 10% off Quarterly, 20% off Annual) |
+| Credit refill cadence | Even on Annual billing, credit refills and rollover calculations execute **monthly** — prevents burning a year of compute in one day |
+| Tier restrictions | Higher-tier plans can be restricted to Monthly-only (protects platform from long-term compute cost risk). Configurable per tier. |
+| Promo expiry | Discounts can have an `expires_at` date after which standard pricing resumes — same DB field as booster pack `available_until` |
+
+#### E. Financial Targeting
+
+Financial targeting can be based on **lifetime spend**, **spend within a specific timeframe**, or **purchase frequency** — all configurable by admin.
+
+| Condition | Strategy |
+|-----------|---------|
+| Lifetime spend > `[threshold]` (e.g. Rp 500,000) | Show exclusive "Elite Bulk Pack" to high-value users |
+| Lifetime spend < `[threshold]` (e.g. new / rare purchaser) | Show entry-level enticement pack to convert them |
+| Spend in timeframe > `[amount]` (e.g. spent > Rp 100,000 in the past month) | Reward active spenders with a loyalty pack |
+| Spend in timeframe < `[amount]` (e.g. < Rp 10,000 since Jan 2026) | Re-engage low-spend users with a discounted starter pack |
+| Total purchases < `[count]` | First-purchase or rarely-purchase user — show a low-risk intro pack |
+
+**Timeframe targeting:** The rule engine supports a `timeframe_start` and `timeframe_end` on any financial rule. This allows offers scoped to a calendar window (e.g. "spent anything in 2026", "purchased in the past 30 days", "active since the start of Ramadan promo"). Both absolute dates and rolling windows (e.g. last `[N]` days) are supported.
+
+All thresholds are admin-configurable. Multiple conditions can be stacked (AND/OR logic groups, configurable per offer).
+
+**Targeting config DB:**
+
+```
+booster_pack_targeting_rules
+├── pack_id              FK → booster_packs
+├── rule_type            enum: activity | tenure | churn_risk | financial | new_subscriber
+├── operator             enum: gt | lt | gte | lte | eq | between
+├── value_a              int | float          (primary threshold)
+├── value_b              int | float | null   (upper bound for "between")
+├── unit                 enum: days | months | idr | usd | requests | purchases
+├── timeframe_type       enum: lifetime | rolling | fixed | null
+│   lifetime  = entire account history
+│   rolling   = last N days/months (value_a = N, unit = days/months)
+│   fixed     = between timeframe_start and timeframe_end
+│   null      = not a time-scoped rule
+├── timeframe_start      date | null   (used when timeframe_type = fixed)
+├── timeframe_end        date | null   (used when timeframe_type = fixed)
+└── logic_group          int  (rules with same group = AND; different groups = OR)
+```
+
+### Storefront UI Metadata
+
+Each Booster Pack stores visual metadata for the dashboard store card:
+
+```
+booster_packs (UI fields)
+├── badge_text           string | null   e.g. "🔥 HOT", "👋 WELCOME", "⏳ 24 HOURS LEFT"
+│   Note: "⏳ 24 HOURS LEFT" refers to available_until (store offer closing), NOT credit expiry
+├── gradient_start       hex string | null   e.g. "#7C3AED"
+├── gradient_end         hex string | null   e.g. "#3B82F6"
+├── is_featured          bool   (pinned to top of store)
+└── display_order        int    (sort order within category)
+```
+
+Cards with `gradient_start` / `gradient_end` render a gradient background; cards without fall back to the standard M3E surface colour. Badge text is overlaid as a chip on the card corner.
 
 ---
 
@@ -847,7 +1002,41 @@ subscription_tier_billing_options
 
 Some tiers can have certain billing cycles **disabled** — e.g. Elite may be monthly-only. Configurable per tier via `supports_yearly_billing`, `supports_monthly_billing`.
 
-### Mid-Cycle Upgrade Flow
+### One-Time Next-Cycle Discounts
+
+The system supports **single next-billing-cycle offers** — a discount, a credit bonus, or both, applied exactly once to the user's upcoming billing cycle. These are issued as rewards, upgrade incentives, loyalty gestures, or churn-prevention offers.
+
+**Examples:**
+
+- "Thanks for upgrading — get 20% off your next billing cycle."
+- "Welcome back — here's 50,000 bonus credits on your next cycle."
+- "Stay subscribed and get 20% off + 30,000 credits on your next cycle."
+
+**Hard system constraint — no multi-cycle offers:**
+
+> The system **does not support** discounts or bonuses that extend across multiple billing cycles (e.g. "20% off for the next 3 months", "discounted for a year"). This is intentional to prevent compounding calculation errors across cycle boundaries. An offer applies to **one upcoming billing cycle only**, then expires. Admin cannot configure a multi-cycle span — the field does not exist.
+
+**DB:**
+
+```
+user_next_cycle_offers
+├── id
+├── user_id               FK → users
+├── offer_type            enum: discount | credit_bonus | both
+├── discount_percentage   float | null      (e.g. 0.20 = 20% off)
+├── bonus_credits         int | null        (added to next cycle's credit grant)
+├── bonus_credit_type     enum: standard | fast | null
+├── message               string            (shown in dashboard banner/modal, e.g. "Thanks for being a loyal subscriber!")
+├── applies_to_cycle      date              (the specific billing cycle start date this applies to)
+├── is_used               bool              (flipped to true once cycle processes)
+├── created_at            timestamp
+└── created_by            FK → users (admin) | null (system-generated)
+```
+
+- Only **one active offer** per user at a time. If a new offer is issued while one is pending, it replaces the old one (admin warned before confirming).
+- Offers created by the targeting engine (churn prevention, loyalty rewards) are system-generated (`created_by = null`).
+- Offers created manually by admin have `created_by = admin_user_id`.
+- Once `is_used = true`, the record is kept for audit but has no further effect.
 
 ```
 USER REQUESTS UPGRADE:
@@ -1295,7 +1484,7 @@ users (additions)
 Use the Material 3 Expressive web bundle as an ES module on frontend pages that need M3E components:
 
 ```html
-<script type="module" src="https://cdn.jsdelivr.net/npm/@m3e/web@2.5.2/dist/all.min.js/+esm"></script>
+<script type="module" src="https://cdn.jsdelivr.net/npm/@m3e/web@2.5.5/dist/all.min.js/+esm"></script>
 ```
 
 Local vendored assets may remain available for offline/dev fallback, but production pages should prefer the pinned CDN module unless there is a deployment reason not to.
@@ -1390,7 +1579,7 @@ All sections listed in the Dashboard Sections table (§20 below). Includes model
 | Demo Session Keys | List all active demo keys, view usage, **purge** (hard delete) or **suspend** (block requests without deletion) |
 | Users | Search users, view plan/credits/keys/logs, manually upgrade/downgrade tier, extend subscription, reset/refund credits, suspend accounts. Batch operations supported (multi-select → bulk action). |
 | Tiers | Full CRUD on subscription tiers: name, price (IDR + USD), credit allocations, RPM, queue priority, API key limit, concurrent request limit, context caps, rollover config, colour token |
-| Booster Packages | Create / edit / expire packs: credit amount (standard + fast split), queue priority, model access grant, expiry duration, per-tier availability, purchase limit, permanent flag |
+| Booster Packages | Create / edit / deactivate packs: credit amount (standard + fast split), queue priority, model access grant, store offer window (`available_from`/`available_until`), per-tier availability, purchase limit |
 | Model Catalogue | See §20 Model Catalog Maker below |
 | API Keys | View all API keys platform-wide, filter by user, plan, status. Suspend or revoke individual keys. Bulk suspend. |
 | Announcements | Create / edit / expire banners. Set tone, title, markdown description, active window, max 3 simultaneous banners enforced here. |
@@ -1488,7 +1677,7 @@ Announcements and changelogs are a **unified system** — the same DB table, sam
 ### Entry Types & Preset Colours
 
 | Type | Preset Colour | Use Case |
-|------|--------------|---------|
+|------|--------------|-------|
 | `announcement` | Tone-driven (see below) | Platform news, maintenance, policy changes |
 | `changelog` | Teal / Cyan | Model updates, new features, system improvements, version notes |
 | `announcement + changelog` | Tone colour (banner) + Teal badge | Urgent news that also has release notes; both tags shown |
@@ -1511,43 +1700,121 @@ Announcements and changelogs are a **unified system** — the same DB table, sam
 ```
 announcements
 ├── id
-├── title                   text
-├── description             markdown | null
-├── type                    enum: announcement | changelog | both
-├── tone                    enum: info | warning | error | success | neutral | changelog
-├── version_tag             string | null   e.g. "v1.4.2", "Model Update – May 2026"
-│                           (shown as a small chip on changelog entries)
-├── related_announcement_id FK → announcements | null
-│                           (allows an announcement to hyperlink to a changelog entry)
-├── is_banner               bool   (false by default for changelog-only entries)
-├── banner_expires_at       timestamp | null
-├── is_active               bool
-├── created_at
-└── created_by              FK → users (admin)
+├── title                    text          ← full announcement title (used on page)
+├── banner_title             string | null ← shorter title for the banner strip; falls back
+│                                            to title if null
+├── description              markdown | null
+├── type                     enum: announcement | changelog | both
+├── tone                     enum: info | warning | error | success | neutral | changelog
+├── version_tag              string | null   e.g. "v1.4.2", "Model Update – May 2026"
+│                            (shown as a small chip on changelog entries)
+├── related_announcement_id  FK → announcements | null
+│                            (allows an announcement to hyperlink to a changelog entry)
+├── is_banner                bool   (false by default for changelog-only entries)
+├── is_banner_dismissible    bool   (true = user can dismiss banner; false = permanent banner
+│                                   until admin expires/disables/makes-dismissible/disables banner)
+├── expires_at               timestamp | null
+│                            When reached: announcement soft-disappears from user dashboard.
+│                            Banner also removed. Admin can still see and restore.
+│                            If null = stays visible forever until admin disables it.
+├── is_active                bool   (false removes entry from user view immediately — both
+│                                   announcement and banner. Admin sees it as disabled.)
+├── posted_at                timestamp   ← original publish time; never changed on edit
+├── last_edited_at           timestamp | null   ← updated on every admin edit
+└── created_by               FK → users (admin)
 ```
+
+> `posted_at` is set once on creation and never modified. `last_edited_at` updates on every subsequent admin edit.
+
+### Announcement Lifecycle — What Makes One Disappear
+
+| Trigger | Effect on Banner | Effect on Announcements Page |
+|---------|-----------------|------------------------------|
+| `expires_at` reached | Removed | Soft-removed from user view |
+| Admin sets `is_active = false` | Removed | Removed from user view (admin can re-enable) |
+| Admin sets `is_banner_dismissible = true` | User can now dismiss it | Announcement stays on page |
+| Admin sets `is_banner = false` | Removed | Announcement stays on page |
+| User dismisses a dismissible banner | Dismissed for that user | Announcement **still visible** on page — **announcements page is never user-dismissible** |
+
+### Non-Dismissible Banner Rules
+
+If `is_banner_dismissible = false`, the banner persists for every user until one of these admin actions:
+
+- **A.** Admin sets `expires_at` → banner (and announcement) disappear when that date is reached
+- **B.** Admin sets `is_active = false` → removes both banner and announcement immediately
+- **C.** Admin sets `is_banner_dismissible = true` → users can now dismiss it themselves
+- **D.** Admin sets `is_banner = false` → disables the banner only; announcement stays on page
 
 ### Banner Rules
 
-- Max **3 active banners** simultaneously (most recent 3 by `created_at` if more exist).
-- Banners are **thin, unobtrusive** — single line: title + tone colour strip + type chip (`changelog` / `announcement`) + dismiss button.
-- Clicking banner → navigates to Announcements page → auto-expands clicked item.
-- Dismiss → stored in `user_dismissed_announcements` → never shown again to that user.
+- Max **3 active banners** simultaneously (most recent 3 by `posted_at` if more exist).
+- Banners are **thin, unobtrusive** — single line: `banner_title` (falls back to `title`) + tone colour strip + type chip + dismiss button (only if `is_banner_dismissible = true`).
+- Clicking banner → navigates to Announcements page → auto-expands clicked entry → marks as read.
 - Changelog-only entries (`is_banner = false`) are never shown as banners regardless of settings.
+- Banner appearance does **not** change based on read state. Full banner style always shown — read state is reflected on the announcements page only.
+
+### Read State
+
+- An announcement is marked **read** when the user clicks it from the banner, bell list, or announcements page. All three count equally.
+- Read announcements on the page render in **pastel / muted** style — colour shifted, opacity reduced. Still fully legible at a glance; not intrusive.
+- Unread announcements show at full colour and contrast.
+- Non-dismissible banners always render at full banner style regardless of read state.
+- Read state stored in `user_read_announcements` (user_id, announcement_id, read_at).
+
+### Timestamps & Relative Time
+
+Every announcement shows two levels of timestamp detail:
+
+**In-list / bell view (compact):**
+```
+Last edited: [date]  ·  16 hrs ago
+```
+Relative time counts from `last_edited_at` if set, otherwise from `posted_at`. Lets users judge at a glance if the entry is fresh or outdated.
+
+**Popout / expanded view (full detail):**
+```
+Originally posted:  [full posted_at timestamp]
+Last edited:        [full last_edited_at timestamp]   ← only shown if edited at least once
+```
+
+### Announcements / Changelog Page
+
+- Single unified page, sorted **newest → oldest** by `posted_at`.
+- Filterable by type (`All` / `Announcements` / `Changelog`).
+- **Not user-dismissible.** Entries disappear only via `expires_at` or admin `is_active = false`.
+- Read entries shown in pastel/muted style; unread at full contrast.
+- Changelog entries show `version_tag` as a prominent chip.
+- Cross-linked entries: **"See release notes →"** / **"See announcement →"** shown inline.
+- Admin creates both types from the same form: type, tone, title, banner title override, description, version tag, dismissibility toggle, optional expiry date.
 
 ### Bell Icon
 
 - Located at bottom of sidebar/nav.
-- Red badge count = undismissed announcements + unread changelog entries.
-- Bell list groups by type: banners/announcements first, then changelog entries below a divider.
-- `version_tag` chip shown inline on changelog entries in the list.
-- Items with null or very short description display inline (no expand toggle needed).
+- Red badge count = unread active announcements + unread changelog entries.
+- Bell list groups: banners/announcements first, changelog entries below a divider.
+- Relative time shown inline per entry ("2 hrs ago", "yesterday").
+- `version_tag` chip shown on changelog entries.
+- Clicking any bell entry marks it as read and opens the expanded entry on the Announcements page.
 
-### Announcements / Changelog Page
+### Supporting DB Tables
 
-- Single unified page, filterable by type (`All` / `Announcements` / `Changelog`).
-- Changelog entries show `version_tag` as a prominent chip.
-- Cross-linked entries: if an announcement has a `related_announcement_id` pointing to a changelog entry (or vice versa), a **"See release notes →"** / **"See announcement →"** link is shown inline.
-- Admin creates both types from the same form, with type selector and optional version tag field.
+```
+user_dismissed_banners
+├── id
+├── user_id         FK → users
+├── announcement_id FK → announcements
+└── dismissed_at    timestamp
+-- Only for banner dismissals. Announcements page has no user-dismiss action.
+
+user_read_announcements
+├── id
+├── user_id         FK → users
+├── announcement_id FK → announcements
+└── read_at         timestamp
+-- Written on click from banner, bell list, or announcements page.
+```
+
+> Replaces the old `user_dismissed_announcements` table, now split into two tables with distinct responsibilities.
 
 ---
 
@@ -1567,9 +1834,9 @@ announcements
 | Subscription management | Extend subscription, refund credits, reset credits to tier default |
 | Provider management | Enable/disable providers, view health, rotation config via `.env` |
 | Tier configuration | Full CRUD on subscription tiers and all parameters |
-| Booster pack management | Create / edit / expire packs |
+| Booster pack management | Create / edit / deactivate packs; set store offer window, not credit expiry |
 | Model management | Full model catalogue maker (see §20) |
-| Announcement management | Create / expire banners and changelog entries; tag as `announcement`, `changelog`, or both; set version tag; hyperlink entries to each other; enforce 3-banner limit |
+| Announcement management | Create / edit / expire announcements and changelog entries; set `banner_title`, tone, type, dismissibility toggle, optional `expires_at`; disable banner independently of announcement; enforce 3-banner limit |
 | Pricing config | Base credit costs, multipliers, context tier prices, batch discount rate |
 | User lookup | View user's plan, credits, keys, logs; suspend accounts |
 | Batch user operations | Multi-select users → bulk suspend / tier change / credit reset / key revoke |
@@ -1655,18 +1922,36 @@ user_credits
 
 user_credit_ledger
   id, user_id,
-  source: sub | booster | rollover | reservation | reconcile | expiry,
+  source: sub | booster | rollover | reservation | reconcile,
   amount, balance_after, reference_id, created_at
 
 subscription_tiers          (see §7)
 subscription_tier_billing_options  (see §13)
 booster_packs               (see §12)
 
+booster_pack_wallets
+  id, pack_id, label,
+  credits_amount, queue_priority,
+  model_access_tier, context_unlock_tiers
+
+booster_pack_targeting_rules
+  id, pack_id, rule_type, operator,
+  value_a, value_b, unit,
+  timeframe_type, timeframe_start, timeframe_end,
+  logic_group
+
 user_booster_packs
   id, user_id, pack_id,
-  purchased_at, expires_at,
+  purchased_at,
   credits_standard_remaining, credits_fast_remaining,
   is_active, invalidated_at, invalidation_reason
+  -- No expires_at: pack credits do not expire after purchase.
+  -- Pack is invalidated only by plan downgrade (ignore_plan_lock=false) or account deletion.
+
+user_next_cycle_offers      (see §13)
+  id, user_id, offer_type, discount_percentage,
+  bonus_credits, bonus_credit_type, message,
+  applies_to_cycle, is_used, created_at, created_by
 
 model_makers
   id, name,               -- e.g. "Anthropic", "OpenAI", "Google DeepMind"
@@ -1713,8 +1998,13 @@ batch_requests              (see §14)
 user_compression_settings   (see §8)
 user_context_tier_preferences  (see §8 / §9)
 
-user_dismissed_announcements
+user_dismissed_banners
   id, user_id, announcement_id, dismissed_at
+  -- banner dismissals only
+
+user_read_announcements
+  id, user_id, announcement_id, read_at
+  -- written on click from banner, bell, or page
 
 announcements               (see §21)
 
@@ -1791,10 +2081,18 @@ REDIS_URL=
 
 # Provider Speed Ratings — higher number = faster provider.
 # Add one `<PROVIDER_ENV>_SPEED` value for each provider key env var you configure.
-# Example: free/demo traffic may be routed to lower speed values; paid traffic prefers higher values.
+# Speed is used for paid traffic only. Free/demo routing ignores speed entirely.
 OPENROUTER_API_KEY_SPEED=80
 GROQ_API_KEY_SPEED=70
 POLLINATIONS_API_KEY_SPEED=20
+
+# Provider Free Eligibility — controls whether a provider can serve free/demo tier users.
+# true  = provider is eligible to receive free and demo tier traffic
+# false = provider is reserved for paid subscribers only (never receives free/demo requests)
+# Speed is irrelevant for free/demo users — only _FREE eligibility is checked.
+OPENROUTER_API_KEY_FREE=true
+GROQ_API_KEY_FREE=true
+POLLINATIONS_API_KEY_FREE=false
 
 # Encryption (for provider API keys stored at rest)
 ENCRYPTION_KEY=
@@ -1961,7 +2259,8 @@ Polling jobs (image, video, music, TTS generation from async providers) are mana
 
 - ✅ Queue base priority `n` is DB-configured per tier — not hardcoded.
 - ✅ Compression is sequential backend. TTFT slower; spinner shown client-side.
-- ✅ Permanent packs survive upgrades; lost only on downgrade below purchase tier. `ignore_plan_lock` for promo exceptions.
+- ✅ **Booster pack credits do not expire after purchase** — credits persist until consumed or account deleted. `available_from`/`available_until` control the store offer window only. Badges like "⏳ 24 HOURS LEFT" refer to the store deal closing, not credit expiry.
+- ✅ Plan-lock invalidation controlled by `ignore_plan_lock` only. No `is_permanent` toggle — all packs are permanent by default; `ignore_plan_lock=false` packs are invalidated on downgrade below purchase tier.
 - ✅ Compression charge = compression_model cost + primary_model cost.
 - ✅ Mid-cycle upgrade defaults to next billing cycle. Immediate opt-in invalidates rollover and current credits.
 - ✅ Exhausted paid users treated per tier config — typically same as free. Context locked back to exhaustion limit.
@@ -2045,4 +2344,8 @@ Polling jobs (image, video, music, TTS generation from async providers) are mana
 
 ---
 
-*v2.9.1 — **Clarification patch:** Compression and context window config is per-model-card only, never global, never in Settings. Added ⚠️ placement rule callout to §8. Settings dashboard section stripped of compression references. Models dashboard section updated to own the config. Model Detail Sheet section expanded with explicit implementor warning. No logic changes — placement clarification only.*
+*v3.1.1 — Provider free-eligibility system added. `<PROVIDER_ENV>_FREE=true|false` `.env` flag controls whether a provider can serve free/demo traffic. Free/demo routing now gates on `_FREE` eligibility only — speed is explicitly ignored. Routing decision tree updated (step 2c free-eligibility gate, steps 3–4 paid-only). Parameter handling rules updated to 503 if no free-eligible provider available. `.env` section updated with `_FREE` examples and comments.*
+
+*v3.1.2 — **Booster pack expiry model corrected.** Credits no longer expire after purchase — they persist until consumed. `available_from`/`available_until` are store offer windows only (when the deal is purchasable), not credit countdown timers. `[⏳ 24 HOURS LEFT]` badge = store offer closing, not credits expiring. Removed `is_permanent`, `permanent_base_tier_id`, and `duration_days` fields from `booster_packs`. Removed `expires_at` from `user_booster_packs`. Rewrote pack invalidation section (plan-lock via `ignore_plan_lock` only). Fixed Free-tier lifecycle, Welcome Pack targeting row, checkout flow review items, credit transaction source enum, admin capabilities rows, and decision log. Header updated to v3.1.2.*
+
+*v3.1.3 - **Updated M3E.** The M3E import script has been updated from 2.5.2 to 2.5.5. This update includes 2 new components: Content Pane and Breadcrumbs.
