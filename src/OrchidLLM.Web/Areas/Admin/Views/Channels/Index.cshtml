@@ -1,0 +1,83 @@
+@model List<OrchidLLM.Web.Areas.Admin.Controllers.ChannelsController.ChannelRow>
+@{
+    ViewData["Title"] = "Channels";
+    ViewData["ActiveSection"] = "providers";
+}
+
+<section class="admin-section active" id="section-providers">
+    <div class="channels-policy">
+        <div class="cp-item">
+            <span class="material-symbols-outlined">dns</span>
+            <div>
+                <div class="cp-label">Headline metric</div>
+                <div class="cp-val">RPM (live, 60s window) — replaces the old raw concurrency stat</div>
+            </div>
+        </div>
+        <div class="cp-item">
+            <span class="material-symbols-outlined">key</span>
+            <div>
+                <div class="cp-label">Provider API keys</div>
+                <div class="cp-val">.env-only per policy — never stored or shown here</div>
+            </div>
+        </div>
+    </div>
+
+    <div style="margin:16px 0;">
+        <a class="oauth-btn" href="/Admin/Channels/Edit" style="display:inline-flex;width:auto;padding:8px 16px;">
+            <span class="material-symbols-outlined" style="font-size:18px;">add</span>
+            <span>Add Channel</span>
+        </a>
+    </div>
+
+    <div class="provider-grid" id="provider-grid">
+        @if (!Model.Any())
+        {
+            <p class="hint">No channels configured yet. Add one to start routing real requests.</p>
+        }
+        @foreach (var row in Model)
+        {
+            var p = row.Provider;
+            var hasIssue = p.Status is "dead" or "out_of_credits";
+            var rpmDisplay = p.RpmCap.HasValue ? $"{row.CurrentRpm}<small>/{p.RpmCap} cap</small>" : $"{row.CurrentRpm}<small> rpm</small>";
+            <div class="provider-card @(hasIssue ? "has-issue" : "")">
+                <div class="pc-head">
+                    <div class="pc-glyph">@p.Name.Substring(0, 1)</div>
+                    <div>
+                        <div class="pc-title">@p.Name</div>
+                        <div class="pc-url">@p.BaseUrl</div>
+                    </div>
+                    <div class="pc-head-right"><span class="status-chip st-@p.Status">@p.Status.Replace("_", " ")</span></div>
+                </div>
+                <div class="pc-metrics">
+                    <div class="pc-metric">
+                        <div class="pc-metric-label">Weight</div>
+                        <div class="pc-metric-value">@p.Weight <small>lower = better</small></div>
+                    </div>
+                    <div class="pc-metric">
+                        <div class="pc-metric-label">RPM</div>
+                        <div class="pc-metric-value">@Html.Raw(rpmDisplay)</div>
+                    </div>
+                    <div class="pc-metric">
+                        <div class="pc-metric-label">Concurrency cap</div>
+                        <div class="pc-metric-value"><small>@p.MaxConcurrent max (safety limit only)</small></div>
+                    </div>
+                    <div class="pc-metric">
+                        <div class="pc-metric-label">Free tier</div>
+                        <div class="pc-metric-value" style="color:@(p.Free ? "var(--st-active)" : "var(--md-sys-color-outline)")">@(p.Free ? "Yes" : "No")</div>
+                    </div>
+                </div>
+                <div class="pc-actions">
+                    <a class="icon-btn" href="/Admin/Channels/Edit/@p.Id" title="Edit">
+                        <span class="material-symbols-outlined" style="font-size:16px">edit</span> Edit
+                    </a>
+                    <form method="post" action="/Admin/Channels/Delete/@p.Id" onsubmit="return confirm('Remove this channel?');" style="display:inline;">
+                        @Html.AntiForgeryToken()
+                        <button type="submit" class="icon-btn danger" title="Delete" style="background:none;border:none;cursor:pointer;">
+                            <span class="material-symbols-outlined" style="font-size:16px">delete</span> Delete
+                        </button>
+                    </form>
+                </div>
+            </div>
+        }
+    </div>
+</section>

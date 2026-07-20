@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>@ViewData["Title"] — OrchidLLM Admin</title>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Google+Sans+Text:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@@m3e/web@@2.5.5/dist/all.min.js/+esm"></script>
+
+  <link rel="stylesheet" href="~/css/admin.css" />
+</head>
+<body>
+
+<div class="admin-shell">
+
+  <nav class="nav-rail" id="nav-rail" aria-label="Admin navigation">
+    <a class="nav-rail-brand" href="/Dashboard" title="Back to Dashboard">
+      <div class="nav-rail-logo"><span class="material-symbols-outlined fill">auto_awesome</span></div>
+    </a>
+    <div class="nav-rail-divider"></div>
+    <div class="nav-rail-items">
+      @{
+          var sections = new[]
+          {
+              ("dashboard", "monitoring", "Dashboard", "/Admin/Home", true),
+              ("models", "category", "Models", "#", false),
+              ("makers", "factory", "Model Maker", "#", false),
+              ("providers", "dns", "Channels", "/Admin/Channels", true),
+              ("subscriptions", "workspace_premium", "Plans", "#", false),
+              ("users", "group", "Users", "#", false),
+              ("queue", "format_list_numbered", "Queue", "#", false),
+              ("logs", "receipt_long", "Logs", "#", false),
+              ("announcements", "campaign", "Announce", "#", false),
+              ("settings", "settings", "Settings", "#", false),
+          };
+          var current = (ViewData["ActiveSection"] as string) ?? "dashboard";
+      }
+      @foreach (var (key, icon, label, href, implemented) in sections)
+      {
+          var activeClass = key == current ? "active" : "";
+          if (implemented)
+          {
+              <a class="nav-rail-item @activeClass" href="@href">
+                  <span class="material-symbols-outlined">@icon</span>
+                  <span class="nav-label">@label</span>
+              </a>
+          }
+          else
+          {
+              <button class="nav-rail-item" disabled title="Coming in a later phase" style="opacity:.4;cursor:default">
+                  <span class="material-symbols-outlined">@icon</span>
+                  <span class="nav-label">@label</span>
+              </button>
+          }
+      }
+    </div>
+    <form method="post" action="/Account/Logout" class="nav-rail-exit" style="border:none;background:none;">
+      <button type="submit" style="all:unset;display:flex;flex-direction:column;align-items:center;gap:2px;cursor:pointer;width:100%;">
+        <span class="material-symbols-outlined">logout</span>
+        <span class="nav-label">Exit</span>
+      </button>
+    </form>
+  </nav>
+
+  <main class="admin-main">
+    <header class="admin-topbar">
+      <div class="topbar-title-wrap">
+        <div class="topbar-overline">OrchidLLM · Admin</div>
+        <h1 class="topbar-title">@ViewData["Title"]</h1>
+      </div>
+      <div class="topbar-spacer"></div>
+      <div class="topbar-admin-chip">
+        <span class="material-symbols-outlined fill">shield_person</span>
+        <span>@User.Identity?.Name</span>
+      </div>
+    </header>
+
+    <div class="admin-content">
+      @RenderBody()
+    </div>
+  </main>
+</div>
+
+@await RenderSectionAsync("Scripts", required: false)
+</body>
+</html>

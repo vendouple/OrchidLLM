@@ -1,4 +1,12 @@
-/node_modules
-/package-lock.json
-/.env
-.vercel
+# .NET build output
+bin/
+obj/
+*.user
+
+# Local secrets (connection strings, OAuth secret, provider keys)
+appsettings.Development.json
+appsettings.Local.json
+
+# IDE
+.vs/
+.vscode/

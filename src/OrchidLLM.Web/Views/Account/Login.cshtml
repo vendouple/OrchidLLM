@@ -1,0 +1,177 @@
+@{
+    Layout = null;
+    ViewData["Title"] = "Sign In";
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OrchidLLM — Sign In</title>
+  <meta name="description" content="Sign in to OrchidLLM — your stable AI gateway. Access models, manage credits, and explore the platform." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&family=Google+Sans+Text:wght@400;500;700&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+
+  <!-- M3E Web Components -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@@m3e/web@@2.5.5/dist/all.min.js/+esm"></script>
+
+  <link rel="stylesheet" href="~/css/login.css" />
+</head>
+<body>
+  <!-- Animated background — slow falling M3E shapes -->
+  <canvas id="bg-shapes" class="bg-shapes-canvas"></canvas>
+
+  <!-- Main container -->
+  <main class="login-main" id="login-main">
+
+    <!-- Back button -->
+    <a href="/" class="back-link" id="back-link" aria-label="Back to home">
+      <span class="material-symbols-outlined">arrow_back</span>
+    </a>
+
+    <!-- Login Card -->
+    <div class="login-card" id="login-card">
+
+      <!-- Logo -->
+      <div class="brand-section">
+        <div class="logo-container" id="logo-container">
+          <svg class="logo-icon" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <!-- Orchid flower petals — each individually animated -->
+            <defs>
+              <linearGradient id="petal-grad" x1="16" y1="8" x2="48" y2="56">
+                <stop offset="0%" stop-color="#D4A5FF"/>
+                <stop offset="50%" stop-color="#B388FF"/>
+                <stop offset="100%" stop-color="#9F86FF"/>
+              </linearGradient>
+              <linearGradient id="petal-grad-2" x1="8" y1="20" x2="56" y2="44">
+                <stop offset="0%" stop-color="#CE93D8"/>
+                <stop offset="100%" stop-color="#AB47BC"/>
+              </linearGradient>
+              <radialGradient id="center-grad" cx="32" cy="32" r="6" gradientUnits="userSpaceOnUse">
+                <stop offset="0%" stop-color="#FFD54F"/>
+                <stop offset="100%" stop-color="#FFA726"/>
+              </radialGradient>
+            </defs>
+            <ellipse class="petal petal-1" cx="32" cy="16" rx="8" ry="13" fill="url(#petal-grad)"/>
+            <ellipse class="petal petal-2" cx="32" cy="16" rx="7.5" ry="12.5" fill="url(#petal-grad)"/>
+            <ellipse class="petal petal-3" cx="32" cy="16" rx="7.5" ry="12.5" fill="url(#petal-grad-2)"/>
+            <ellipse class="petal petal-4" cx="32" cy="16" rx="7.5" ry="12.5" fill="url(#petal-grad-2)"/>
+            <ellipse class="petal petal-5" cx="32" cy="16" rx="7.5" ry="12.5" fill="url(#petal-grad)"/>
+            <circle class="center-pistil" cx="32" cy="32" r="5" fill="url(#center-grad)"/>
+            <circle class="center-highlight" cx="32" cy="32" r="2.5" fill="#FFF8E1"/>
+          </svg>
+        </div>
+      </div>
+
+      <!-- View: Choose Method -->
+      <div class="login-view active" id="view-choose">
+        <h1 class="view-title">Sign in to <span class="brand-accent">OrchidLLM</span></h1>
+        <p class="view-subtitle">Choose your preferred sign-in method</p>
+
+        @if (TempData["LoginError"] is string loginError)
+        {
+            <p class="view-subtitle" style="color:#f28b82;">@loginError</p>
+        }
+
+        <div class="auth-methods">
+          <button class="oauth-btn github-btn" id="btn-github" type="button">
+            <svg class="oauth-icon" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+            <span>Continue with GitHub</span>
+          </button>
+
+          <button class="oauth-btn google-btn" id="btn-google" type="button" disabled>
+            <svg class="oauth-icon" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+            <span>Continue with Google</span>
+            <span class="coming-soon-badge">Coming Soon</span>
+          </button>
+        </div>
+
+        <div class="divider-row">
+          <div class="divider-line"></div>
+          <span class="divider-text">or</span>
+          <div class="divider-line"></div>
+        </div>
+
+        <button class="oauth-btn demo-btn" id="btn-try-demo" type="button">
+          <span class="material-symbols-outlined" style="font-size:20px;">play_circle</span>
+          <span>Try Demo — No account needed</span>
+        </button>
+
+        <p class="terms-text">
+          By continuing, you agree to OrchidLLM's
+          <a href="#" class="terms-link" id="link-tos">Terms of Service</a>
+          and
+          <a href="#" class="terms-link" id="link-privacy">Privacy Policy</a>.
+        </p>
+      </div>
+
+      <!-- View: GitHub Loading -->
+      <div class="login-view" id="view-loading">
+        <div class="loading-section">
+          <h2 class="view-title loading-brand">OrchidLLM</h2>
+          <m3e-loading-indicator indeterminate size="large"></m3e-loading-indicator>
+          <p class="loading-text" id="loading-text">Connecting to GitHub…</p>
+        </div>
+      </div>
+
+      <!-- View: Success -->
+      <div class="login-view" id="view-success">
+        <div class="success-section">
+          <div class="success-icon-container">
+            <span class="material-symbols-outlined success-check">check_circle</span>
+          </div>
+          <h2 class="view-title">Welcome!</h2>
+          <p class="success-user" id="success-username"></p>
+          <p class="view-subtitle">Redirecting to dashboard…</p>
+        </div>
+      </div>
+
+      <!-- View: Demo Mode -->
+      <div class="login-view" id="view-demo">
+        <div class="demo-section">
+          <h2 class="view-title">Demo Mode</h2>
+          <p class="view-subtitle">Explore OrchidLLM with limited access.<br/>20 requests/day · Demo models only</p>
+          <div class="demo-features">
+            <div class="demo-feature">
+              <span class="material-symbols-outlined feature-icon">chat</span>
+              <span>Chat with AI models</span>
+            </div>
+            <div class="demo-feature">
+              <span class="material-symbols-outlined feature-icon">explore</span>
+              <span>Browse model catalog</span>
+            </div>
+            <div class="demo-feature">
+              <span class="material-symbols-outlined feature-icon">lock_open</span>
+              <span>No signup required</span>
+            </div>
+          </div>
+          <m3e-button variant="filled" size="large" id="btn-start-demo" class="demo-primary-btn">
+            <m3e-icon slot="icon" name="play_arrow"></m3e-icon>
+            Start Exploring
+          </m3e-button>
+          <m3e-button variant="outlined" size="medium" id="btn-back-from-demo" class="demo-secondary-btn">
+            <m3e-icon slot="icon" name="arrow_back"></m3e-icon>
+            Back to sign in
+          </m3e-button>
+        </div>
+      </div>
+
+    </div>
+
+    <!-- Footer -->
+    <footer class="login-footer">
+      <span>© 2026 OrchidLLM</span>
+      <span class="footer-dot">·</span>
+      <a href="#" class="footer-link">Status</a>
+      <span class="footer-dot">·</span>
+      <a href="#" class="footer-link">Docs</a>
+    </footer>
+  </main>
+
+  <script src="~/js/login.js"></script>
+</body>
+</html>

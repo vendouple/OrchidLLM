@@ -1,0 +1,25 @@
+services:
+  mysql:
+    image: mysql:8
+    restart: unless-stopped
+    environment:
+      MYSQL_DATABASE: orchidllm
+      MYSQL_USER: orchid
+      MYSQL_PASSWORD: orchid_dev_password
+      MYSQL_ROOT_PASSWORD: orchid_root_dev_password
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis-data:/data
+
+volumes:
+  mysql-data:
+  redis-data:

@@ -1,0 +1,72 @@
+@model OrchidLLM.Web.Data.Entities.Provider
+@{
+    var isNew = Model.Id == 0;
+    ViewData["Title"] = isNew ? "Add Channel" : "Edit Channel";
+    ViewData["ActiveSection"] = "providers";
+}
+
+<section class="admin-section active">
+    <form method="post" action="/Admin/Channels/Save" style="max-width:520px;display:flex;flex-direction:column;gap:16px;">
+        @Html.AntiForgeryToken()
+        <input type="hidden" name="id" value="@(isNew ? "" : Model.Id.ToString())" />
+
+        <label>
+            <div class="pc-metric-label">Name</div>
+            <input class="form-input" type="text" name="name" value="@Model.Name" required />
+        </label>
+
+        <label>
+            <div class="pc-metric-label">Base URL</div>
+            <input class="form-input" type="url" name="baseUrl" value="@Model.BaseUrl" placeholder="https://api.example.com/v1" required />
+        </label>
+
+        <label>
+            <div class="pc-metric-label">Status</div>
+            <select class="form-input" name="status">
+                @foreach (var s in new[] { "active", "rate_limited", "out_of_credits", "dead", "disabled" })
+                {
+                    if (s == Model.Status)
+                    {
+                        <option value="@s" selected>@s</option>
+                    }
+                    else
+                    {
+                        <option value="@s">@s</option>
+                    }
+                }
+            </select>
+        </label>
+
+        <label>
+            <div class="pc-metric-label">Weight <small>(lower = preferred in routing)</small></div>
+            <input class="form-input" type="number" name="weight" value="@Model.Weight" min="1" required />
+        </label>
+
+        <label style="display:flex;align-items:center;gap:8px;">
+            @if (Model.Free)
+            {
+                <input type="checkbox" name="free" value="true" checked />
+            }
+            else
+            {
+                <input type="checkbox" name="free" value="true" />
+            }
+            <span>Eligible for free/demo traffic</span>
+        </label>
+
+        <label>
+            <div class="pc-metric-label">RPM cap <small>(optional — admin-configured ceiling for this channel)</small></div>
+            <input class="form-input" type="number" name="rpmCap" value="@Model.RpmCap" min="0" placeholder="No cap" />
+        </label>
+
+        <label>
+            <div class="pc-metric-label">Max concurrent <small>(backend safety limit — not the headline stat anymore)</small></div>
+            <input class="form-input" type="number" name="maxConcurrent" value="@Model.MaxConcurrent" min="1" required />
+        </label>
+
+        <div class="pc-actions">
+            <button type="submit" class="oauth-btn" style="display:inline-flex;width:auto;padding:8px 16px;">Save</button>
+            <a class="icon-btn" href="/Admin/Channels">Cancel</a>
+        </div>
+    </form>
+</section>
