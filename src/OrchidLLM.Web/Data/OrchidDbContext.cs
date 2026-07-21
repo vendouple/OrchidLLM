@@ -21,6 +21,7 @@ public class OrchidDbContext(DbContextOptions<OrchidDbContext> options) : DbCont
     public DbSet<UserBoosterPack> UserBoosterPacks => Set<UserBoosterPack>();
 
     public DbSet<Provider> Providers => Set<Provider>();
+    public DbSet<ProviderKey> ProviderKeys => Set<ProviderKey>();
     public DbSet<ModelMaker> ModelMakers => Set<ModelMaker>();
     public DbSet<Model> Models => Set<Model>();
     public DbSet<ModelProvider> ModelProviders => Set<ModelProvider>();
@@ -37,7 +38,8 @@ public class OrchidDbContext(DbContextOptions<OrchidDbContext> options) : DbCont
 
     public DbSet<Announcement> Announcements => Set<Announcement>();
     public DbSet<AdminNotification> AdminNotifications => Set<AdminNotification>();
-    public DbSet<UserDismissedAnnouncement> UserDismissedAnnouncements => Set<UserDismissedAnnouncement>();
+    public DbSet<UserDismissedBanner> UserDismissedBanners => Set<UserDismissedBanner>();
+    public DbSet<UserReadAnnouncement> UserReadAnnouncements => Set<UserReadAnnouncement>();
 
     public DbSet<RequestLog> RequestLogs => Set<RequestLog>();
     public DbSet<RoutingLog> RoutingLogs => Set<RoutingLog>();
@@ -59,6 +61,7 @@ public class OrchidDbContext(DbContextOptions<OrchidDbContext> options) : DbCont
         b.Entity<UserCredit>().HasIndex(x => x.UserId).IsUnique();
 
         b.Entity<Provider>().HasIndex(x => x.Name).IsUnique();
+        b.Entity<ProviderKey>().HasIndex(x => x.ProviderId);
         b.Entity<ModelMaker>().HasIndex(x => x.Slug).IsUnique();
         b.Entity<Model>().HasIndex(x => x.ModelSlug).IsUnique();
         b.Entity<ModelProvider>().HasIndex(x => new { x.ModelId, x.ProviderId }).IsUnique();
@@ -67,7 +70,8 @@ public class OrchidDbContext(DbContextOptions<OrchidDbContext> options) : DbCont
 
         b.Entity<UserCompressionSetting>().HasIndex(x => new { x.UserId, x.ModelId, x.TierIndex }).IsUnique();
         b.Entity<UserContextTierPreference>().HasIndex(x => new { x.UserId, x.ModelId, x.TierIndex }).IsUnique();
-        b.Entity<UserDismissedAnnouncement>().HasIndex(x => new { x.UserId, x.AnnouncementId }).IsUnique();
+        b.Entity<UserDismissedBanner>().HasIndex(x => new { x.UserId, x.AnnouncementId }).IsUnique();
+        b.Entity<UserReadAnnouncement>().HasIndex(x => new { x.UserId, x.AnnouncementId }).IsUnique();
 
         b.Entity<SystemSetting>().HasIndex(x => x.SettingKey).IsUnique();
 
@@ -142,10 +146,6 @@ public class OrchidDbContext(DbContextOptions<OrchidDbContext> options) : DbCont
         b.Entity<AdminSqlQueryLog>()
             .HasOne(x => x.AdminUser).WithMany()
             .HasForeignKey(x => x.AdminUserId).OnDelete(DeleteBehavior.SetNull);
-
-        b.Entity<BoosterPack>()
-            .HasOne(x => x.PermanentBaseTier).WithMany()
-            .HasForeignKey(x => x.PermanentBaseTierId).OnDelete(DeleteBehavior.Restrict);
 
         b.Entity<UserCompressionSetting>()
             .HasOne(x => x.CompressionModel).WithMany()

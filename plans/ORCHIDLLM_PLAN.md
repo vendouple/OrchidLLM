@@ -1,7 +1,7 @@
 # OrchidLLM — Comprehensive Product & Architecture Plan
 >
 > **Status:** Draft v3.1.3 | Last updated: 2026-05-21
-> **Author:** James (Owner) + AI-assisted planning
+> **Author:** REDACTED (Owner) + AI-assisted planning
 
 ---
 
@@ -545,7 +545,7 @@ subscription_tiers
 | Compression | ❌ | ✅ | ✅ | ✅ | ✅ |
 | Accent Color | Gray | TBD | TBD | TBD | TBD |
 
-> **TODO (James):** Fill in pricing and priority numbers above.
+> **TODO (REDACTED):** Fill in pricing and priority numbers above.
 
 ---
 
@@ -1766,12 +1766,15 @@ If `is_banner_dismissible = false`, the banner persists for every user until one
 Every announcement shows two levels of timestamp detail:
 
 **In-list / bell view (compact):**
+
 ```
 Last edited: [date]  ·  16 hrs ago
 ```
+
 Relative time counts from `last_edited_at` if set, otherwise from `posted_at`. Lets users judge at a glance if the entry is fresh or outdated.
 
 **Popout / expanded view (full detail):**
+
 ```
 Originally posted:  [full posted_at timestamp]
 Last edited:        [full last_edited_at timestamp]   ← only shown if edited at least once
@@ -2324,15 +2327,15 @@ Polling jobs (image, video, music, TTS generation from async providers) are mana
 
 ## 28. Open TODOs
 
-- [ ] **James:** Fill in tier pricing table in §7 (IDR/USD prices, credit amounts, priority values, accent colours).
-- [ ] **James:** Finalise tier names (Free / Basic / Plus / Pro / Elite or similar).
-- [ ] **James:** Decide which specific models are available on the `demo` tier.
-- [ ] **James:** Define `.env` naming convention for multi-key providers (e.g. `OPENAI_KEY_1` / `OPENAI_KEY_2` assumed).
+- [ ] **REDACTED:** Fill in tier pricing table in §7 (IDR/USD prices, credit amounts, priority values, accent colours).
+- [ ] **REDACTED:** Finalise tier names (Free / Basic / Plus / Pro / Elite or similar).
+- [ ] **REDACTED:** Decide which specific models are available on the `demo` tier.
+- [ ] **REDACTED:** Define `.env` naming convention for multi-key providers (e.g. `OPENAI_KEY_1` / `OPENAI_KEY_2` assumed).
 - [ ] Define heartbeat ping interval for queue-waiting SSE connections *(suggest: 15 seconds)*.
 - [ ] Define per-request-type timeout thresholds *(suggest: chat ~30s, image ~120s, video ~300s)*.
 - [ ] Confirm `ADMIN_GITHUB_HANDLES` format in `.env` — comma-separated list assumed.
 - [ ] Decide if `referral_code` is generated on signup for all users or only on demand.
-- [ ] **James:** Decide demo key cookie name and exact expiry duration *(suggest: `orchid_demo_key`, 30-day rolling expiry)*.
+- [ ] **REDACTED:** Decide demo key cookie name and exact expiry duration *(suggest: `orchid_demo_key`, 30-day rolling expiry)*.
 - [ ] Confirm demo inactivity cron schedule *(suggest: daily at 03:00 UTC)*.
 - [ ] Define Phase 5 scope cut: which roleplay/playground features ship in Phase 5 vs Phase 6.
 - [ ] Decide account deletion grace period: 14 days assumed — confirm if shorter/longer is preferred.

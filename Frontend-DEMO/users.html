@@ -1,0 +1,1627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>OrchidLLM — Dashboard</title>
+  <meta name="description" content="OrchidLLM Dashboard — Manage your API keys, credits, models, and account settings." />
+
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;600;700&family=Google+Sans+Text:wght@400;500;700&family=Roboto+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet" />
+
+  <!-- M3E Web Components -->
+  <script type="module" src="https://cdn.jsdelivr.net/npm/@m3e/web@2.5.5/dist/all.min.js/+esm"></script>
+
+  <link rel="stylesheet" href="users.css" />
+
+  <!-- Custom Styles for Compression Tracking & Account History padding -->
+  <style>
+    /* Fix Account History padding on hover and align it beautifully */
+    .ah-item {
+      padding: 12px 16px !important;
+      margin: 0 -16px !important;
+      border-radius: 8px !important;
+      transition: all 150ms ease !important;
+    }
+    .ah-item:hover {
+      background: color-mix(in srgb, var(--tier-accent) 8%, transparent) !important;
+    }
+
+    /* Fix activity-item padding and hover (M3E style with transition) */
+    .activity-list .activity-item {
+      padding: 10px 16px !important;
+      margin: 0 -16px !important;
+      border-radius: 12px !important;
+      transition: background-color 200ms cubic-bezier(0.2, 0, 0, 1) !important;
+    }
+    .activity-list .activity-item:hover {
+      background: color-mix(in srgb, var(--tier-accent) 8%, transparent) !important;
+    }
+
+    /* Fix usage history table edge padding to align with the card header (24px) */
+    .history-table th:first-child,
+    .history-table td:first-child {
+      padding-left: 24px !important;
+    }
+    .history-table th:last-child,
+    .history-table td:last-child {
+      padding-right: 24px !important;
+    }
+
+    /* Fix usage-filters-bar alignment — match the card's horizontal spacing */
+    .usage-filters-bar {
+      padding: 14px 20px !important;
+      gap: 16px !important;
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      align-items: center !important;
+      justify-content: space-between !important;
+    }
+    .usage-filters-left {
+      display: flex !important;
+      flex-direction: row !important;
+      flex-wrap: wrap !important;
+      align-items: center !important;
+      gap: 12px 24px !important;
+      flex: 1 !important;
+      min-width: 0 !important;
+    }
+    .usage-filter-group {
+      display: flex !important;
+      align-items: center !important;
+      gap: 8px !important;
+      flex-wrap: nowrap !important;
+    }
+    #btn-reset-usage-filters {
+      align-self: flex-end !important;
+    }
+    @media (max-width: 640px) {
+      .usage-filters-bar {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 16px !important;
+      }
+      .usage-filters-left {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        gap: 12px !important;
+      }
+      .usage-filter-group {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 6px !important;
+        width: 100% !important;
+      }
+      .usage-filter-chips {
+        width: 100% !important;
+      }
+      #btn-reset-usage-filters {
+        align-self: flex-end !important;
+        margin-left: 0 !important;
+      }
+    }
+    
+    /* Custom styles for compression and routing tracking in usage history */
+    .model-cell-content {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      padding: 4px 0;
+    }
+    .model-name-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+    .model-name {
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
+    }
+    .badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      font-size: 10px;
+      font-weight: 700;
+      padding: 1px 6px;
+      border-radius: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .badge .material-symbols-outlined {
+      font-size: 12px;
+      font-variation-settings: 'FILL' 1;
+    }
+    .badge-compression {
+      background-color: rgba(187, 134, 252, 0.12);
+      color: #BB86FC;
+      border: 1px solid rgba(187, 134, 252, 0.25);
+    }
+    .badge-routing {
+      background-color: rgba(3, 218, 198, 0.12);
+      color: #03DAC6;
+      border: 1px solid rgba(3, 218, 198, 0.25);
+    }
+    .model-subtext {
+      font-size: 11px;
+      color: var(--md-sys-color-on-surface-variant);
+      opacity: 0.85;
+      line-height: 1.4;
+    }
+    .tokens-info {
+      font-weight: 600;
+      color: #D4A5FF;
+    }
+    .compressor-name {
+      font-family: 'Roboto Mono', monospace;
+      background-color: var(--md-sys-color-surface-container-high, rgba(255, 255, 255, 0.05));
+      padding: 1px 4px;
+      border-radius: 4px;
+      color: var(--md-sys-color-secondary);
+      font-size: 10.5px;
+    }
+    .orig-model {
+      text-decoration: line-through;
+      opacity: 0.6;
+    }
+    .target-model {
+      font-weight: 600;
+      color: #03DAC6;
+    }
+    .routing-compress-info {
+      display: block;
+      margin-top: 2px;
+      font-size: 10px;
+      color: var(--md-sys-color-on-surface-variant);
+      opacity: 0.75;
+    }
+    
+    /* Styles for Recent Activity items with compression */
+    .activity-compression-info {
+      margin-top: 4px;
+      font-size: 11px;
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      border-left: 2px solid var(--md-sys-color-primary);
+      padding-left: 8px;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .activity-compression-badge-row {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      margin-bottom: 2px;
+    }
+    .activity-badge {
+      font-size: 9px;
+      font-weight: 700;
+      padding: 1px 4px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .activity-badge-comp {
+      background: rgba(187, 134, 252, 0.15);
+      color: #BB86FC;
+    }
+    .activity-badge-route {
+      background: rgba(3, 218, 198, 0.15);
+      color: #03DAC6;
+    }
+    .activity-comp-text {
+      font-size: 10.5px;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+
+    /* CUSTOM STYLE OVERRIDES FOR SIDEBAR, AVATAR SWAP, TOOLTIPS, AND ANNOUNCEMENT BANNERS */
+    .tier-badge {
+      cursor: pointer;
+    }
+    /* TOPBAR CHAT BUTTON */
+    .topbar-chat-btn {
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      background: var(--md-sys-color-surface-container-high);
+      color: var(--md-sys-color-on-surface);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      transition: all var(--md-sys-motion-duration-short) ease;
+      border: 2px solid transparent;
+      text-decoration: none;
+    }
+    .topbar-chat-btn:hover {
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      transform: scale(1.05);
+    }
+    .topbar-chat-btn .material-symbols-outlined {
+      font-size: 20px;
+      font-variation-settings: 'FILL' 0;
+    }
+
+    /* NAV RAIL AVATAR (Bottom Left) */
+    .nav-rail-avatar {
+      width: 24px;
+      height: 24px;
+      border-radius: 50%;
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 12px;
+      font-weight: 700;
+      transition: all var(--md-sys-motion-duration-short) ease;
+    }
+    .nav-rail-item.active .nav-rail-avatar {
+      background: var(--tier-accent);
+      color: var(--md-sys-color-on-primary);
+      box-shadow: 0 0 8px var(--tier-accent);
+    }
+
+    /* PLAN HOVER CARD */
+    .plan-hover-card {
+      position: absolute;
+      display: none;
+      z-index: 1000;
+      width: 260px;
+      background: var(--md-sys-color-surface-container-high);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      border-radius: var(--md-sys-shape-corner-large);
+      box-shadow: var(--md-sys-elevation-3);
+      padding: 16px;
+      font-family: var(--md-sys-typescale-body-font);
+      color: var(--md-sys-color-on-surface);
+      pointer-events: none;
+      animation: plan-card-fade-in 150ms cubic-bezier(0.2, 0, 0, 1);
+    }
+    @keyframes plan-card-fade-in {
+      from { opacity: 0; transform: translateY(4px) scale(0.98); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    .plan-hover-card-header {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      margin-bottom: 12px;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      padding-bottom: 8px;
+    }
+    .plan-hover-card-title {
+      font-weight: 600;
+      font-size: 14px;
+      color: var(--tier-accent, var(--md-sys-color-primary));
+    }
+    .plan-hover-card-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 12px;
+      margin-bottom: 6px;
+    }
+    .plan-hover-card-label {
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .plan-hover-card-value {
+      font-weight: 500;
+    }
+    .plan-hover-card-footer {
+      margin-top: 12px;
+      font-size: 11px;
+      color: var(--tier-accent, var(--md-sys-color-primary));
+      text-align: center;
+      font-weight: 500;
+    }
+
+    /* WELCOME SUB BADGE HOVER CARD TRIGGER */
+    .welcome-sub-badge {
+      cursor: pointer;
+      transition: all var(--md-sys-motion-duration-short) ease;
+    }
+    .welcome-sub-badge:hover {
+      background: color-mix(in srgb, var(--tier-accent) 20%, var(--md-sys-color-surface-container-low));
+      transform: scale(1.02);
+    }
+
+    /* THIN ANNOUNCEMENT BANNERS */
+    .announcement-banner {
+      position: relative;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      padding: 8px 16px;
+      border-radius: var(--md-sys-shape-corner-medium);
+      background: var(--md-sys-color-surface-container);
+      border: 1px solid var(--md-sys-color-outline-variant);
+      margin-bottom: 16px;
+      overflow: hidden;
+      transition: all 300ms ease;
+    }
+    .announcement-banner:hover {
+      background: var(--md-sys-color-surface-container-high);
+      border-color: var(--md-sys-color-outline);
+    }
+    .announcement-banner .tone-strip {
+      position: absolute;
+      left: 0;
+      top: 0;
+      bottom: 0;
+      width: 4px;
+    }
+    .announcement-banner.tone-info .tone-strip { background: var(--md-sys-color-primary); }
+    .announcement-banner.tone-warning .tone-strip { background: var(--md-sys-color-warning, #f57c00); }
+    .announcement-banner.tone-error .tone-strip { background: var(--md-sys-color-error); }
+    .announcement-banner.tone-success .tone-strip { background: var(--md-sys-color-success, #388e3c); }
+    .announcement-banner.tone-neutral .tone-strip { background: var(--md-sys-color-outline); }
+
+    .banner-main-content {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      min-width: 0;
+      cursor: pointer;
+    }
+    .banner-type-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 2px 8px;
+      font-size: 10px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: var(--md-sys-shape-corner-full);
+      background: color-mix(in srgb, var(--md-sys-color-primary) 12%, transparent);
+      color: var(--md-sys-color-primary);
+      border: 1px solid color-mix(in srgb, var(--md-sys-color-primary) 24%, transparent);
+      white-space: nowrap;
+    }
+    .announcement-banner.tone-warning .banner-type-chip {
+      background: color-mix(in srgb, var(--md-sys-color-warning, #f57c00) 12%, transparent);
+      color: var(--md-sys-color-warning, #f57c00);
+      border-color: color-mix(in srgb, var(--md-sys-color-warning, #f57c00) 24%, transparent);
+    }
+    .announcement-banner.tone-error .banner-type-chip {
+      background: color-mix(in srgb, var(--md-sys-color-error) 12%, transparent);
+      color: var(--md-sys-color-error);
+      border-color: color-mix(in srgb, var(--md-sys-color-error) 24%, transparent);
+    }
+    .banner-title {
+      font-size: 12.5px;
+      font-weight: 500;
+      color: var(--md-sys-color-on-surface);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .banner-dismiss-btn {
+      background: transparent;
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 50%;
+      transition: background 150ms ease;
+      flex-shrink: 0;
+    }
+    .banner-dismiss-btn:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--md-sys-color-on-surface);
+    }
+    .banner-dismiss-btn .material-symbols-outlined {
+      font-size: 18px;
+    }
+    @media (max-width: 600px) {
+      .banner-main-content {
+        flex-wrap: nowrap;
+      }
+      .banner-title {
+        font-size: 11.5px;
+      }
+    }
+
+    /* GLOBAL TOP VIEWPORT ANNOUNCEMENT BANNERS */
+    :root {
+      --banner-height: 0px;
+    }
+
+    #global-banners-container {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      z-index: 1000;
+      display: flex;
+      flex-direction: column;
+      pointer-events: auto;
+    }
+
+    .global-banner {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+      padding: 6px 40px 6px 24px;
+      min-height: 38px;
+      box-sizing: border-box;
+      font-size: 13px;
+      font-weight: 500;
+      position: relative;
+      width: 100%;
+      border-bottom: 1px solid var(--md-sys-color-outline-variant);
+      transition: all 300ms cubic-bezier(0.2, 0, 0, 1);
+      overflow: hidden;
+      opacity: 1;
+      height: 38px;
+    }
+
+    /* Tone-based background combinations designed to match Orchid theme beautifully */
+    .global-banner.tone-info {
+      background: linear-gradient(90deg, color-mix(in srgb, var(--md-sys-color-primary) 12%, var(--md-sys-color-surface-container-high)), color-mix(in srgb, var(--md-sys-color-primary) 18%, var(--md-sys-color-surface-container-high)));
+      color: var(--md-sys-color-on-surface);
+      border-bottom-color: color-mix(in srgb, var(--md-sys-color-primary) 25%, transparent);
+    }
+
+    .global-banner.tone-warning {
+      background: linear-gradient(90deg, color-mix(in srgb, var(--md-sys-color-error) 10%, var(--md-sys-color-surface-container-high)), color-mix(in srgb, var(--md-sys-color-error) 15%, var(--md-sys-color-surface-container-high)));
+      color: var(--md-sys-color-on-surface);
+      border-bottom-color: color-mix(in srgb, var(--md-sys-color-error) 25%, transparent);
+    }
+
+    .global-banner.tone-success {
+      background: linear-gradient(90deg, color-mix(in srgb, var(--md-sys-color-tertiary-container) 35%, var(--md-sys-color-surface-container-high)), color-mix(in srgb, var(--md-sys-color-tertiary-container) 50%, var(--md-sys-color-surface-container-high)));
+      color: var(--md-sys-color-on-tertiary-container);
+      border-bottom-color: color-mix(in srgb, var(--md-sys-color-tertiary) 25%, transparent);
+    }
+
+    .global-banner-text {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+
+    .global-banner-type-chip {
+      display: inline-flex;
+      align-items: center;
+      padding: 1px 7px;
+      font-size: 9px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      border-radius: 4px;
+      background: rgba(255, 255, 255, 0.08);
+      border: 1px solid rgba(255, 255, 255, 0.15);
+      color: inherit;
+      white-space: nowrap;
+    }
+
+    .global-banner-title {
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      letter-spacing: -0.01em;
+    }
+
+    .global-banner-cta {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background: var(--md-sys-color-on-surface);
+      color: var(--md-sys-color-surface);
+      padding: 2.5px 9px;
+      border-radius: 20px;
+      font-size: 10.5px;
+      font-weight: 700;
+      text-decoration: none;
+      transition: all 180ms ease;
+      cursor: pointer;
+      border: none;
+      white-space: nowrap;
+      margin-left: 4px;
+    }
+
+    .global-banner-cta:hover {
+      transform: scale(1.05);
+      background: var(--md-sys-color-primary-container);
+      color: var(--md-sys-color-on-primary-container);
+    }
+
+    .global-banner-cta span {
+      font-size: 12px;
+      font-weight: bold;
+    }
+
+    .global-banner-dismiss {
+      position: absolute;
+      right: 12px;
+      top: 50%;
+      transform: translateY(-50%);
+      background: transparent;
+      border: none;
+      color: var(--md-sys-color-on-surface-variant);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 4px;
+      border-radius: 50%;
+      transition: all 150ms ease;
+      opacity: 0.75;
+    }
+
+    .global-banner-dismiss:hover {
+      background: rgba(255, 255, 255, 0.08);
+      color: var(--md-sys-color-on-surface);
+      opacity: 1;
+    }
+
+    .global-banner-dismiss .material-symbols-outlined {
+      font-size: 16px;
+    }
+
+    /* OVERRIDES TO SHIFT LAYOUT */
+    .nav-rail {
+      top: var(--banner-height, 0px) !important;
+      height: calc(100vh - var(--banner-height, 0px)) !important;
+      transition: top 300ms cubic-bezier(0.2, 0, 0, 1), height 300ms cubic-bezier(0.2, 0, 0, 1) !important;
+    }
+
+    .dashboard-content {
+      margin-top: var(--banner-height, 0px) !important;
+      min-height: calc(100vh - var(--banner-height, 0px)) !important;
+      transition: margin-top 300ms cubic-bezier(0.2, 0, 0, 1) !important;
+    }
+
+    .dashboard-topbar {
+      top: var(--banner-height, 0px) !important;
+      transition: top 300ms cubic-bezier(0.2, 0, 0, 1) !important;
+    }
+
+    @media (max-width: 1023px) {
+      .dashboard-content {
+        margin-top: var(--banner-height, 0px) !important;
+      }
+      .dashboard-topbar {
+        top: var(--banner-height, 0px) !important;
+      }
+    }
+
+    @media (max-width: 600px) {
+      .global-banner {
+        font-size: 11.5px;
+        gap: 8px;
+        padding-left: 12px;
+        padding-right: 32px;
+      }
+      .global-banner-cta {
+        padding: 2px 7px;
+        font-size: 9.5px;
+      }
+    }
+
+    /* ===== M3E COMPONENT OVERRIDES ===== */
+
+    /* Danger button (Delete Account) — override M3E filled button colors */
+    m3e-button.danger-btn {
+      --md-sys-color-primary: var(--md-sys-color-error);
+      --md-sys-color-on-primary: var(--md-sys-color-on-error);
+      --md-sys-color-primary-container: var(--md-sys-color-error-container);
+      --md-sys-color-on-primary-container: var(--md-sys-color-on-error-container);
+    }
+
+    /* Ensure m3e-filter-chip-set wraps like the old .filter-chips / .usage-filter-chips */
+    m3e-filter-chip-set.usage-filter-chips,
+    m3e-filter-chip-set.filter-chips,
+    m3e-filter-chip-set.announcement-filters {
+      display: inline-flex;
+      flex-wrap: wrap;
+      gap: 6px;
+    }
+
+    /* Segmented button in settings — keep compact sizing */
+    .setting-item m3e-segmented-button {
+      flex-shrink: 0;
+    }
+
+    /* m3e-switch in setting items — align right */
+    .setting-item m3e-switch {
+      flex-shrink: 0;
+    }
+
+    /* m3e-button inside apikeys-header and plan-card — preserve layout */
+    .apikeys-header m3e-button,
+    .plan-card m3e-button {
+      flex-shrink: 0;
+    }
+
+    /* Explore Boosters full-width m3e-button */
+    .promo-store-card m3e-button {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* m3e-switch in context-tier-row — align with layout */
+    .context-tier-row m3e-switch {
+      flex-shrink: 0;
+    }
+
+    /* ===== PETAL BLOOM ANIMATION (shared with login) ===== */
+    .nav-rail-logo .petal {
+      transform-origin: 16px 16px;
+      opacity: 0;
+    }
+    .nav-rail-logo .petal-1 {
+      animation: petalBloom1 600ms var(--md-sys-motion-easing-emphasized-decelerate) 200ms forwards;
+    }
+    .nav-rail-logo .petal-2 {
+      animation: petalBloom2 600ms var(--md-sys-motion-easing-emphasized-decelerate) 350ms forwards;
+    }
+    .nav-rail-logo .petal-3 {
+      animation: petalBloom3 600ms var(--md-sys-motion-easing-emphasized-decelerate) 500ms forwards;
+    }
+    .nav-rail-logo .petal-4 {
+      animation: petalBloom4 600ms var(--md-sys-motion-easing-emphasized-decelerate) 650ms forwards;
+    }
+    .nav-rail-logo .petal-5 {
+      animation: petalBloom5 600ms var(--md-sys-motion-easing-emphasized-decelerate) 800ms forwards;
+    }
+    @keyframes petalBloom1 {
+      0%   { opacity: 0; transform: rotate(0deg) scale(0); }
+      50%  { opacity: 0.6; }
+      80%  { opacity: 0.9; transform: rotate(0deg) scale(1.08); }
+      100% { opacity: 0.9; transform: rotate(0deg) scale(1); }
+    }
+    @keyframes petalBloom2 {
+      0%   { opacity: 0; transform: rotate(0deg) scale(0); }
+      50%  { opacity: 0.5; }
+      80%  { opacity: 0.8; transform: rotate(72deg) scale(1.08); }
+      100% { opacity: 0.8; transform: rotate(72deg) scale(1); }
+    }
+    @keyframes petalBloom3 {
+      0%   { opacity: 0; transform: rotate(0deg) scale(0); }
+      50%  { opacity: 0.5; }
+      80%  { opacity: 0.75; transform: rotate(144deg) scale(1.08); }
+      100% { opacity: 0.75; transform: rotate(144deg) scale(1); }
+    }
+    @keyframes petalBloom4 {
+      0%   { opacity: 0; transform: rotate(0deg) scale(0); }
+      50%  { opacity: 0.5; }
+      80%  { opacity: 0.75; transform: rotate(216deg) scale(1.08); }
+      100% { opacity: 0.75; transform: rotate(216deg) scale(1); }
+    }
+    @keyframes petalBloom5 {
+      0%   { opacity: 0; transform: rotate(0deg) scale(0); }
+      50%  { opacity: 0.5; }
+      80%  { opacity: 0.8; transform: rotate(288deg) scale(1.08); }
+      100% { opacity: 0.8; transform: rotate(288deg) scale(1); }
+    }
+
+    .nav-rail-logo .center-pistil {
+      opacity: 0;
+      transform-origin: 16px 16px;
+      animation: centerFlyIn 500ms var(--md-sys-motion-easing-emphasized-decelerate) forwards;
+      animation-delay: 1050ms;
+    }
+    @keyframes centerFlyIn {
+      0%   { opacity: 0; transform: scale(0) translateY(-12px); }
+      60%  { opacity: 1; transform: scale(1.3) translateY(0); }
+      80%  { transform: scale(0.9); }
+      100% { opacity: 1; transform: scale(1) translateY(0); }
+    }
+
+    /* Idle glow after bloom settles */
+    .nav-rail-brand {
+      animation: none !important;
+    }
+
+    .nav-rail-logo {
+      overflow: visible !important;
+    }
+
+    /* Flower tier-specific styling */
+    [data-active-tier="free"] .nav-rail-logo .petal {
+      fill: #938F99 !important;
+    }
+    [data-active-tier="free"] .nav-rail-logo .petal-3,
+    [data-active-tier="free"] .nav-rail-logo .petal-4 {
+      fill: #706E75 !important;
+    }
+
+    [data-active-tier="basic"] .nav-rail-logo .petal {
+      fill: #80CBC4 !important;
+    }
+    [data-active-tier="basic"] .nav-rail-logo .petal-3,
+    [data-active-tier="basic"] .nav-rail-logo .petal-4 {
+      fill: #00796B !important;
+    }
+
+    [data-active-tier="plus"] .nav-rail-logo .petal {
+      fill: url(#nr-pet) !important;
+    }
+    [data-active-tier="plus"] .nav-rail-logo .petal-3,
+    [data-active-tier="plus"] .nav-rail-logo .petal-4 {
+      fill: #AB47BC !important;
+    }
+
+    [data-active-tier="pro"] .nav-rail-logo .petal {
+      fill: #FFD54F !important;
+    }
+    [data-active-tier="pro"] .nav-rail-logo .petal-3,
+    [data-active-tier="pro"] .nav-rail-logo .petal-4 {
+      fill: #FF8F00 !important;
+    }
+    [data-active-tier="pro"] .nav-rail-logo {
+      animation: logoPulsePro 3.5s ease-in-out 2s infinite !important;
+    }
+
+    [data-active-tier="elite"] .nav-rail-logo .petal {
+      fill: url(#nr-pet-elite) !important;
+    }
+    [data-active-tier="elite"] .nav-rail-logo .petal-3,
+    [data-active-tier="elite"] .nav-rail-logo .petal-4 {
+      fill: #C026D3 !important;
+    }
+    [data-active-tier="elite"] .nav-rail-logo {
+      animation: logoPulseElite 3.5s ease-in-out 2s infinite !important;
+    }
+
+    @keyframes logoPulsePro {
+      0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 213, 79, 0.5)); }
+      50%       { filter: drop-shadow(0 0 10px rgba(255, 213, 79, 0.9)); }
+    }
+
+    @keyframes logoPulseElite {
+      0%, 100% { filter: drop-shadow(0 0 6px rgba(217, 70, 239, 0.6)) drop-shadow(0 0 12px rgba(244, 63, 94, 0.4)); }
+      50%       { filter: drop-shadow(0 0 16px rgba(217, 70, 239, 0.95)) drop-shadow(0 0 26px rgba(244, 63, 94, 0.75)); }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ===== GLOBAL VIEWPORT BANNERS ===== -->
+  <div id="global-banners-container"></div>
+
+  <!-- ===== DASHBOARD SHELL ===== -->
+  <div class="dashboard-shell" id="dashboard-shell">
+
+    <!-- ===== NAVIGATION RAIL (Desktop) ===== -->
+    <nav class="nav-rail" id="nav-rail" aria-label="Dashboard navigation">
+      <!-- Brand -->
+      <a href="users.html" class="nav-rail-brand" id="nav-rail-brand" aria-label="OrchidLLM home">
+        <svg class="nav-rail-logo" viewBox="0 0 32 32" fill="none">
+          <defs>
+            <linearGradient id="nr-pet" x1="8" y1="4" x2="24" y2="28">
+              <stop offset="0%" stop-color="#D4A5FF"/>
+              <stop offset="50%" stop-color="#B388FF"/>
+              <stop offset="100%" stop-color="#9F86FF"/>
+            </linearGradient>
+            <linearGradient id="nr-pet-elite" x1="8" y1="4" x2="24" y2="28">
+              <stop offset="0%" stop-color="#F472B6"/>
+              <stop offset="50%" stop-color="#D946EF"/>
+              <stop offset="100%" stop-color="#8B5CF6"/>
+            </linearGradient>
+            <radialGradient id="nr-center" cx="16" cy="16" r="3">
+              <stop offset="0%" stop-color="#FFD54F"/>
+              <stop offset="100%" stop-color="#FFA726"/>
+            </radialGradient>
+          </defs>
+          <ellipse class="petal petal-1" cx="16" cy="8" rx="4" ry="6.5" fill="url(#nr-pet)" transform="rotate(0 16 16)"/>
+          <ellipse class="petal petal-2" cx="16" cy="8" rx="4" ry="6.5" fill="url(#nr-pet)" transform="rotate(72 16 16)"/>
+          <ellipse class="petal petal-3" cx="16" cy="8" rx="4" ry="6.5" fill="#AB47BC" transform="rotate(144 16 16)"/>
+          <ellipse class="petal petal-4" cx="16" cy="8" rx="4" ry="6.5" fill="#AB47BC" transform="rotate(216 16 16)"/>
+          <ellipse class="petal petal-5" cx="16" cy="8" rx="4" ry="6.5" fill="url(#nr-pet)" transform="rotate(288 16 16)"/>
+          <circle class="center-pistil" cx="16" cy="16" r="2.5" fill="url(#nr-center)"/>
+        </svg>
+      </a>
+
+      <div class="nav-rail-divider"></div>
+
+      <!-- Nav items -->
+      <div class="nav-rail-items">
+        <button class="nav-rail-item active" data-section="home" id="nav-home" aria-label="Home">
+          <span class="nav-indicator"></span>
+          <span class="material-symbols-outlined">home</span>
+          <span class="nav-rail-item-label">Home</span>
+        </button>
+        <button class="nav-rail-item" data-section="usage" id="nav-usage" aria-label="Usage">
+          <span class="nav-indicator"></span>
+          <span class="material-symbols-outlined">monitoring</span>
+          <span class="nav-rail-item-label">Usage</span>
+        </button>
+        <button class="nav-rail-item" data-section="models" id="nav-models" aria-label="Models">
+          <span class="nav-indicator"></span>
+          <span class="material-symbols-outlined">psychology</span>
+          <span class="nav-rail-item-label">Models</span>
+        </button>
+        <button class="nav-rail-item" data-section="apikeys" id="nav-apikeys" aria-label="API Keys">
+          <span class="nav-indicator"></span>
+          <span class="material-symbols-outlined">key</span>
+          <span class="nav-rail-item-label">API Keys</span>
+        </button>
+        <button class="nav-rail-item" data-section="billing" id="nav-billing" aria-label="Billing">
+          <span class="nav-indicator"></span>
+          <span class="material-symbols-outlined">payments</span>
+          <span class="nav-rail-item-label">Billing</span>
+        </button>
+        <button class="nav-rail-item" data-section="settings" id="nav-settings" aria-label="Settings">
+          <span class="nav-indicator"></span>
+          <span class="material-symbols-outlined">settings</span>
+          <span class="nav-rail-item-label">Settings</span>
+        </button>
+      </div>
+
+      <!-- Bottom section -->
+      <div class="nav-rail-bottom">
+        <button class="nav-rail-item" data-section="announcements" id="nav-announcements" aria-label="Announcements">
+          <span class="nav-indicator"></span>
+          <span class="material-symbols-outlined">notifications</span>
+          <span class="nav-rail-item-label">News</span>
+          <span class="bell-badge" id="bell-badge">3</span>
+        </button>
+        <button class="nav-rail-item" data-section="account" id="nav-account-avatar-btn" aria-label="Account">
+          <span class="nav-indicator"></span>
+          <div class="nav-rail-avatar" id="nav-rail-avatar">J</div>
+          <span class="nav-rail-item-label">Account</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <div class="dashboard-content">
+
+      <!-- Top bar -->
+      <header class="dashboard-topbar" id="dashboard-topbar">
+        <h1 class="topbar-title" id="topbar-title">Home</h1>
+        <div class="topbar-right">
+          <div class="tier-badge" id="tier-badge">
+            <span class="material-symbols-outlined">diamond</span>
+            <span id="tier-badge-label">Free</span>
+          </div>
+          <a href="index.html" class="topbar-chat-btn" id="topbar-chat-btn" title="Chat">
+            <span class="material-symbols-outlined">chat</span>
+          </a>
+        </div>
+      </header>
+
+      <!-- Sections -->
+      <div class="dashboard-sections" id="dashboard-sections">
+
+        <!-- ========== HOME / OVERVIEW ========== -->
+        <section class="dashboard-section active" id="section-home" aria-label="Overview">
+
+          <!-- Nudge banner (conditional) -->
+          <div class="nudge-banner" id="nudge-banner" style="display:none;">
+            <span class="material-symbols-outlined">warning</span>
+            <span class="nudge-text">You've hit your rollover cap — spend your credits before the cycle ends to avoid losing them.</span>
+            <button class="nudge-dismiss" id="nudge-dismiss" aria-label="Dismiss"><span class="material-symbols-outlined" style="font-size:18px;">close</span></button>
+          </div>
+
+          <!-- Announcement banners container -->
+          <div id="announcement-banners-container">
+          </div>
+
+
+          <!-- Welcome banner -->
+          <div class="welcome-banner">
+            <div class="welcome-row">
+              <div class="welcome-text-col">
+                <h2 class="welcome-greeting" id="welcome-greeting">Welcome back, johndoe</h2>
+                <p class="welcome-sub">Here's your OrchidLLM overview for today.</p>
+              </div>
+              <div id="welcome-sub-status"></div>
+            </div>
+          </div>
+
+          <!-- Dashboard Multi-column Layout -->
+          <div class="dashboard-home-layout">
+            
+            <!-- Left Main Column: Credits Console & Recent Activity -->
+            <div class="dashboard-main-col">
+              <!-- Interactive Credits Console -->
+              <div id="credits-console-container" class="stagger-item" style="animation-delay:0ms"></div>
+
+              <!-- Recent Activity Card -->
+              <m3e-card variant="outlined" class="recent-activity-card stagger-item" style="animation-delay:120ms">
+                <div class="card-header">
+                  <div class="card-title"><span class="material-symbols-outlined">history</span> Recent Activity</div>
+                </div>
+                <div class="activity-list" id="activity-list">
+                  <!-- Populated by JS -->
+                </div>
+              </m3e-card>
+            </div>
+
+            <!-- Right Sidebar Column: Quick Stats & Call-to-action -->
+            <div class="dashboard-sidebar-col">
+              <!-- Quick Stats Card -->
+              <m3e-card variant="outlined" class="sidebar-stats-card stagger-item" style="animation-delay:60ms">
+                <div class="card-header">
+                    <div class="card-title"><span class="material-symbols-outlined">monitoring</span> Dashboard Insights</div>
+                  </div>
+                <div class="sidebar-stats-list">
+                  <div class="sidebar-stat-item">
+                    <div class="stat-icon-wrap primary"><span class="material-symbols-outlined">send</span></div>
+                    <div class="sidebar-stat-details">
+                      <div class="sidebar-stat-val" id="stat-requests">47</div>
+                      <div class="sidebar-stat-label">Requests today</div>
+                    </div>
+                  </div>
+                  <div class="sidebar-stat-item">
+                    <div class="stat-icon-wrap secondary"><span class="material-symbols-outlined">psychology</span></div>
+                    <div class="sidebar-stat-details">
+                      <div class="sidebar-stat-val" id="stat-models">12</div>
+                      <div class="sidebar-stat-label">Models available</div>
+                    </div>
+                  </div>
+                  <div class="sidebar-stat-item">
+                    <div class="stat-icon-wrap tertiary"><span class="material-symbols-outlined">key</span></div>
+                    <div class="sidebar-stat-details">
+                      <div class="sidebar-stat-val" id="stat-keys">3</div>
+                      <div class="sidebar-stat-label">API keys active</div>
+                    </div>
+                  </div>
+                  <div class="sidebar-stat-item">
+                    <div class="stat-icon-wrap success"><span class="material-symbols-outlined">speed</span></div>
+                    <div class="sidebar-stat-details">
+                      <div class="sidebar-stat-val" id="stat-rpm">3</div>
+                      <div class="sidebar-stat-label">RPM limit</div>
+                    </div>
+                  </div>
+                </div>
+                <!-- View full usage nudge -->
+                <button class="view-more-usage-btn" onclick="switchSection('usage')" id="btn-view-usage-insights">
+                  <span class="material-symbols-outlined vmu-icon">bar_chart</span>
+                  <span class="vmu-text">View full usage</span>
+                  <span class="material-symbols-outlined vmu-arrow">arrow_forward</span>
+                </button>
+              </m3e-card>
+
+              <!-- Promo Card for booster store -->
+              <m3e-card variant="outlined" class="promo-store-card stagger-item" style="animation-delay:180ms">
+                <div class="promo-glow"></div>
+                <div class="promo-card-content">
+                  <div class="promo-icon"><span class="material-symbols-outlined">flash_on</span></div>
+                  <h3 class="promo-title">Running low on fuel?</h3>
+                  <p class="promo-desc">Purchase a recharge pack or subscribe to unlock higher RPM limits, context window sizes, and priority routing.</p>
+                  <m3e-button variant="filled" onclick="switchSection('billing')" style="width:100%;">
+                    Explore Boosters
+                    <span slot="trailing-icon" class="material-symbols-outlined" style="font-size:16px;">arrow_forward</span>
+                  </m3e-button>
+                </div>
+              </m3e-card>
+
+              <!-- Quick Links Card -->
+              <m3e-card variant="outlined" class="quick-links-card stagger-item" style="animation-delay:240ms">
+                <div class="card-header">
+                    <div class="card-title"><span class="material-symbols-outlined">link</span> Quick Links</div>
+                  </div>
+                <div class="quick-links-list">
+                  <a href="#" class="quick-link-item" onclick="return false;">
+                    <span class="quick-link-icon status-green">
+                      <span class="material-symbols-outlined">radio_button_checked</span>
+                    </span>
+                    <span class="quick-link-label">System Status</span>
+                    <span class="quick-link-badge badge-operational">Operational</span>
+                  </a>
+                  <a href="#" class="quick-link-item" onclick="return false;">
+                    <span class="quick-link-icon">
+                      <span class="material-symbols-outlined">menu_book</span>
+                    </span>
+                    <span class="quick-link-label">Documentation</span>
+                    <span class="material-symbols-outlined quick-link-arrow">open_in_new</span>
+                  </a>
+                  <a href="#" class="quick-link-item" onclick="return false;">
+                    <span class="quick-link-icon">
+                      <span class="material-symbols-outlined">code</span>
+                    </span>
+                    <span class="quick-link-label">API Reference</span>
+                    <span class="material-symbols-outlined quick-link-arrow">open_in_new</span>
+                  </a>
+                  <a href="#" class="quick-link-item" onclick="return false;">
+                    <span class="quick-link-icon">
+                      <span class="material-symbols-outlined">chat_bubble</span>
+                    </span>
+                    <span class="quick-link-label">Support</span>
+                    <span class="material-symbols-outlined quick-link-arrow">open_in_new</span>
+                  </a>
+                </div>
+              </m3e-card>
+
+            </div>
+
+          </div>
+        </section>
+
+        <!-- ========== MODELS ========== -->
+        <section class="dashboard-section" id="section-models" aria-label="Models">
+          <div class="section-header">
+            <h2 class="section-title">Models</h2>
+            <p class="section-subtitle">Browse and configure available AI models</p>
+          </div>
+
+          <div class="models-toolbar">
+            <div class="search-row">
+              <div class="search-field">
+                <span class="material-symbols-outlined">search</span>
+                <input type="text" placeholder="Search models by name, maker, or ID…" id="model-search" />
+              </div>
+              <div style="position: relative; display: inline-flex;">
+                <m3e-button variant="tonal" id="toggle-filters-btn">
+                  <span slot="icon" class="material-symbols-outlined">filter_list</span>
+                  Filters
+                </m3e-button>
+                <span class="filter-count-badge" id="filter-count-badge" style="position: absolute; top: -4px; right: -4px; z-index: 1; display: none; background: var(--md-sys-color-primary); color: var(--md-sys-color-on-primary); border-radius: 50%; width: 18px; height: 18px; font-size: 11px; align-items: center; justify-content: center; font-weight: bold;">0</span>
+              </div>
+            </div>
+            
+            <!-- Active Filters Summary Bar -->
+            <div class="active-filters-bar" id="active-filters-bar" style="display: none;">
+              <span style="font-size: 12px; font-weight: 600; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; margin-right: 4px; display: inline-flex; align-items: center; gap: 4px;">
+                <span class="material-symbols-outlined" style="font-size: 16px;">filter_alt</span>
+                Active Filters:
+              </span>
+              <div id="active-filters-pills" style="display: inline-flex; flex-wrap: wrap; gap: 6px; align-items: center;"></div>
+              <m3e-button variant="outlined" size="extra-small" class="active-filters-reset-btn" id="active-filters-reset-btn" style="margin-left: auto;">
+                <span slot="icon" class="material-symbols-outlined" style="font-size: 16px;">restart_alt</span>
+                Reset All
+              </m3e-button>
+            </div>
+            
+            <div class="filter-panel" id="filter-panel">
+              <div class="filter-panel-header" style="display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--md-sys-color-outline-variant); padding-bottom: 10px; margin-bottom: 12px; width: 100%;">
+                <span style="font-size: 13px; font-weight: 600; color: var(--md-sys-color-on-surface-variant); text-transform: uppercase; letter-spacing: 0.5px; display: inline-flex; align-items: center; gap: 6px;">
+                  <span class="material-symbols-outlined" style="font-size: 18px;">tune</span>
+                  Filter Controls
+                </span>
+                <m3e-button variant="outlined" size="extra-small" class="active-filters-reset-btn" id="filter-panel-reset-btn">
+                  <span slot="icon" class="material-symbols-outlined" style="font-size: 16px;">restart_alt</span>
+                  Clear All
+                </m3e-button>
+              </div>
+
+              <div class="filter-group">
+                <span class="filter-label">
+                  <span class="material-symbols-outlined">business</span>
+                  <span>Provider</span>
+                  <span style="font-size: 11px; text-transform: none; font-weight: normal; color: var(--md-sys-color-on-surface-variant); opacity: 0.75; margin-left: 6px;">(Select multiple)</span>
+                </span>
+                <m3e-filter-chip-set multi id="model-provider-filters">
+                  <m3e-filter-chip label="All" selected data-filter="all">All</m3e-filter-chip>
+                  <m3e-filter-chip label="Anthropic" data-filter="anthropic">Anthropic</m3e-filter-chip>
+                  <m3e-filter-chip label="OpenAI" data-filter="openai">OpenAI</m3e-filter-chip>
+                  <m3e-filter-chip label="Google" data-filter="google">Google</m3e-filter-chip>
+                  <m3e-filter-chip label="Meta" data-filter="meta">Meta</m3e-filter-chip>
+                  <m3e-filter-chip label="DeepSeek" data-filter="deepseek">DeepSeek</m3e-filter-chip>
+                </m3e-filter-chip-set>
+              </div>
+
+              <div class="filter-group">
+                <span class="filter-label">
+                  <span class="material-symbols-outlined">workspace_premium</span>
+                  <span>Access Tier</span>
+                  <span style="font-size: 11px; text-transform: none; font-weight: normal; color: var(--md-sys-color-on-surface-variant); opacity: 0.75; margin-left: 6px;">(Select multiple)</span>
+                </span>
+                <m3e-filter-chip-set multi id="model-tier-filters">
+                  <m3e-filter-chip label="All Tiers" selected data-tier="all">All Tiers</m3e-filter-chip>
+                  <m3e-filter-chip label="Free" data-tier="free">Free</m3e-filter-chip>
+                  <m3e-filter-chip label="Standard" data-tier="standard">Standard</m3e-filter-chip>
+                  <m3e-filter-chip label="Premium" data-tier="premium">Premium</m3e-filter-chip>
+                  <m3e-filter-chip label="Elite" data-tier="elite">Elite</m3e-filter-chip>
+                </m3e-filter-chip-set>
+              </div>
+
+              <div class="filter-group">
+                <span class="filter-label">
+                  <span class="material-symbols-outlined">psychology</span>
+                  <span>Capabilities</span>
+                  <span style="font-size: 11px; text-transform: none; font-weight: normal; color: var(--md-sys-color-on-surface-variant); opacity: 0.75; margin-left: 6px;">(Select multiple)</span>
+                </span>
+                <m3e-filter-chip-set multi id="model-cap-filters">
+                  <m3e-filter-chip label="All Caps" selected data-cap="all">All Caps</m3e-filter-chip>
+                  <m3e-filter-chip label="Vision" data-cap="vision">Vision</m3e-filter-chip>
+                  <m3e-filter-chip label="Reasoning" data-cap="reasoning">Reasoning</m3e-filter-chip>
+                  <m3e-filter-chip label="Streaming" data-cap="streaming">Streaming</m3e-filter-chip>
+                  <m3e-filter-chip label="Tools" data-cap="tools">Tools</m3e-filter-chip>
+                  <m3e-filter-chip label="Search" data-cap="search">Search</m3e-filter-chip>
+                  <m3e-filter-chip label="Caching" data-cap="caching">Caching</m3e-filter-chip>
+                </m3e-filter-chip-set>
+              </div>
+            </div>
+          </div>
+
+
+
+          <div class="models-grid" id="models-grid">
+            <!-- Populated by JS -->
+          </div>
+        </section>
+
+        <!-- ========== API KEYS ========== -->
+        <section class="dashboard-section" id="section-apikeys" aria-label="API Keys">
+          <div class="apikeys-header">
+            <div>
+              <h2 class="section-title">API Keys</h2>
+              <p class="section-subtitle">Manage your API keys and access controls</p>
+            </div>
+            <m3e-button variant="filled" id="btn-create-key">
+              <span slot="icon" class="material-symbols-outlined">add</span>
+              Create Key
+            </m3e-button>
+          </div>
+
+          <div class="apikey-list" id="apikey-list">
+            <!-- Populated by JS -->
+          </div>
+        </section>
+
+        <!-- ========== BILLING & BOOSTER STORE ========== -->
+        <section class="dashboard-section" id="section-billing" aria-label="Billing">
+          <div class="section-header">
+            <h2 class="section-title">Billing & Credits</h2>
+            <p class="section-subtitle">Your plan, credits, and booster packs</p>
+          </div>
+
+          <!-- Premium Billing Card -->
+          <div class="premium-billing-card stagger-item" id="premium-billing-card" style="animation-delay:0ms">
+            <!-- Decorative blobs -->
+            <div class="blob blob-a"></div>
+            <div class="blob blob-b"></div>
+            <div class="blob blob-c"></div>
+            
+            <div class="card-content-wrapper">
+              <!-- Left section: Plan details -->
+              <div class="plan-info-left">
+                <!-- Double outline plan badge with pulsing rings -->
+                <div class="plan-badge-outer" style="position: relative;">
+                  <div class="tier-badge-ring"></div>
+                  <div class="tier-badge-ring2"></div>
+                  <div class="plan-badge-inner">
+                    <span class="material-symbols-outlined">workspace_premium</span>
+                    <span class="plan-badge-text" id="plan-badge-text">PLUS</span>
+                  </div>
+                </div>
+                
+                <!-- Title -->
+                <h2 class="card-title-text" id="card-title-text">Plus Plan</h2>
+                
+                <!-- Description -->
+                <p class="plan-description-text" id="card-description-text">Enhanced limits and speed for developers and small teams.</p>
+                
+                <!-- Perks container -->
+                <div class="plan-perks-container" id="card-perks-container">
+                  <!-- Dynamically rendered -->
+                </div>
+              </div>
+              
+              <!-- Right section: Subcard with billing details -->
+              <div class="billing-subcard" id="billing-subcard">
+                <!-- Dynamically rendered by JS -->
+              </div>
+            </div>
+          </div>
+
+          <!-- Tier transition overlay (hidden, triggered by JS upgrade/downgrade animation) -->
+          <div class="tier-overlay" id="tier-overlay" role="dialog" aria-label="Plan update" hidden>
+            <div class="tier-overlay-backdrop"></div>
+            <div class="tier-overlay-content" id="tier-overlay-content">
+              <div class="tier-shape-container">
+                <m3e-shape name="flower" width="96" height="96" class="tier-shape-bloom" id="tier-shape-animate"></m3e-shape>
+              </div>
+              <div class="tier-credits-boost" id="tier-credits-animate">+0</div>
+              <div class="tier-name-text" id="tier-name-animate">Plan</div>
+              <div class="tier-particles" id="tier-particles"></div>
+              <div class="tier-action-row">
+                <m3e-button variant="filled" id="tier-overlay-close">Continue</m3e-button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Credits breakdown -->
+          <div id="billing-credits-console-container" style="margin-bottom: 24px;">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Subscription plans -->
+          <div id="subscription-plans-container" style="margin-bottom: 24px;">
+            <!-- Populated by JS: renderSubscriptionPlans() -->
+          </div>
+
+          <!-- Booster packs -->
+          <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;flex-wrap:wrap;gap:12px;">
+            <h3 class="store-section-title" style="margin-bottom:0;">
+              <span class="material-symbols-outlined">flash_on</span>
+              Booster Packs
+            </h3>
+            <m3e-segmented-button id="booster-category-filter" class="booster-category-segmented">
+              <m3e-button-segment value="all" checked>All</m3e-button-segment>
+              <m3e-button-segment value="starter">Starter</m3e-button-segment>
+              <m3e-button-segment value="flash deals">Flash Deals</m3e-button-segment>
+              <m3e-button-segment value="sprint packs">Sprint Packs</m3e-button-segment>
+            </m3e-segmented-button>
+          </div>
+          <div class="booster-grid" id="booster-grid">
+            <!-- Populated by JS -->
+          </div>
+          <div class="booster-show-more-row" id="booster-show-more-row" style="display:none;">
+            <button class="booster-show-more-btn" id="show-more-btn" type="button">
+              <span class="show-more-label">Show more packs</span>
+              <span class="material-symbols-outlined">expand_more</span>
+            </button>
+          </div>
+
+          <!-- Invoices section -->
+          <div style="margin-top: 24px; margin-bottom: 8px;">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px;">
+              <h3 class="store-section-title">
+                <span class="material-symbols-outlined">receipt_long</span>
+                Invoices
+              </h3>
+            </div>
+            <div class="invoice-stub">
+              <div class="invoice-icon">🧾</div>
+              <div style="font-size:15px;font-weight:700;margin-bottom:4px;color:var(--md-sys-color-on-surface);">Invoice history coming soon</div>
+              <div style="font-size:13px;color:var(--md-sys-color-on-surface-variant);">Payment records appear here once real payment integration is live (Midtrans · Stripe).</div>
+            </div>
+          </div>
+
+          </section>
+
+        <!-- ========== SETTINGS ========== -->
+        <section class="dashboard-section" id="section-settings" aria-label="Settings">
+          <div class="section-header">
+            <h2 class="section-title">Settings</h2>
+            <p class="section-subtitle">Account-level preferences</p>
+          </div>
+
+          <div class="card">
+            <div class="settings-list" id="settings-list">
+              <div class="setting-item">
+                <div class="setting-icon"><span class="material-symbols-outlined">tune</span></div>
+                <div class="setting-info">
+                  <div class="setting-label">Strict Parameters</div>
+                  <div class="setting-desc">Only route to providers supporting ALL requested parameters. Requests fail if no match.</div>
+                </div>
+                <span class="lock-chip" id="strict-params-lock">
+                  <span class="material-symbols-outlined">lock</span>
+                  Paid only
+                </span>
+              </div>
+              <div class="setting-item">
+                <div class="setting-icon"><span class="material-symbols-outlined">dark_mode</span></div>
+                <div class="setting-info">
+                  <div class="setting-label">Theme</div>
+                  <div class="setting-desc">Dashboard color scheme</div>
+                </div>
+                <m3e-segmented-button class="theme-toggle" id="theme-toggle-settings">
+                  <m3e-button-segment value="light">Light</m3e-button-segment>
+                  <m3e-button-segment checked value="dark">Dark</m3e-button-segment>
+                  <m3e-button-segment value="auto">Auto</m3e-button-segment>
+                </m3e-segmented-button>
+              </div>
+
+              <div class="setting-item">
+                <div class="setting-icon"><span class="material-symbols-outlined">view_compact</span></div>
+                <div class="setting-info">
+                  <div class="setting-label">Display Density</div>
+                  <div class="setting-desc">Adjust spacing and sizing of UI elements</div>
+                </div>
+                <m3e-segmented-button class="density-toggle" id="density-toggle-settings">
+                  <m3e-button-segment value="compact">Compact</m3e-button-segment>
+                  <m3e-button-segment checked value="default">Default</m3e-button-segment>
+                </m3e-segmented-button>
+              </div>
+            </div>
+          </div>
+
+          <div class="card" id="settings-version-card" style="display:none; margin-top: 20px;">
+            <div class="card-header">
+              <div class="card-title"><span class="material-symbols-outlined">new_releases</span> Current Version</div>
+            </div>
+            <div class="settings-version-content" id="settings-version-content">
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== ACCOUNT ========== -->
+        <section class="dashboard-section" id="section-account" aria-label="Account">
+          <div class="section-header">
+            <h2 class="section-title">Account</h2>
+            <p class="section-subtitle">Profile, security, and account management</p>
+          </div>
+
+          <!-- Profile card -->
+          <div class="profile-card" id="profile-card">
+            <div class="profile-avatar-large" id="profile-avatar">j</div>
+            <div class="profile-info">
+              <div class="profile-name" id="profile-name">johndoe</div>
+              <div class="profile-username" id="profile-username">@vendouple</div>
+              <div class="profile-email" id="profile-email">johndoe@orchidllm.com</div>
+              <div class="profile-meta">
+                <div class="profile-meta-item">
+                  <span class="material-symbols-outlined">calendar_today</span>
+                  Member since May 2026
+                </div>
+                <div class="profile-meta-item">
+                  <span class="material-symbols-outlined">tag</span>
+                  <span id="profile-account-id">usr_a8f3e21b</span>
+                </div>
+              </div>
+            </div>
+            <div style="display: flex; gap: 8px; flex-shrink: 0;">
+              <m3e-button variant="outlined" size="small" id="btn-edit-profile">
+                <span slot="icon" class="material-symbols-outlined">edit</span>
+                Edit
+              </m3e-button>
+              <m3e-button variant="outlined" size="small" id="btn-signout" class="danger-btn">
+                <span slot="icon" class="material-symbols-outlined">logout</span>
+                Sign out
+              </m3e-button>
+            </div>
+          </div>
+
+          <!-- Connected accounts -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title"><span class="material-symbols-outlined">link</span> Connected Accounts</div>
+            </div>
+            <div class="connected-account">
+              <svg class="connected-account-icon" viewBox="0 0 24 24" fill="var(--md-sys-color-on-surface)"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>
+              <div class="connected-account-name">GitHub</div>
+              <div class="connected-status linked">
+                <span class="material-symbols-outlined" style="font-size:16px;">check_circle</span>
+                Linked
+              </div>
+            </div>
+            <div class="connected-account" style="opacity:0.6;">
+              <svg class="connected-account-icon" viewBox="0 0 24 24"><path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92a5.06 5.06 0 01-2.2 3.32v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.1z" fill="#4285F4"/><path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/><path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/><path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/></svg>
+              <div class="connected-account-name">Google</div>
+              <div class="connected-status pending">Coming Soon</div>
+            </div>
+          </div>
+
+          <!-- Active sessions -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title"><span class="material-symbols-outlined">devices</span> Active Sessions</div>
+              <m3e-button variant="text" size="small" id="btn-revoke-all">Revoke All</m3e-button>
+            </div>
+            <div class="sessions-list" id="sessions-list">
+              <div class="session-item stagger-item" style="animation-delay:0ms">
+                <div class="session-device-icon"><span class="material-symbols-outlined">computer</span></div>
+                <div class="session-device-name">Chrome · Windows</div>
+                <span class="current-session-badge">Current</span>
+                <div class="session-last-seen">Just now</div>
+              </div>
+              <div class="session-item stagger-item" style="animation-delay:60ms">
+                <div class="session-device-icon"><span class="material-symbols-outlined">phone_android</span></div>
+                <div class="session-device-name">Safari · iPhone</div>
+                <div class="session-last-seen">2 hours ago</div>
+                <button class="apikey-action-btn danger" aria-label="Revoke session"><span class="material-symbols-outlined">close</span></button>
+              </div>
+            </div>
+          </div>
+
+          <!-- Notification preferences -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title"><span class="material-symbols-outlined">notifications_active</span> Notification Preferences</div>
+            </div>
+            <div class="settings-list">
+              <div class="setting-item">
+                <div class="setting-info">
+                  <div class="setting-label">Billing Alerts</div>
+                  <div class="setting-desc">Low credits, renewal reminders</div>
+                </div>
+                <m3e-switch checked data-toggle="billing-alerts"></m3e-switch>
+              </div>
+              <div class="setting-item">
+                <div class="setting-info">
+                  <div class="setting-label">Announcements</div>
+                  <div class="setting-desc">Platform updates and news</div>
+                </div>
+                <m3e-switch checked data-toggle="announcements"></m3e-switch>
+              </div>
+              <div class="setting-item">
+                <div class="setting-info">
+                  <div class="setting-label">Product Updates</div>
+                  <div class="setting-desc">New features and improvements (email)</div>
+                </div>
+                <m3e-switch data-toggle="product-updates"></m3e-switch>
+              </div>
+            </div>
+          </div>
+
+          <!-- Login & Account History -->
+          <div class="card" style="margin-bottom:16px;">
+            <div class="card-header">
+              <div class="card-title"><span class="material-symbols-outlined">manage_history</span> Login & Account History (30 days)</div>
+            </div>
+            <div class="account-history-list" id="account-history-list">
+              <!-- Populated by JS -->
+            </div>
+          </div>
+
+          <!-- Danger zone -->
+          <div class="danger-zone">
+            <div class="danger-zone-title">
+              <span class="material-symbols-outlined">warning</span>
+              Danger Zone
+            </div>
+            <p class="danger-zone-desc">
+              Permanently delete your account, all API keys, and cancel any active subscriptions. This action cannot be undone after the 14-day grace period.
+            </p>
+            <m3e-button variant="filled" size="small" id="btn-delete-account" class="danger-btn">
+              <span slot="icon" class="material-symbols-outlined">delete_forever</span>
+              Delete My Account
+            </m3e-button>
+          </div>
+        </section>
+
+        <!-- ========== USAGE ========== -->
+        <section class="dashboard-section" id="section-usage" aria-label="Usage">
+          <div class="section-header">
+            <h2 class="section-title">Usage</h2>
+            <p class="section-subtitle">Request history and credit consumption for the last 30 days</p>
+          </div>
+
+          <!-- Usage Stats Row -->
+          <div class="usage-stats-row stagger-item" style="animation-delay:0ms" id="usage-stats-row">
+            <!-- Populated by JS -->
+          </div>
+
+          <!-- Filters Bar -->
+          <div class="usage-filters-bar stagger-item" style="animation-delay:60ms">
+            <div class="usage-filters-left">
+              <div class="usage-filter-group">
+                <label class="usage-filter-label">Status</label>
+                <m3e-filter-chip-set class="usage-filter-chips" id="usage-filter-status">
+                  <m3e-filter-chip selected data-status="all">All</m3e-filter-chip>
+                  <m3e-filter-chip data-status="success">Success</m3e-filter-chip>
+                  <m3e-filter-chip data-status="fail">Failed</m3e-filter-chip>
+                </m3e-filter-chip-set>
+              </div>
+              <div class="usage-filter-group">
+                <label class="usage-filter-label">Endpoint</label>
+                <m3e-filter-chip-set class="usage-filter-chips" id="usage-filter-endpoint">
+                  <m3e-filter-chip selected data-endpoint="all">All</m3e-filter-chip>
+                  <m3e-filter-chip data-endpoint="/v1/chat/completions">Chat</m3e-filter-chip>
+                  <m3e-filter-chip data-endpoint="/v1/completions">Completions</m3e-filter-chip>
+                </m3e-filter-chip-set>
+              </div>
+              <div class="usage-filter-group">
+                <label class="usage-filter-label">Compression</label>
+                <m3e-filter-chip-set class="usage-filter-chips" id="usage-filter-compression">
+                  <m3e-filter-chip selected data-compression="all">All</m3e-filter-chip>
+                  <m3e-filter-chip data-compression="compressed">Compressed</m3e-filter-chip>
+                  <m3e-filter-chip data-compression="routed">Routed</m3e-filter-chip>
+                  <m3e-filter-chip data-compression="none">None</m3e-filter-chip>
+                </m3e-filter-chip-set>
+              </div>
+            </div>
+            <m3e-button variant="text" size="small" id="btn-reset-usage-filters" style="margin-left:auto;">
+              <span slot="icon" class="material-symbols-outlined" style="font-size:16px;">restart_alt</span>
+              Reset Filters
+            </m3e-button>
+          </div>
+
+          <!-- Full Request History Table -->
+          <div class="card usage-history-card stagger-item" style="animation-delay:120ms">
+            <div class="card-header">
+              <div class="card-title"><span class="material-symbols-outlined">receipt_long</span> Request History (30 days)</div>
+              <span class="usage-history-count" id="usage-history-count"></span>
+            </div>
+            <div style="overflow-x:auto;">
+              <table class="history-table" id="usage-history-table">
+                <thead>
+                  <tr>
+                    <th>Timestamp</th>
+                    <th>Model</th>
+                    <th>Endpoint</th>
+                    <th>Status</th>
+                    <th>Credits</th>
+                  </tr>
+                </thead>
+                <tbody id="usage-history-tbody">
+                  <!-- Populated by JS -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </section>
+
+        <!-- ========== ANNOUNCEMENTS ========== -->
+        <section class="dashboard-section" id="section-announcements" aria-label="Announcements">
+          <div class="section-header">
+            <h2 class="section-title">Announcements & Changelog</h2>
+            <p class="section-subtitle">Platform news and updates</p>
+          </div>
+
+          <m3e-filter-chip-set class="announcement-filters" id="announcement-filters">
+            <m3e-filter-chip selected data-filter="all">All</m3e-filter-chip>
+            <m3e-filter-chip data-filter="announcement">Announcements</m3e-filter-chip>
+            <m3e-filter-chip data-filter="changelog">Changelog</m3e-filter-chip>
+          </m3e-filter-chip-set>
+
+          <div class="announcement-list" id="announcement-list">
+            <!-- Populated by JS -->
+          </div>
+        </section>
+
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== MOBILE BOTTOM NAVIGATION ===== -->
+  <nav class="bottom-nav" id="bottom-nav" aria-label="Mobile navigation">
+    <button class="bottom-nav-item active" data-section="home" aria-label="Home">
+      <span class="bottom-indicator"></span>
+      <span class="material-symbols-outlined">home</span>
+      <span>Home</span>
+    </button>
+    <button class="bottom-nav-item" data-section="usage" aria-label="Usage">
+      <span class="material-symbols-outlined">monitoring</span>
+      <span>Usage</span>
+    </button>
+    <button class="bottom-nav-item" data-section="models" aria-label="Models">
+      <span class="material-symbols-outlined">psychology</span>
+      <span>Models</span>
+    </button>
+    <button class="bottom-nav-item" data-section="billing" aria-label="Billing">
+      <span class="material-symbols-outlined">payments</span>
+      <span>Billing</span>
+    </button>
+    <button class="bottom-nav-item" data-section="announcements" aria-label="News" style="position:relative;">
+      <span class="material-symbols-outlined">notifications</span>
+      <span>News</span>
+      <span class="bell-badge" id="bell-badge-mobile" style="top:-4px;right:2px;">3</span>
+    </button>
+  </nav>
+
+  <!-- ===== MODEL DETAIL BOTTOM SHEET ===== -->
+  <div class="model-detail-overlay" id="model-detail-overlay">
+    <div class="model-detail-sheet" id="model-detail-sheet">
+      <div class="sheet-handle"></div>
+      <div class="sheet-content" id="sheet-content">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ===== DIALOG OVERLAY (reusable) ===== -->
+  <div class="dialog-overlay" id="dialog-overlay">
+    <div class="dialog-box" id="dialog-box">
+      <!-- Populated by JS -->
+    </div>
+  </div>
+
+  <!-- ===== TOAST CONTAINER ===== -->
+  <div class="toast-container" id="toast-container"></div>
+
+  <!-- ===== ANNOUNCEMENT DETAILS MODAL ===== -->
+  <div class="announcement-modal-backdrop" id="announcement-modal" onclick="handleAnnouncementModalBackdropClick(event)">
+    <div class="announcement-modal-card">
+      <div class="announcement-modal-header" id="announcement-modal-header"></div>
+      <div class="announcement-modal-body" id="announcement-modal-body"></div>
+    </div>
+  </div>
+
+  <script src="shared-store.js?v=5"></script>
+  <script src="booster-seed.js?v=1"></script>
+  <script src="users.js"></script>
+</body>
+</html>

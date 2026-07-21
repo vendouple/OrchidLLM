@@ -4,6 +4,7 @@ using Microsoft.EntityFrameworkCore;
 using OrchidLLM.Web.Data;
 using OrchidLLM.Web.Data.Entities;
 using OrchidLLM.Web.Services.RateLimit;
+using OrchidLLM.Web.Services.Security;
 using StackExchange.Redis;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -25,6 +26,8 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
     return ConnectionMultiplexer.Connect(options);
 });
 builder.Services.AddSingleton<ChannelRpmService>();
+builder.Services.AddSingleton<IProviderKeyCipher, ProviderKeyCipher>();
+builder.Services.AddHttpClient("channel-probe", client => client.Timeout = TimeSpan.FromSeconds(6));
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>

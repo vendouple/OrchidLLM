@@ -1,3 +1,4 @@
+@using System.Text.Json
 @model List<OrchidLLM.Web.Areas.Admin.Controllers.ChannelsController.ChannelRow>
 @{
     ViewData["Title"] = "Channels";
@@ -17,10 +18,15 @@
             <span class="material-symbols-outlined">key</span>
             <div>
                 <div class="cp-label">Provider API keys</div>
-                <div class="cp-val">.env-only per policy — never stored or shown here</div>
+                <div class="cp-val">Stored encrypted at rest (AES-256-GCM) via this Channels UI — no longer .env-only</div>
             </div>
         </div>
     </div>
+
+    @if (TempData["ProbeResult"] is string probeMsg)
+    {
+        <p class="hint">@probeMsg</p>
+    }
 
     <div style="margin:16px 0;">
         <a class="oauth-btn" href="/Admin/Channels/Edit" style="display:inline-flex;width:auto;padding:8px 16px;">
@@ -39,6 +45,9 @@
             var p = row.Provider;
             var hasIssue = p.Status is "dead" or "out_of_credits";
             var rpmDisplay = p.RpmCap.HasValue ? $"{row.CurrentRpm}<small>/{p.RpmCap} cap</small>" : $"{row.CurrentRpm}<small> rpm</small>";
+            var modalities = string.IsNullOrWhiteSpace(p.Modalities)
+                ? new Dictionary<string, List<string>>()
+                : (JsonSerializer.Deserialize<Dictionary<string, List<string>>>(p.Modalities) ?? new());
             <div class="provider-card @(hasIssue ? "has-issue" : "")">
                 <div class="pc-head">
                     <div class="pc-glyph">@p.Name.Substring(0, 1)</div>
@@ -66,7 +75,51 @@
                         <div class="pc-metric-value" style="color:@(p.Free ? "var(--st-active)" : "var(--md-sys-color-outline)")">@(p.Free ? "Yes" : "No")</div>
                     </div>
                 </div>
+                <div class="pc-modalities">
+                    <div class="pc-keys-head" style="margin-bottom:6px"><span>Modality support</span></div>
+                    @if (!modalities.Any())
+                    {
+                        <div class="hint" style="margin:0">No modalities configured</div>
+                    }
+                    else
+                    {
+                        foreach (var (mod, parms) in modalities)
+                        {
+                            <div class="pc-mod-row"><span class="pc-mod-name">@mod</span><span class="pc-mod-params">@(parms.Any() ? string.Join(", ", parms) : "no params")</span></div>
+                        }
+                    }
+                </div>
+                <div>
+                    <div class="pc-keys-head">
+                        <span>Key pool (@p.Keys.Count) — LRU rotation</span>
+                    </div>
+                    <div class="pc-key-list" style="margin-top:8px">
+                        @foreach (var k in p.Keys)
+                        {
+                            <div class="pc-key-row">
+                                <span class="key-dot k-@k.Status"></span>
+                                <span class="pc-key-preview">@k.KeyPreview</span>
+                                <span class="key-status-label k-@k.Status">@k.Status.Replace("_", " ")</span>
+                                <form method="post" action="/Admin/Channels/DeleteKey" onsubmit="return confirm('Revoke this key?');" style="display:inline;">
+                                    @Html.AntiForgeryToken()
+                                    <input type="hidden" name="providerId" value="@p.Id" />
+                                    <input type="hidden" name="keyId" value="@k.Id" />
+                                    <button type="submit" class="icon-btn danger" title="Revoke key" style="width:28px;height:28px;background:none;border:none;cursor:pointer;">
+                                        <span class="material-symbols-outlined" style="font-size:16px">delete</span>
+                                    </button>
+                                </form>
+                            </div>
+                        }
+                    </div>
+                </div>
                 <div class="pc-actions">
+                    <form method="post" action="/Admin/Channels/Probe" style="display:inline;">
+                        @Html.AntiForgeryToken()
+                        <input type="hidden" name="id" value="@p.Id" />
+                        <button type="submit" class="icon-btn" title="Probe" style="background:none;border:none;cursor:pointer;">
+                            <span class="material-symbols-outlined" style="font-size:16px">ecg_heart</span> Probe
+                        </button>
+                    </form>
                     <a class="icon-btn" href="/Admin/Channels/Edit/@p.Id" title="Edit">
                         <span class="material-symbols-outlined" style="font-size:16px">edit</span> Edit
                     </a>

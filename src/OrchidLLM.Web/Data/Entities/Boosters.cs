@@ -29,11 +29,8 @@ public class BoosterPack
     [Column(TypeName = "json")]
     public string ContextUnlockTiers { get; set; } = "[]";
 
-    public int DurationDays { get; set; } = -1; // -1 = permanent while conditions met
-    public bool IsPermanent { get; set; }
-    public int? PermanentBaseTierId { get; set; }
-    public SubscriptionTier? PermanentBaseTier { get; set; }
-
+    // No duration/permanent fields by design (plan v3.1.2 correction): pack credits never
+    // expire after purchase, only IgnorePlanLock governs invalidation on plan downgrade.
     public bool IgnorePlanLock { get; set; }
     public int MaxPurchasesPerUser { get; set; } = -1;
     public int MaxTotalPurchases { get; set; } = -1;
@@ -128,7 +125,8 @@ public class UserBoosterPack
     public BoosterPack? Pack { get; set; }
 
     public DateTime PurchasedAt { get; set; }
-    public DateTime? ExpiresAt { get; set; }
+    // No ExpiresAt: pack credits do not expire after purchase (plan v3.1.2) — only
+    // plan-lock invalidation (IsActive/InvalidatedAt below) can remove them unspent.
 
     public int CreditsStandardRemaining { get; set; }
     public int CreditsFastRemaining { get; set; }

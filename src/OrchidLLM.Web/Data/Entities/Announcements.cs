@@ -10,6 +10,10 @@ public class Announcement
     [MaxLength(255)]
     public string Title { get; set; } = string.Empty;
 
+    /// <summary>Shorter title for the banner strip; falls back to <see cref="Title"/> when null.</summary>
+    [MaxLength(255)]
+    public string? BannerTitle { get; set; }
+
     public string? Description { get; set; }
 
     [MaxLength(20)]
@@ -25,8 +29,20 @@ public class Announcement
     public Announcement? RelatedAnnouncement { get; set; }
 
     public bool IsBanner { get; set; }
-    public DateTime? BannerExpiresAt { get; set; }
+
+    /// <summary>true = user can dismiss the banner themselves; false = persists until admin acts (plan §21).</summary>
+    public bool IsBannerDismissible { get; set; } = true;
+
+    /// <summary>When reached, the entry soft-disappears from banner and user-facing views. Null = stays until IsActive=false.</summary>
+    public DateTime? ExpiresAt { get; set; }
+
     public bool IsActive { get; set; } = true;
+
+    /// <summary>Original publish time; never changed on edit.</summary>
+    public DateTime PostedAt { get; set; }
+
+    /// <summary>Set on every subsequent admin edit; null if never edited since posting.</summary>
+    public DateTime? LastEditedAt { get; set; }
 
     public DateTime CreatedAt { get; set; }
 
@@ -66,7 +82,8 @@ public class AdminNotification
     public DateTime CreatedAt { get; set; }
 }
 
-public class UserDismissedAnnouncement
+/// <summary>Banner dismissals only — the Announcements page itself is never user-dismissible (plan §21).</summary>
+public class UserDismissedBanner
 {
     public int Id { get; set; }
 
@@ -77,4 +94,18 @@ public class UserDismissedAnnouncement
     public Announcement? Announcement { get; set; }
 
     public DateTime DismissedAt { get; set; }
+}
+
+/// <summary>Read-state, written on click from banner, bell list, or the Announcements page — counts equally.</summary>
+public class UserReadAnnouncement
+{
+    public int Id { get; set; }
+
+    public int UserId { get; set; }
+    public User? User { get; set; }
+
+    public int AnnouncementId { get; set; }
+    public Announcement? Announcement { get; set; }
+
+    public DateTime ReadAt { get; set; }
 }

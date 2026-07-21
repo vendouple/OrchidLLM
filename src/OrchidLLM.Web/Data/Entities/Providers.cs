@@ -20,9 +20,6 @@ public class Provider
     [MaxLength(30)]
     public string AuthType { get; set; } = "bearer";
 
-    [MaxLength(100)]
-    public string? EnvKeyPrefix { get; set; }
-
     [MaxLength(30)]
     public string Status { get; set; } = "active"; // active|rate_limited|out_of_credits|dead|disabled
 
@@ -64,6 +61,34 @@ public class Provider
     public DateTime UpdatedAt { get; set; }
 
     public ICollection<ModelProvider> ModelProviders { get; set; } = new List<ModelProvider>();
+    public ICollection<ProviderKey> Keys { get; set; } = new List<ProviderKey>();
+}
+
+/// <summary>
+/// One upstream API key in a channel's rotation pool. Keys are configured via the admin
+/// Channels UI and stored encrypted at rest — this is the new direction replacing the
+/// original .env-only key model (plan §6/§25 are aspirational on this point now).
+/// </summary>
+public class ProviderKey
+{
+    public int Id { get; set; }
+
+    public int ProviderId { get; set; }
+    public Provider? Provider { get; set; }
+
+    /// <summary>AES-GCM ciphertext (base64), decrypted only at dispatch time via IProviderKeyCipher.</summary>
+    public string KeyCipher { get; set; } = string.Empty;
+
+    /// <summary>Masked display value, e.g. "sk-or-v1-a3f8...k2x1" — never the full key.</summary>
+    [MaxLength(60)]
+    public string KeyPreview { get; set; } = string.Empty;
+
+    [MaxLength(20)]
+    public string Status { get; set; } = "healthy"; // healthy|rate_limited|down
+
+    public DateTime? RateLimitUntil { get; set; }
+    public DateTime? LastUsedAt { get; set; }
+    public DateTime CreatedAt { get; set; }
 }
 
 /// <summary>
@@ -149,7 +174,10 @@ public class ModelProvider
     [MaxLength(255)]
     public string ProviderModelId { get; set; } = string.Empty;
 
-    public int SpeedPriority { get; set; } // 0 = fastest; higher = slower fallback
+    // Lower = tried first (mirrors Provider.Weight's "lower = better" convention, chosen
+    // over the plan's "higher = faster" wording since that's what the shipped Channels
+    // UI and Frontend-DEMO both already use — see IMPLEMENTATION_CHECKLIST.md §1).
+    public int SpeedPriority { get; set; }
     public int? ContextLimit { get; set; }
 
     [Column(TypeName = "json")]

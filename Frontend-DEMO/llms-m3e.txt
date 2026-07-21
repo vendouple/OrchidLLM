@@ -1,0 +1,512 @@
+# M3E - Material 3 Expressive for Every Framework
+
+> M3E v2.5.5 — Web Components implementing Material 3 Expressive design.
+> All components use `m3e-` prefix. Import pattern: `import "@m3e/web/{component-name}";`
+> Package includes a Custom Elements Manifest (`custom-elements.json`).
+> Built with Lit. Requires import map for tslib, lit, lit-html, @lit/reactive-element, @m3e/web/core when used without a bundler.
+
+## Components
+
+### App Bar (`m3e-app-bar`)
+Import: `@m3e/web/app-bar`
+Top navigation bar for contextual info and actions.
+- Slots: `leading`, `title`, `subtitle`, `trailing`
+- Sizes: `small` (default), `medium`, `large` — set via `size` attribute
+- `centered` attribute centers the title
+
+### Autocomplete (`m3e-autocomplete`)
+Import: `@m3e/web/autocomplete`
+Enhances a text input with a suggestion panel.
+- `for` attribute binds to an input element's id
+- `m3e-option` children define available options
+- `change` event fires on selection
+- Properties: `selected`, `value`
+- Filter modes via `filter` attribute: `contains` (default), `starts-with`, `ends-with`, `none`
+- `case-sensitive` attribute for case-sensitive filtering
+
+### Avatar (`m3e-avatar`)
+Import: `@m3e/web/avatar`
+Reusable identity primitive displaying visual/textual representation with consistent sizing, shape, and typography.
+- Accepts textual initials, images, or icons via slots
+- No default ARIA role (neutral, non-semantic)
+
+### Badge (`m3e-badge`)
+Import: `@m3e/web/badge`
+Compact visual indicator for counts, presence, or emphasis. Attaches to icons, buttons, or other components.
+
+### Bottom Sheet (`m3e-bottom-sheet`)
+Import: `@m3e/web/bottom-sheet`
+Sheet anchored to bottom of screen for secondary content.
+- Open via `m3e-bottom-sheet-trigger` (nested in clickable element), `open` attribute, or `show()` method
+- Close via `m3e-bottom-sheet-action`, remove `open`, or `hide()` method
+- Lifecycle events: `opening` (cancelable), `opened`, `closing` (cancelable), `closed`
+- Variants: **standard** (default, non-blocking) and **modal** (blocks interaction, scrim, focus trap, autofocus)
+  - `modal` attribute enables modal mode
+  - Modal: `cancel` event on scrim click, focus restored to trigger on close
+- `handle` attribute shows drag handle; `handle-label` for accessible label (default "Drag handle")
+- **Detents**: `detents` attribute defines snap positions
+  - Named detents: `collapsed`, `fit`, `half`, `full`
+  - Unit-based detents: percentages or pixels (e.g., `50%`, `300px`)
+  - Mix named and unit-based in any order
+  - `detent` attribute (zero-based index) sets initial detent; also settable on trigger via `detent` attribute
+  - `--m3e-bottom-sheet-peek-height` CSS custom property controls content peek in collapsed state (default `0px`)
+- `hideable` attribute allows dismissal by dragging past lowest detent
+- `header` named slot for custom header content below drag handle
+- ARIA: standard = `role="region"`, modal = `role="dialog"` + `aria-modal="true"`
+- Trigger: `aria-controls`, `aria-expanded`; modal trigger: `aria-haspopup="dialog"`
+- `secondary` attribute on trigger opts out of ARIA ownership
+
+### Breadcrumb (`m3e-breadcrumb`, `m3e-breadcrumb-item`)
+Import: `@m3e/web/breadcrumb`
+Hierarchical navigation component.
+- `m3e-breadcrumb-item` supports `href`, `target`, `rel` attributes
+- `icon` slot on items
+- Last item is automatically marked as current
+
+### Button (`m3e-button`)
+Import: `@m3e/web/button`
+Semantic, expressive UI primitive for user actions.
+- Variants: `elevated`, `filled`, `tonal`, `outlined`, `text` (default) — via `variant` attribute
+- Shapes: `rounded` (default), `square` — via `shape` attribute
+- Sizes: `extra-small`, `small` (default), `medium`, `large`, `extra-large` — via `size` attribute
+- Slots: `icon` (before label), `trailing-icon` (after label)
+- Toggle: `toggle` attribute for binary selection, `selected` for state; emits `input` (cancelable) + `change`
+- `selected`/`selected-icon` slots for alternate label/icon when selected
+- `disabled` / `disabled-interactive` attributes
+- `type` attribute: `button` (default), `submit`, `reset`; `name`/`value` for forms
+- Links: `href`, `target`, `rel`, `download` attributes → changes role to `link`
+- ARIA: `role="button"`, `aria-pressed` for toggle, `aria-disabled="true"` when disabled
+
+### Button Group (`m3e-button-group`)
+Import: `@m3e/web/button-group`
+Arranges multiple buttons into a unified layout.
+- Variants: `standard` (default), `connected` — via `variant` attribute
+- Sizes: `extra-small`, `small` (default), `medium`, `large`, `extra-large` — via `size` attribute (controls spacing)
+- Selection: `multi` attribute for multi-select on toggle buttons
+- ARIA: `role="group"`; single-select with toggles → `role="radiogroup"`, buttons → `role="radio"`
+- Requires `aria-label` or `aria-labelledby`
+
+### Calendar (`m3e-calendar`)
+Import: `@m3e/web/calendar`
+Month/year/multi-year views with date selection.
+- Single-date and range selection
+- Disabled rules: `min`, `max`, blackout
+- `date` attribute for value; `change` event on selection
+- ISO-8601 date parsing: `yyyy-MM-dd`, `yyyy-MM-ddTHH:mm:ss`, `yyyy-MM-ddTHH:mm:ssZ`, `yyyy-MM-ddTHH:mm:ss±HH:mm`
+
+### Card (`m3e-card`)
+Import: `@m3e/web/card`
+Flexible container for presenting unified subject—text, media, actions.
+- Slots: `header`, `content` (padded), `actions`, `footer`, `(default)` (no padding)
+- `actions` slot supports `end` attribute on slotted element for right-alignment
+- Variants: `filled` (default), `outlined`, `elevated` — via `variant` attribute
+- `inline` attribute for inline rendering
+- `orientation`: `vertical` (default), `horizontal` — via `orientation` attribute
+- `actionable` attribute makes card an interactive surface
+- `disabled` / `disabled-interactive` on actionable cards
+- Links: `href`, `target`, `rel`, `download` on actionable cards → role becomes `link`
+- ARIA: no role by default; actionable → `role="button"`; href → `role="link"`
+
+### Checkbox (`m3e-checkbox`)
+Import: `@m3e/web/checkbox`
+Form-associated custom element (FACE) for boolean selection.
+- Attributes: `checked`, `indeterminate`, `disabled`, `required`
+- Events: `input` + `change`; `invalid` event
+- `name`/`value` for form submission
+
+### Chips (`m3e-chip`, `m3e-chip-set`, `m3e-assist-chip`, `m3e-filter-chip`, `m3e-filter-chip-set`, `m3e-input-chip-set`, `m3e-input-chip`, `m3e-suggestion-chip`)
+Import: `@m3e/web/chips`
+Expressive chip components for actions, input, filtering, and suggestions.
+- **m3e-chip**: Non-interactive; nest in `m3e-chip-set` for spacing
+  - Variants: `outlined` (default), `elevated` — via `variant` attribute
+  - `m3e-chip-set` supports `vertical` attribute
+  - Slots: `icon`, `trailing-icon`
+- **m3e-assist-chip**: Smart/automated action chip
+  - `icon` slot only (no trailing); `disabled`/`disabled-interactive`; `type`/`name`/`value`; `href`/`target`/`rel`/`download`
+- **m3e-filter-chip** + **m3e-filter-chip-set**: Selectable filter chips
+  - `icon` + `trailing-icon` slots; selected → icon replaced with check
+  - `multi` attribute on set for multi-select; `selected` on chip for state
+  - `input` (cancelable) + `change` events; `disabled`/`disabled-interactive`
+  - `hide-selection-indicator` on set; FACE with `name`/`value`
+- **m3e-input-chip-set** + **m3e-input-chip**: Input, display, manage discrete values
+  - `input` slot for input element; `change` on input adds chip
+  - BACKSPACE removes chips; DELETE removes focused chip
+  - `change` event with `detail.type` ("add"/"remove"), `detail.value`, `detail.chip`
+  - Prepopulate with `m3e-input-chip`; `removable` attribute
+  - `disabled` on set disables everything; FACE with `name`
+- **m3e-suggestion-chip**: Contextually relevant suggestions (equivalent to assist chip, different semantic intent)
+  - `icon` slot only; `disabled`/`disabled-interactive`; `type`/`name`/`value`; `href`/`target`/`rel`/`download`
+- ARIA: chip/chip-set = no role; assist/suggestion = `role="button"` (or `link` with href); filter single-select = `radiogroup`/`radio`, multi = `group`/`button`; input = `grid`/`row`/`gridcell`
+
+### Content Pane (`m3e-content-pane`)
+Import: `@m3e/web/content-pane`
+Shaped surface with padding and vertical scrolling for document-like content.
+- Inline padding auto-adjusted for scrollbar width compensation
+- No ARIA role by default
+
+### Datepicker (`m3e-datepicker`, `m3e-datepicker-toggle`)
+Import: `@m3e/web/datepicker`
+Date picker with calendar toggle.
+- `m3e-datepicker-toggle` opens picker via `for` attribute
+- ISO-8601 date parsing (same 4 formats as Calendar)
+- Used with `m3e-form-field`; input field + calendar toggle pattern
+
+### Dialog (`m3e-dialog`)
+Import: `@m3e/web/dialog`
+Presents important prompts, alerts, and actions.
+- Slots: `(default)`, `header`, `actions`, `close-icon`
+- Open via `m3e-dialog-trigger` (nested in clickable, `for` attribute) or `show()` method
+- Close via `m3e-dialog-action` (sets `returnValue` from `return-value` attribute) or `hide()` method
+- `closed` event on close; `cancel` event on backdrop click/Escape
+- `dismissible` attribute shows close button; `close-label` for accessible label
+- `disable-close` attribute prevents backdrop/Escape close
+- `no-focus-trap` attribute disables focus trap
+- `autofocus` attribute on action for initial focus
+- `alert` attribute → `role="alertdialog"`
+- Internal `dialog` element labelled by `header` slot
+
+### Divider (`m3e-divider`)
+Import: `@m3e/web/divider`
+Separator between content groups.
+- Attributes: `inset`, `inset-start`, `inset-end`, `vertical`
+- ARIA `role="separator"`
+
+### Drawer Container (`m3e-drawer-container`)
+Import: `@m3e/web/drawer-container`
+Split view with drawers.
+
+### Expansion Panel (`m3e-expansion-panel`, `m3e-accordion`)
+Import: `@m3e/web/expansion-panel`
+Collapsible content panel with optional accordion grouping.
+- `header` slot + default slot; `open` attribute
+- `toggle-position`: `before`, `after` (default)
+- `toggle-direction`: `vertical` (default), `horizontal`
+- `hide-toggle` attribute
+- **m3e-accordion**: Container for panels; `multi` attribute allows multiple open panels
+
+### FAB (`m3e-fab`)
+Import: `@m3e/web/fab`
+Floating action button for important actions.
+- Variants: `primary`, `primary-container` (default), `secondary`, `secondary-container`, `tertiary`, `tertiary-container`, `surface` — via `variant` attribute
+- `lowered` attribute reduces elevation
+- Sizes: `small`, `medium` (default), `large` — via `size` attribute
+- `extended` attribute + `label` slot for extended FAB
+- `disabled` / `disabled-interactive`
+- `type`: `button` (default), `submit`, `reset`; `name`/`value`
+- Links: `href`, `target`, `rel`, `download` → role becomes `link`
+- ARIA: `role="button"` (or `link` with href); always provide `aria-label` for non-extended FABs
+
+### FAB Menu (`m3e-fab-menu`)
+Import: `@m3e/web/fab-menu`
+Dynamic menu of related actions revealed from a FAB.
+- `m3e-fab-menu-trigger` nested in `m3e-fab`, `for` attribute points to menu
+- 2-6 `m3e-fab-menu-item` children in `m3e-fab-menu`
+- Variants: `primary` (default), `secondary`, `tertiary` — via `variant` attribute
+- `icon` slot on items for icon before label
+- `disabled` on items; disabled FAB prevents menu opening
+- Links: `href`, `target`, `rel`, `download` on items
+- ARIA: `role="menu"` on menu, `role="menuitem"` on items; FAB gets `aria-controls`, `aria-haspopup="menu"`, `aria-expanded`
+
+### Form Field (`m3e-form-field`)
+Import: `@m3e/web/form-field`
+Container for form inputs with label and hint support.
+- Variants: `outlined` (default), `filled` — via `variant` attribute
+- `float-label` attribute
+- `hint` slot for hint text
+- `hide-subscript` attribute
+
+### Heading (`m3e-heading`)
+Import: `@m3e/web/heading`
+Expressive, accessible headings for pages and sections.
+- Variants: `display` (default), `headline`, `title`, `label` — via `variant` attribute
+- Sizes: `large`, `medium` (default), `small` — via `size` attribute
+- `emphasized` attribute for emphasized typescale
+- `level` attribute (1-6) → applies `role="heading"` and `aria-level`
+- No ARIA role by default (neutral, non-semantic unless `level` set)
+
+### Icon (`m3e-icon`)
+Import: `@m3e/web/icon`
+Renders Material Symbols (font or SVG).
+- `name` attribute for Material Symbol name
+- Variants: `outlined` (default), `rounded`, `sharp` — via `variant` attribute
+- `filled` attribute (0 or 1, maps to FILL axis)
+- `weight` attribute (100-700), `grade` attribute (`low`, `medium` default, `high`), `optical-size` (20-48)
+- SVG icons via `@m3e/icons` package: `import "@m3e/icons/outlined/search";` or `import "@m3e/icons/outlined";`
+- ARIA: `role="img"`; use `aria-hidden="true"` for decorative; otherwise label with `aria-label`/`aria-labelledby`
+
+### Icon Button (`m3e-icon-button`)
+Import: `@m3e/web/icon-button`
+Icon button for supplementary actions.
+- Variants: `filled`, `tonal`, `outlined`, `standard` (default) — via `variant` attribute
+- Shapes: `rounded` (default), `square` — via `shape` attribute
+- Sizes: `extra-small`, `small` (default), `medium`, `large`, `extra-large` — via `size` attribute
+- Widths: `default` (default), `narrow`, `wide` — via `width` attribute
+- Toggle: `toggle` + `selected`; `input` (cancelable) + `change` events
+- `selected` slot for alternate icon when selected
+- Selected: rounded becomes square, square becomes rounded
+- `disabled` / `disabled-interactive`
+- `type`: `button` (default), `submit`, `reset`; `name`/`value`
+- Links: `href`, `target`, `rel`, `download` → role becomes `link`
+- ARIA: `role="button"` (or `link` with href); `aria-pressed` for toggle; always provide `aria-label`
+
+### List (`m3e-list`, `m3e-list-item`)
+Import: `@m3e/web/list`
+Structured list of items.
+- Slots (on items): default, `leading`, `overline`, `supporting-text`, `trailing`
+- Variants: `standard` (default), `segmented` — via `variant` attribute
+- Multiline items auto-adapt height
+
+### Loading Indicator (`m3e-loading-indicator`)
+Import: `@m3e/web/loading-indicator`
+Indeterminate progress indicator.
+- Variants: `uncontained` (default), `contained` — via `variant` attribute
+- ARIA `role="progressbar"`; always provide `aria-label`
+
+### Menu (`m3e-menu`)
+Import: `@m3e/web/menu`
+List of choices on a temporary surface.
+
+### Nav Bar (`m3e-nav-bar`, `m3e-nav-item`)
+Import: `@m3e/web/nav-bar`
+Horizontal bar for 3-5 views.
+- Modes: `compact` (default), `expanded`, `auto` — via attribute
+- `m3e-nav-item` for items; single-select via `selected`
+- Events: `input` (cancelable) + `change`
+
+### Nav Menu (`m3e-nav-menu`, `m3e-nav-menu-item`, `m3e-nav-menu-item-group`)
+Import: `@m3e/web/nav-menu`
+Hierarchical menu for sidebars and drawers on larger devices.
+- `m3e-nav-menu-item` slots: `label`, `icon`, `badge`
+- Nest `m3e-nav-menu-item` for multilevel menus
+- `m3e-nav-menu-item-group` for grouping top-level items; `label` slot
+- `disabled` on item disables item and children
+- ARIA: `role="tree"` on menu, `role="treeitem"` on items, `role="group"` on groups
+- Focus: `tabindex="0"` on container, `aria-activedescendant` for roving focus
+- `aria-expanded` on expandable items; icons/dividers: `aria-hidden="true"`
+
+### Nav Rail (`m3e-nav-rail`, `m3e-nav-rail-toggle`, `m3e-nav-item`)
+Import: `@m3e/web/nav-rail`
+Vertical bar for larger devices, extends Nav Bar.
+- Modes: `compact` (default), `expanded`, `auto`
+- `m3e-nav-rail-toggle` with `for` attribute toggles mode
+- `m3e-nav-item` for items; `selected-icon` slots for alternate icon when selected
+- Single-select via `selected`; events: `input` (cancelable) + `change`
+- Extended FAB auto-transitions to match rail mode
+
+### Paginator (`m3e-paginator`)
+Import: `@m3e/web/paginator`
+Compact accessible paginator.
+- `length` + `page-size` (default 50) attributes
+- `page` event on page change
+- `page-sizes` comma-separated string (can include "all")
+- `show-first-last-buttons` attribute
+
+### Progress Indicator (`m3e-linear-progress-indicator`, `m3e-circular-progress-indicator`)
+Import: `@m3e/web/progress-indicator`
+Accessible, animated progress indicators.
+- **Circular**: `m3e-circular-progress-indicator`
+  - Variants: `flat` (default), `wavy` — via `variant` attribute
+  - Determinate: `value` + `max` attributes; default slot for content
+  - Indeterminate: `indeterminate` attribute (ignores `value`/`max`)
+- **Linear**: `m3e-linear-progress-indicator`
+  - Modes: `determinate` (default), `indeterminate`, `buffer`, `query` — via `mode` attribute
+  - Variants: `flat` (default), `wavy` — via `variant` attribute
+  - Determinate: `value` + `max`; wavy auto-transitions to flat at 100%
+  - Buffer: `value` + `buffer-value`; wavy auto-transitions to flat at 100%
+  - Query: pre-loading indication; ignores `value`/`max`
+- ARIA: `role="progressbar"`, `aria-valuemin="0"`, `aria-valuenow`, `aria-valuemax`; always provide `aria-label`
+
+### Radio Group (`m3e-radio-group`, `m3e-radio`)
+Import: `@m3e/web/radio-group`
+Single-choice selection control. FACE.
+- `name` propagates from group to radios
+- Attributes: `disabled`, `required`
+- `value` defaults to `"on"`
+
+### Search (`m3e-search-bar`, `m3e-search-view`)
+Import: `@m3e/web/search`
+Material 3 expressive search experience.
+- **m3e-search-bar**: Entry point for search
+  - Slots: `leading`, `input`, `trailing`
+  - `clearable` attribute shows clear button; `clear` event
+  - Input normalized: `role="searchbox"`, `inputmode="search"`, `type="text"`, `aria-haspopup="dialog"`
+- **m3e-search-view**: Suggestions, history, results
+  - Slots: `closed-leading`, `closed-trailing`, `open-leading`, `open-trailing`, `input`, `(default)`
+  - Modes: `fullscreen`, `docked` (default), `auto` — via `mode` attribute
+  - `contained` attribute for filled container when open
+  - `query` event on input focus and value change (`detail.term`); `clear` event
+  - `hide-search-icon` attribute
+  - ARIA: overlay = `role="dialog"` + `aria-modal="true"`; provide `aria-live="polite"` for result updates
+
+### Segmented Button (`m3e-segmented-button`, `m3e-button-segment`)
+Import: `@m3e/web/segmented-button`
+Horizontal group for selecting one or more options.
+- `m3e-button-segment` children; `icon` slot per segment (replaced with check on select)
+- Selection: `multi` attribute on set; `checked` on segment; `input` (cancelable) + `change` events
+- `disabled` on individual segments or entire button
+- `hide-selection-indicator` attribute
+- FACE: `name` on set, `value` on segments
+- ARIA: single-select = `radiogroup`/`radio` + `aria-checked`; multi-select = `group`/`button` + `aria-pressed`
+
+### Select (`m3e-select`)
+Import: `@m3e/web/select`
+Form control for predefined options.
+- `m3e-option` children; `m3e-optgroup` for grouping
+- `multi` attribute for multi-select
+
+### Shape (`m3e-shape`)
+Import: `@m3e/web/shape`
+Abstract shapes with built-in morphing for emphasis and decorative flair.
+- `name` attribute: 31 shapes — `4-leaf-clover`, `4-sided-cookie`, `6-sided-cookie`, `7-sided-cookie`, `8-leaf-clover`, `9-sided-cookie`, `12-sided-cookie`, `arch`, `arrow`, `boom`, `bun`, `burst`, `circle`, `diamond`, `fan`, `flower`, `gem`, `ghost-ish`, `heart`, `hexagon`, `oval`, `pentagon`, `pill`, `pixel-circle`, `pixel-triangle`, `puffy`, `puffy-diamond`, `semicircle`, `slanted`, `soft-boom`, `soft-burst`, `square`, `sunny`, `triangle`, `very-sunny`
+- Nest images/videos to clip with shape
+- CSS `clip-path` transitions for morphing between shapes
+- No ARIA role by default
+
+### Skeleton (`m3e-skeleton`)
+Import: `@m3e/web/skeleton`
+Loading placeholder preserving layout stability.
+- `loaded` attribute reveals content
+- `shape` attribute: `circular`, `rounded`, `square`, `auto` (mirrors slotted element's border-radius)
+- `animation` attribute: `wave` (directional sweep), `pulse` (fade in/out), `none` (static)
+- ARIA: no role, no aria-label, no aria-live, no aria-busy; use `aria-busy="true"` on parent container
+
+### Slide Group (`m3e-slide-group`)
+Import: `@m3e/web/slide-group`
+Directional pagination for overflowing content.
+- `vertical` attribute
+- `previous-page-label`/`next-page-label` attributes
+- No ARIA role
+
+### Slider (`m3e-slider`, `m3e-slider-thumb`)
+Import: `@m3e/web/slider`
+Numeric value selection from continuous or discrete range.
+- `m3e-slider-thumb` required for interactive handle
+- `min` (default 0), `max` (default 100), `step` (default 1) on slider
+- `value` on thumb; `input` (cancelable) + `change` events
+- Two thumbs = range slider
+- Negative ranges supported
+- Sizes: `extra-small` (default), `small`, `medium`, `large`, `extra-large` — via `size` attribute
+- `labelled` attribute shows thumb labels; `displayWith` property for custom formatting
+- `discrete` attribute shows tick marks (requires `step` > 1)
+- `disabled` on slider or individual thumbs
+- ARIA: slider = no role; thumb = `role="slider"`, `aria-valuemin`, `aria-valuemax`, `aria-valuenow`; always label thumbs
+
+### Snackbar (`M3eSnackbar`)
+Import: `@m3e/web/snackbar`
+Global snackbar service for brief messages.
+- `M3eSnackbar.open("message")` to show
+- Action + callback: `M3eSnackbar.open("msg", { action: "Undo", onAction: () => {} })`
+- Dismiss: `M3eSnackbar.open("msg", true)` or action callback
+- ARIA: `role="status"`, `aria-live="polite"`
+
+### Split Button (`m3e-split-button`)
+Import: `@m3e/web/split-button`
+Primary action alongside menu of related actions.
+- Slots: `leading-button` (primary intent), `trailing-button` (invokes menu)
+- Variants: `filled` (default), `tonal`, `outlined`, `elevated` — via `variant` attribute
+- Sizes: `extra-small`, `small` (default), `medium`, `large`, `extra-large` — via `size` attribute
+- ARIA: `role="group"`; always provide `aria-label`/`aria-labelledby`
+
+### Split Pane (`m3e-split-pane`)
+Import: `@m3e/web/split-pane`
+Split view with movable drag handle.
+- Slots: `start`, `end`
+- `value` attribute controls start pane % (default 50%)
+- Events: `input` (cancelable) + `change`
+- Orientations: `horizontal` (default), `vertical`, `auto` — via `orientation` attribute
+- `min`/`max` attrs for pane size constraints
+- `step` for keyboard resize
+- `detents` attr for snap positions
+
+### Stepper (`m3e-stepper`, `m3e-step`, `m3e-step-panel`)
+Import: `@m3e/web/stepper`
+Wizard-like workflow dividing content into steps.
+- `m3e-step` + `m3e-step-panel` as direct children of `m3e-stepper`
+- `for` on `m3e-step` links to `m3e-step-panel` id
+- `selected` attribute on step; `input` (cancelable) + `change` events
+- Orientations: `horizontal` (default), `vertical`, `auto` — via `orientation` attribute
+- `header-position`: `above` (default), `below` — for horizontal
+- `label-position`: `after` (default), `below` — for horizontal
+- `actions` slot on panels; `m3e-stepper-previous`, `m3e-stepper-next`, `m3e-stepper-reset` navigation
+- `linear` attribute requires completing previous steps; requires `form` per step
+- `optional` attribute on step; `editable` on step for backward navigation in linear
+- `completed`/`invalid` attributes for programmatic control
+- Icon slots: `icon`, `done-icon`, `edit-icon`, `error-icon`
+- `hint`/`error` slots on step; optional steps default hint: "(Optional)"
+- ARIA: Tabs pattern — `tablist`, `tab`, `tabpanel`; `aria-controls`, `aria-selected`, `aria-disabled`
+
+### Switch (`m3e-switch`)
+Import: `@m3e/web/switch`
+On/off toggle control. FACE.
+- `checked` attribute; `input` (cancelable) + `change` events
+- `icons` attribute: `none` (default), `selected`, `both`
+- `name`/`value` (default "on") for form submission
+- `disabled` attribute; property-only control (no DOM attribute when disabled at runtime)
+- ARIA: `role="switch"`, `aria-checked`; `aria-disabled="true"` when disabled
+
+### Tabs (`m3e-tabs`, `m3e-tab`, `m3e-tab-panel`)
+Import: `@m3e/web/tabs`
+Tabbed navigation and content panels.
+- `for` attr on `m3e-tab` links to `m3e-tab-panel`
+- `selected` attribute; `input` (cancelable) + `change` events
+- Variants: `primary`, `secondary` (default) — via `variant` attribute
+- `stretch` attribute; `header-position`: `before` (default), `after`
+- `disabled` on tabs; `disable-pagination`
+
+### Textarea Autosize (`m3e-textarea-autosize`)
+Import: `@m3e/web/textarea-autosize`
+Auto-adjusts textarea height to fit content.
+- `for` attribute specifies textarea id
+- `min-rows`/`max-rows` attributes
+- `disabled` attribute
+- ARIA: `role="none"` (presentational)
+
+### Theme (`m3e-theme`)
+Import: `@m3e/web/theme`
+Non-visual element for dynamic color, motion, density, and focus indicators.
+- `color` attribute: HEX color → derives full M3 color palettes as CSS custom properties (e.g., `--md-sys-color-primary`)
+- `scheme` attribute: `light`, `dark`, `auto` (default, follows system preference)
+- `contrast` attribute: `standard` (default), `medium`, `high`
+- `density` attribute: `-3` (most compact) to `+1` (most spacious), default `0`; sets `--md-sys-density-scale` token
+- `motion` attribute: `standard` (default), `expressive` — spring-based physics
+- No ARIA role by default
+
+### TOC (`m3e-toc`)
+Import: `@m3e/web/toc`
+Hierarchical table of contents for in-page navigation.
+- `for` attribute: ID of container with headings to index
+- Scans `h1`-`h6` and `m3e-heading`; reactive to DOM changes
+- `m3e-toc-ignore` attribute on headings to exclude
+- `overline` + `title` slots for heading (overline: 1 line, title: 2 lines, ellipsis truncation)
+- `max-depth` attribute (default 2); depth relative to highest-level heading found
+- ARIA: `role="navigation"`; items = `role="link"` + `tabindex="-1"`; active = `aria-current="true"`
+
+### Toolbar (`m3e-toolbar`)
+Import: `@m3e/web/toolbar`
+Contextual actions, navigation, and controls.
+- Variants: `standard` (default), `vibrant` — via `variant` attribute
+- Shapes: `square` (default), `rounded` — via `shape` attribute
+- `elevated` attribute for elevated surface
+- `vertical` attribute for vertical orientation
+- ARIA: `role="toolbar"`; vertical → `aria-orientation="vertical"`
+
+### Tooltip (`m3e-tooltip`, `m3e-rich-tooltip`)
+Import: `@m3e/web/tooltip`
+Plain and rich tooltips.
+- `for` attribute binds to target element
+- `position`: `above`, `below` (default), `before`, `after` (BIDI-aware)
+- `show-delay`/`hide-delay` attributes
+- `disabled` attribute
+- `touch-gestures`: `auto`, `on`, `off`
+- **m3e-rich-tooltip**: `heading` slot for rich content
+
+### Tree (`m3e-tree`, `m3e-tree-item`)
+Import: `@m3e/web/tree`
+Hierarchical data with nested expandable levels.
+- `m3e-tree-item` children; `label` slot; `open` attribute for expansion
+- `selected` attribute; `change` event; `selected` property
+- `multi` attribute for multi-select
+- `cascade` attribute with `multi` for cascade selection
+- `icon`/`selected-icon` slots on items
+- `toggle-icon`/`open-toggle-icon` slots for expand/collapse icons
+- ARIA: `role="tree"` on tree, `role="treeitem"` on items; `aria-expanded` on expandable; single-select: `aria-selected`, multi-select: `aria-checked`; `tabindex="0"` + `aria-activedescendant` for roving focus; icons: `aria-hidden="true"`; disabled: `aria-disabled="true"`

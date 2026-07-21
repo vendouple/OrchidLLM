@@ -1,23 +1,32 @@
-@model OrchidLLM.Web.Data.Entities.Provider
+@model OrchidLLM.Web.Areas.Admin.Controllers.ChannelEditViewModel
 @{
-    var isNew = Model.Id == 0;
+    var provider = Model.Provider;
+    var isNew = provider.Id == 0;
     ViewData["Title"] = isNew ? "Add Channel" : "Edit Channel";
     ViewData["ActiveSection"] = "providers";
+
+    // Base modalities always get a row; any custom ones already saved follow, plus a
+    // couple of blank rows so the admin can add new custom modalities without JS.
+    var modalityRows = OrchidLLM.Web.Areas.Admin.Controllers.ChannelsController.BaseModalities
+        .Concat(Model.Modalities.Keys.Where(k => !OrchidLLM.Web.Areas.Admin.Controllers.ChannelsController.BaseModalities.Contains(k)))
+        .ToList();
+    const int blankModalitySlots = 2;
+    const int blankErrorAliasSlots = 3;
 }
 
 <section class="admin-section active">
-    <form method="post" action="/Admin/Channels/Save" style="max-width:520px;display:flex;flex-direction:column;gap:16px;">
+    <form method="post" action="/Admin/Channels/Save" style="max-width:640px;display:flex;flex-direction:column;gap:16px;">
         @Html.AntiForgeryToken()
-        <input type="hidden" name="id" value="@(isNew ? "" : Model.Id.ToString())" />
+        <input type="hidden" name="id" value="@(isNew ? "" : provider.Id.ToString())" />
 
         <label>
             <div class="pc-metric-label">Name</div>
-            <input class="form-input" type="text" name="name" value="@Model.Name" required />
+            <input class="form-input" type="text" name="name" value="@provider.Name" required />
         </label>
 
         <label>
             <div class="pc-metric-label">Base URL</div>
-            <input class="form-input" type="url" name="baseUrl" value="@Model.BaseUrl" placeholder="https://api.example.com/v1" required />
+            <input class="form-input" type="url" name="baseUrl" value="@provider.BaseUrl" placeholder="https://api.example.com/v1" required />
         </label>
 
         <label>
@@ -25,7 +34,7 @@
             <select class="form-input" name="status">
                 @foreach (var s in new[] { "active", "rate_limited", "out_of_credits", "dead", "disabled" })
                 {
-                    if (s == Model.Status)
+                    if (s == provider.Status)
                     {
                         <option value="@s" selected>@s</option>
                     }
@@ -39,11 +48,11 @@
 
         <label>
             <div class="pc-metric-label">Weight <small>(lower = preferred in routing)</small></div>
-            <input class="form-input" type="number" name="weight" value="@Model.Weight" min="1" required />
+            <input class="form-input" type="number" name="weight" value="@provider.Weight" min="1" required />
         </label>
 
         <label style="display:flex;align-items:center;gap:8px;">
-            @if (Model.Free)
+            @if (provider.Free)
             {
                 <input type="checkbox" name="free" value="true" checked />
             }
@@ -56,13 +65,82 @@
 
         <label>
             <div class="pc-metric-label">RPM cap <small>(optional — admin-configured ceiling for this channel)</small></div>
-            <input class="form-input" type="number" name="rpmCap" value="@Model.RpmCap" min="0" placeholder="No cap" />
+            <input class="form-input" type="number" name="rpmCap" value="@provider.RpmCap" min="0" placeholder="No cap" />
         </label>
 
         <label>
             <div class="pc-metric-label">Max concurrent <small>(backend safety limit — not the headline stat anymore)</small></div>
-            <input class="form-input" type="number" name="maxConcurrent" value="@Model.MaxConcurrent" min="1" required />
+            <input class="form-input" type="number" name="maxConcurrent" value="@provider.MaxConcurrent" min="1" required />
         </label>
+
+        <div>
+            <div class="pc-metric-label">Modality support <small>(which modalities this channel serves, and which params it accepts per modality)</small></div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                @foreach (var mod in modalityRows)
+                {
+                    var enabled = Model.Modalities.ContainsKey(mod);
+                    var paramsCsv = enabled ? string.Join(", ", Model.Modalities[mod]) : "";
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input class="form-input" type="text" name="modalityName" value="@mod" style="width:120px;flex:0 0 auto;" />
+                        <input class="form-input" type="text" name="modalityParams" value="@paramsCsv" placeholder="comma-separated params, e.g. temperature, top_p" />
+                    </div>
+                }
+                @for (var i = 0; i < blankModalitySlots; i++)
+                {
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <input class="form-input" type="text" name="modalityName" value="" placeholder="custom modality" style="width:120px;flex:0 0 auto;" />
+                        <input class="form-input" type="text" name="modalityParams" value="" placeholder="comma-separated params" />
+                    </div>
+                }
+            </div>
+            <p class="hint">Leave a modality's name blank to drop it on save (an empty params field just means "no params configured yet", not removal).</p>
+        </div>
+
+        <div>
+            <div class="pc-metric-label">Error alias overrides <small>(this channel's own error-label overrides — take precedence over the global defaults in Settings)</small></div>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">
+                @for (var i = 0; i < Model.ErrorAliasOverrides.Count + blankErrorAliasSlots; i++)
+                {
+                    var row = i < Model.ErrorAliasOverrides.Count ? Model.ErrorAliasOverrides[i] : null;
+                    var isRegex = row?.MatchType == "regex";
+                    <div style="display:flex;align-items:center;gap:8px;">
+                        <select class="form-input" name="eaMatchType" style="width:100px;flex:0 0 auto;">
+                            @if (isRegex)
+                            {
+                                <option value="code">code</option>
+                                <option value="regex" selected>regex</option>
+                            }
+                            else
+                            {
+                                <option value="code" selected>code</option>
+                                <option value="regex">regex</option>
+                            }
+                        </select>
+                        <input class="form-input" type="text" name="eaPattern" value="@row?.Pattern" placeholder="pattern, e.g. 429" style="width:140px;flex:0 0 auto;" />
+                        <input class="form-input" type="text" name="eaLabel" value="@row?.Label" placeholder="display label, e.g. Upstream Rate Limited" />
+                    </div>
+                }
+            </div>
+            <p class="hint">Leave pattern or label blank to drop a row on save.</p>
+        </div>
+
+        <div>
+            <div class="pc-metric-label">Key pool <small>(one raw key per line — encrypted at rest, never shown again after save)</small></div>
+            @if (provider.Keys.Any())
+            {
+                <div class="pc-key-list" style="margin:8px 0;">
+                    @foreach (var k in provider.Keys)
+                    {
+                        <div class="pc-key-row">
+                            <span class="key-dot k-@k.Status"></span>
+                            <span class="pc-key-preview">@k.KeyPreview</span>
+                            <span class="key-status-label k-@k.Status">@k.Status.Replace("_", " ")</span>
+                        </div>
+                    }
+                </div>
+            }
+            <textarea class="form-input" name="bulkKeys" rows="4" placeholder="sk-key-one&#10;sk-key-two" style="width:100%;font-family:monospace;"></textarea>
+        </div>
 
         <div class="pc-actions">
             <button type="submit" class="oauth-btn" style="display:inline-flex;width:auto;padding:8px 16px;">Save</button>
