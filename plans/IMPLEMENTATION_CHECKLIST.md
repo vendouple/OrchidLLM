@@ -232,7 +232,7 @@
 - [x] ~~Port `users.css`~~ — at `wwwroot/dashboard/users.css` (path per above, not `css/dashboard.css`)
 - [~] Port `users.js` — copied + URL fixes; **localStorage→fetch swaps still pending per section** (below)
 - [x] ~~Port `shared-store.js` / `booster-seed.js`~~ — copied as-is; retired per-section as APIs land
-- [ ] Dashboard API controllers (Home, Models, ApiKeys, Billing, Account, Announcements, Usage)
+- [~] Dashboard API controllers (Home, Models, ApiKeys, Billing, Account, Announcements, Usage) — **ApiKeys done 2026-07-26**: `/api/dashboard/keys` list/create/rotate/pause/enable/delete (`Controllers/Api/Dashboard/ApiKeysController`); sk-orch- generation w/ sanitized prefix, plaintext returned once, tier `MaxApiKeys` enforced on create (downgrade retention per §17), rotate preserves config+prefix. This also unblocks the gateway's first live E2E (key generation existed nowhere before). Remaining sections open
 - [x] ~~Replace mock `USER`/`TIER` with server-injected auth session~~ — `GET /api/auth/session-bootstrap.js` merges real claims (user_id/username/display_name/role/tier) into `orchid_session` before users.js runs; clears it when signed out. Browser-verified: signed-out visit to users.html clears session and bounces to `/Account/Login` with no console errors. **Logged-in render untested** (needs real GitHub OAuth creds + MySQL)
 - [ ] Replace `OrchidShared.get()` seed fallbacks with real API responses
 
