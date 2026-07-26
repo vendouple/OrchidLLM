@@ -1,4 +1,22 @@
 services:
+  web:
+    build:
+      context: .
+      dockerfile: src/OrchidLLM.Web/Dockerfile
+    restart: unless-stopped
+    ports:
+      - "5160:8080"
+    environment:
+      ASPNETCORE_ENVIRONMENT: Development # dev boot auto-applies migrations
+      ConnectionStrings__MySql: "Server=mysql;Port=3306;Database=orchidllm;User=orchid;Password=orchid_dev_password;TreatTinyAsBoolean=true;"
+      ConnectionStrings__Redis: "redis:6379"
+      # Dev-only encryption key (32 bytes, base64) for provider-key storage — replace outside local dev.
+      Orchid__EncryptionKey: "ZGV2LW9ubHktZW5jcnlwdGlvbi1rZXktMzJieXRlcyE="
+      # Authentication__GitHub__ClientId / __ClientSecret: set via .env or shell to enable OAuth locally.
+    depends_on:
+      - mysql
+      - redis
+
   mysql:
     image: mysql:8
     restart: unless-stopped
