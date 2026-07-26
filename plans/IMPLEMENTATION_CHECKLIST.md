@@ -228,13 +228,12 @@
 | Admin ↔ User view toggle | `[~]` | `[ ]` | Demo has admin link; no toggle button |
 
 ### Dashboard port TODOs
-- [ ] Port `users.html` shell → `Areas/Dashboard/Views/Home/Index.cshtml` (or `_Layout`)
-- [ ] Port `users.css` → `wwwroot/css/dashboard.css`
-- [ ] Port `users.js` → `wwwroot/js/dashboard.js` (replace localStorage with fetch calls)
-- [ ] Port `shared-store.js` bridge (or replace with API calls)
-- [ ] Port `booster-seed.js` (or serve packs from API)
+- [x] ~~Port `users.html` shell~~ — 2026-07-26 `[!]` **approach change vs original TODO**: assets live at `wwwroot/dashboard/*` (users.html/css/js + shared-store.js + booster-seed.js) served by `[Authorize]` `Dashboard/HomeController` via `PhysicalFile`, NOT rewritten into Razor views (Razor would require escaping every `@` in 7k lines of CSS/JS; per IMPLEMENTATION_PLAN_V1 D1 the demo JS architecture is kept). Cross-page URLs fixed (`login.html`→`/Account/Login`, `users.html`→`/Dashboard`, `index.html`→`/`)
+- [x] ~~Port `users.css`~~ — at `wwwroot/dashboard/users.css` (path per above, not `css/dashboard.css`)
+- [~] Port `users.js` — copied + URL fixes; **localStorage→fetch swaps still pending per section** (below)
+- [x] ~~Port `shared-store.js` / `booster-seed.js`~~ — copied as-is; retired per-section as APIs land
 - [ ] Dashboard API controllers (Home, Models, ApiKeys, Billing, Account, Announcements, Usage)
-- [ ] Replace mock `USER`/`TIER` with server-injected auth session
+- [x] ~~Replace mock `USER`/`TIER` with server-injected auth session~~ — `GET /api/auth/session-bootstrap.js` merges real claims (user_id/username/display_name/role/tier) into `orchid_session` before users.js runs; clears it when signed out. Browser-verified: signed-out visit to users.html clears session and bounces to `/Account/Login` with no console errors. **Logged-in render untested** (needs real GitHub OAuth creds + MySQL)
 - [ ] Replace `OrchidShared.get()` seed fallbacks with real API responses
 
 ---
@@ -443,6 +442,9 @@
 
 ## Changelog
 
+- **2026-07-26 (later still)** — Phase A closed out + Phase C opened:
+  - Template cleanup (bootstrap/jquery/lib gone, root → login redirect, minimal Error layout), `Dockerfile` + compose `web` service (5160:8080, auto-migrating Development env) — full stack is now one `docker compose up`.
+  - Dashboard shell ported: demo assets at `wwwroot/dashboard/`, `[Authorize]` controller serves users.html, `session-bootstrap.js` bridges real auth into `orchid_session`. Browser-verified signed-out flow end-to-end.
 - **2026-07-26 (later)** — Gateway hardening pass (commit after `ad88dd7`): admin error translations wired end-to-end (`ErrorTranslationRule` from `ErrorLabels` + channel overrides), stream chunk model re-branding, `LogRetentionService` + `ProviderReprobeService` crons, `strict_params`/param-stripping via `ParamSupport` with `X-Orchid-Unsupported-Params` + `RoutingLog.ParamsStripped`. Build clean, boot smoke-tested with all four hosted services.
 - **2026-07-26** — Phase A of `plans/IMPLEMENTATION_PLAN_V1.md` (new sequenced plan doc created same day from full Frontend-DEMO + backend audit):
   - New entities `UserNextCycleOffer` (§13), `RetentionOffer`, `ErrorLabel` + migration `20260726144251_AddOffersAndErrorLabels` (verified via `dotnet ef migrations script` — still no local Docker/MySQL in this environment; run `dotnet ef database update` before next deploy, or just boot in Development: the app now auto-migrates on dev startup).

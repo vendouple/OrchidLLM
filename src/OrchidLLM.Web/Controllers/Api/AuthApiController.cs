@@ -66,4 +66,72 @@ public class AuthApiController(OrchidDbContext db) : ControllerBase
         await HttpContext.SignOutAsync(CookieAuthenticationDefaults.AuthenticationScheme);
         return Ok(new { ok = true });
     }
+
+    /// <summary>
+    /// Session bridge for the ported dashboard (Phase C): emits JS that writes the real
+    /// ASP.NET auth session into the orchid_session localStorage key the demo-derived
+    /// users.js reads, merging over any extra keys the dashboard has written back
+    /// (cycle, nextRenewal, ...). When signed out it clears the key so users.js redirects
+    /// to login. Loaded via &lt;script src&gt; before users.js — never cached.
+    /// </summary>
+    [HttpGet("session-bootstrap.js")]
+    public async Task<IActionResult> SessionBootstrap()
+    {
+        Response.Headers.CacheControl = "no-store";
+
+        string script;
+        var idClaim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (User.Identity?.IsAuthenticated == true && int.TryParse(idClaim, out var userId))
+        {
+            var user = await db.Users
+                .AsNoTracking()
+                .Where(u => u.Id == userId && u.DeletedAt == null)
+                .Select(u => new
+                {
+                    u.Id,
+                    u.Username,
+                    u.DisplayName,
+                    u.Role,
+                    TierName = db.UserSubscriptions
+                        .Where(s => s.UserId == u.Id)
+                        .Select(s => s.Tier!.Name)
+                        .FirstOrDefault(),
+                })
+                .FirstOrDefaultAsync();
+
+            if (user is not null)
+            {
+                var sessionJson = System.Text.Json.JsonSerializer.Serialize(new
+                {
+                    user_id = user.Id,
+                    username = user.Username,
+                    display_name = user.DisplayName,
+                    provider = "github",
+                    role = user.Role,
+                    tier = (user.TierName ?? "free").ToLowerInvariant(),
+                });
+                script = $$"""
+                    (function () {
+                      var fresh = {{sessionJson}};
+                      var existing = {};
+                      try { existing = JSON.parse(localStorage.getItem('orchid_session') || '{}') || {}; } catch (e) {}
+                      // Server identity wins; dashboard-written extras (cycle, nextRenewal, ...) survive.
+                      var merged = Object.assign({}, existing, fresh);
+                      merged.logged_in_at = existing.logged_in_at || new Date().toISOString();
+                      localStorage.setItem('orchid_session', JSON.stringify(merged));
+                    })();
+                    """;
+            }
+            else
+            {
+                script = "localStorage.removeItem('orchid_session');";
+            }
+        }
+        else
+        {
+            script = "localStorage.removeItem('orchid_session');";
+        }
+
+        return Content(script, "application/javascript");
+    }
 }

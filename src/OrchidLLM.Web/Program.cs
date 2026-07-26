@@ -171,6 +171,9 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseHttpsRedirection();
+// MapStaticAssets below serves from a compile-time manifest; this fallback also serves
+// wwwroot files added after the last build (useful during the frontend port).
+app.UseStaticFiles();
 app.UseRouting();
 
 // Gateway auth guards /v1/* only (API keys + demo keys); cookie auth below handles the web UI.
