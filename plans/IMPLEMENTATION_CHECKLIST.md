@@ -99,11 +99,11 @@
 ### Gateway TODOs
 - [~] Create `ApiGatewayController` with all `/v1/*` endpoints — 2026-07-26: `GatewayController` ships `/v1/chat/completions` + `/v1/models` + `/v1/models/{id}`. Remaining endpoints (completions/images/audio/video) still open
 - [ ] **First live end-to-end test** of chat completions against a configured channel (blocked here on no Docker; needs MySQL+Redis+one provider key)
-- [ ] Wire `ErrorLabels` table + `Provider.ErrorAliasOverrides` into adapter error translation (currently a fixed built-in phrasebook)
-- [ ] Re-brand `model` field inside streaming chunks (non-stream responses already re-branded)
-- [ ] Log-retention cleanup cron (30d RequestLogs / 15d RoutingLogs)
-- [ ] Provider re-probe cron (restore `rate_limited`/`dead` → `active`; fail-count threshold before `dead`)
-- [ ] `strict_params` + param stripping + `X-Orchid-Unsupported-Params` (needs `ModelProvider.SupportsParams` consumed in router)
+- [x] ~~Wire `ErrorLabels` table + `Provider.ErrorAliasOverrides` into adapter error translation~~ — 2026-07-26: `ErrorTranslationRule` (code/regex match, safe regex timeout, malformed-JSON tolerant); channel overrides checked before global labels, built-in phrasebook as fallback. `internal`-category rules keep the generic user message (label is for admin log display)
+- [x] ~~Re-brand `model` field inside streaming chunks~~ — 2026-07-26: adapter re-stamps `PublicModelId` on every parsed `data:` chunk (and non-stream bodies — moved out of the controller)
+- [x] ~~Log-retention cleanup cron~~ — `LogRetentionService` (daily 03:30 UTC): 30d RequestLogs / 15d RoutingLogs (both configurable) + settled queue rows after 7d
+- [~] Provider re-probe cron — `ProviderReprobeService` (every `Orchid:ReprobeIntervalMinutes`, default 5): expires elapsed rate limits (keys + channels), HEAD-probes dead channels and restores them, restores dead routes on healthy channels, raises the ">1 day out_of_credits" admin alert (deduped daily). **Fail-count threshold before marking `dead` still open** (first hard failure still flags immediately)
+- [x] ~~`strict_params` + param stripping + `X-Orchid-Unsupported-Params`~~ — 2026-07-26: `ParamSupport` (SupportsParams JSON: explicit `false` = unsupported, absent = pass through), strict (User.StrictParams + tier.StrictParamsOption) filters candidates and fails 400 `strict_params_unroutable` w/ no charge; non-strict strips per candidate, sets `X-Orchid-Unsupported-Params` (non-streaming only — SSE headers are already sent by then) and records `RoutingLog.ParamsStripped`
 - [x] ~~Implement API key auth middleware (`sk-orch-` prefix, hash lookup)~~ — 2026-07-26: `Services/Gateway/` (`ApiKeyAuthenticator` SHA-256 lookup + active/expiry/credit-limit checks, `GatewayAuthMiddleware` on `/v1/*` with OpenAI-shaped errors, `GatewayCaller` in HttpContext.Items). Smoke-tested: no-auth `/v1/*` → 401 `missing_api_key`. Note: no key *generation* yet (dashboard CRUD, §7)
 - [x] ~~Implement demo key auth path~~ — bearer `demo` or bare request + `orchid_demo_key` cookie → `DemoKeyService.TryConsumeAsync` (daily quota consumed per request; 429 `demo_limit_reached` when over)
 - [ ] Build Redis-backed request queue + worker service (`IHostedService`)
@@ -443,6 +443,7 @@
 
 ## Changelog
 
+- **2026-07-26 (later)** — Gateway hardening pass (commit after `ad88dd7`): admin error translations wired end-to-end (`ErrorTranslationRule` from `ErrorLabels` + channel overrides), stream chunk model re-branding, `LogRetentionService` + `ProviderReprobeService` crons, `strict_params`/param-stripping via `ParamSupport` with `X-Orchid-Unsupported-Params` + `RoutingLog.ParamsStripped`. Build clean, boot smoke-tested with all four hosted services.
 - **2026-07-26** — Phase A of `plans/IMPLEMENTATION_PLAN_V1.md` (new sequenced plan doc created same day from full Frontend-DEMO + backend audit):
   - New entities `UserNextCycleOffer` (§13), `RetentionOffer`, `ErrorLabel` + migration `20260726144251_AddOffersAndErrorLabels` (verified via `dotnet ef migrations script` — still no local Docker/MySQL in this environment; run `dotnet ef database update` before next deploy, or just boot in Development: the app now auto-migrates on dev startup).
   - `AuthApiController`: `GET /api/auth/session` + JSON `POST /api/auth/logout` matching the exact shape `index.js` already fetches.

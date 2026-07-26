@@ -39,6 +39,15 @@ public class AdapterChatRequest
     public required string ProviderModelId { get; init; }
     public required string ApiKey { get; init; }
     public required bool Stream { get; init; }
+
+    /// <summary>Orchid model slug re-stamped onto response bodies and stream chunks (obfuscation §6).</summary>
+    public string? PublicModelId { get; init; }
+
+    /// <summary>Params this provider doesn't support — stripped from the outbound body (plan §3).</summary>
+    public IReadOnlyList<string> RemoveParams { get; init; } = [];
+
+    /// <summary>Admin error translations, channel overrides first; built-in phrasebook is the fallback.</summary>
+    public IReadOnlyList<ErrorTranslationRule> ErrorRules { get; init; } = [];
 }
 
 /// <summary>

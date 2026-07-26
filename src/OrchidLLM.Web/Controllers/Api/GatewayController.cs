@@ -192,6 +192,28 @@ public class GatewayController(
 
             // ---- Route + dispatch with fallback (plan §6) ----
             var candidates = await router.GetCandidatesAsync(model, caller, inputTokenEstimate);
+
+            // Param policy (plan §3): strict paid users only route where ALL requested params
+            // are supported (fail otherwise, no charge); everyone else gets unsupported params
+            // stripped per candidate.
+            var featureParams = ParamSupport.GetFeatureParams(body);
+            var strictParams = caller.User?.StrictParams == true && caller.Tier?.StrictParamsOption == true;
+            string? strictFailMessage = null;
+            if (strictParams)
+            {
+                var before = candidates.Count;
+                candidates = candidates
+                    .Where(c => ParamSupport.GetUnsupported(c.ModelProvider.SupportsParams, featureParams).Count == 0)
+                    .ToList();
+                if (before > 0 && candidates.Count == 0)
+                    strictFailMessage = "No provider supports all requested parameters (strict_params is enabled). You have not been charged.";
+            }
+
+            // Admin error translations: channel overrides first, then global labels (§6).
+            var globalErrorRules = (await db.ErrorLabels.AsNoTracking().Where(l => l.IsActive).ToListAsync(ct))
+                .Select(ErrorTranslationRule.From).ToList();
+
+            List<string> droppedParams = [];
             using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             timeoutCts.CancelAfter(TimeSpan.FromSeconds(config.GetValue("Orchid:ChatTimeoutSeconds", 300)));
 
@@ -203,6 +225,10 @@ public class GatewayController(
                     continue;
                 }
 
+                var candidateDropped = strictParams
+                    ? []
+                    : ParamSupport.GetUnsupported(candidate.ModelProvider.SupportsParams, featureParams);
+
                 try
                 {
                     await router.RecordDispatchAsync(candidate);
@@ -213,6 +239,10 @@ public class GatewayController(
                         ProviderModelId = candidate.ModelProvider.ProviderModelId,
                         ApiKey = candidate.PlaintextKey,
                         Stream = stream,
+                        PublicModelId = model.ModelSlug,
+                        RemoveParams = candidateDropped,
+                        ErrorRules = ErrorTranslationRule.FromProviderOverrides(candidate.Provider.ErrorAliasOverrides)
+                            .Concat(globalErrorRules).ToList(),
                     }, stream ? Response.Body : null, timeoutCts.Token);
                 }
                 finally
@@ -226,6 +256,7 @@ public class GatewayController(
                 {
                     succeeded = true;
                     winner = candidate;
+                    droppedParams = candidateDropped;
                     break;
                 }
 
@@ -253,17 +284,15 @@ public class GatewayController(
                 queueItem.ProviderId = winner!.Provider.Id;
                 queueItem.ActualCredits = actualCost;
                 queueItem.CompletedAt = DateTime.UtcNow;
-                await WriteLogsAsync(requestId, caller, model, winner, attempted, "success", actualCost, (int)queueStopwatch.ElapsedMilliseconds);
+                await WriteLogsAsync(requestId, caller, model, winner, attempted, "success", actualCost, (int)queueStopwatch.ElapsedMilliseconds, droppedParams);
 
                 if (!stream)
                 {
-                    // Re-brand before returning: the upstream body's model field carries the
-                    // provider's own model id (obfuscation policy §6). Streams pass through
-                    // untouched in v1 — noted as a TODO in the checklist.
-                    var responseBody = lastResult.ResponseBody!;
-                    responseBody["model"] = model.ModelSlug;
+                    // Adapter already re-branded the model field (obfuscation §6).
+                    if (droppedParams.Count > 0)
+                        Response.Headers["X-Orchid-Unsupported-Params"] = string.Join(",", droppedParams);
                     Response.ContentType = "application/json";
-                    await Response.WriteAsync(responseBody.ToJsonString(), ct);
+                    await Response.WriteAsync(lastResult.ResponseBody!.ToJsonString(), ct);
                 }
             }
             else
@@ -273,12 +302,16 @@ public class GatewayController(
 
                 queueItem.Status = "failed";
                 queueItem.CompletedAt = DateTime.UtcNow;
-                await WriteLogsAsync(requestId, caller, model, null, attempted, "fail", 0, (int)queueStopwatch.ElapsedMilliseconds);
+                await WriteLogsAsync(requestId, caller, model, null, attempted, "fail", 0, (int)queueStopwatch.ElapsedMilliseconds, droppedParams);
 
-                var (status, code, message) = lastResult is { UserActionable: true, UserMessage: not null }
-                    ? (StatusCodes.Status400BadRequest, "invalid_request_error", lastResult.UserMessage)
-                    : (StatusCodes.Status503ServiceUnavailable, "service_unavailable",
-                       "No provider is currently available for this model. Please retry. You have not been charged.");
+                var (status, code, message) = (strictFailMessage, lastResult) switch
+                {
+                    (not null, _) => (StatusCodes.Status400BadRequest, "strict_params_unroutable", strictFailMessage),
+                    (_, { UserActionable: true, UserMessage: not null }) =>
+                        (StatusCodes.Status400BadRequest, "invalid_request_error", lastResult.UserMessage),
+                    _ => (StatusCodes.Status503ServiceUnavailable, "service_unavailable",
+                        "No provider is currently available for this model. Please retry. You have not been charged."),
+                };
 
                 if (stream && Response.HasStarted)
                 {
@@ -314,7 +347,7 @@ public class GatewayController(
     }
 
     private async Task WriteLogsAsync(string requestId, GatewayCaller caller, Model model, RouteCandidate? winner,
-        List<object> attempted, string status, int creditsCharged, int queueWaitMs)
+        List<object> attempted, string status, int creditsCharged, int queueWaitMs, List<string> droppedParams)
     {
         db.RequestLogs.Add(new RequestLog
         {
@@ -333,6 +366,7 @@ public class GatewayController(
             UserId = caller.User?.Id,
             KeyRefHash = winner?.KeyRefHash,
             ProvidersAttempted = JsonSerializer.Serialize(attempted),
+            ParamsStripped = droppedParams.Count > 0 ? JsonSerializer.Serialize(droppedParams) : null,
             FinalProviderId = winner?.Provider.Id,
             RoutingReason = winner is null ? "all_candidates_failed" : "weight_order",
             QueueWaitMs = queueWaitMs,

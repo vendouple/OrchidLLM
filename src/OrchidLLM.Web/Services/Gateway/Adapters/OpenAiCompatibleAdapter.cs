@@ -23,6 +23,8 @@ public class OpenAiCompatibleAdapter(IHttpClientFactory httpClientFactory) : IPr
         var body = (JsonObject)request.Body.DeepClone();
         body["model"] = request.ProviderModelId;
         body["stream"] = request.Stream;
+        foreach (var param in request.RemoveParams)
+            body.Remove(param);
 
         var url = request.BaseUrl.TrimEnd('/') + "/chat/completions";
         using var httpRequest = new HttpRequestMessage(HttpMethod.Post, url)
@@ -45,15 +47,15 @@ public class OpenAiCompatibleAdapter(IHttpClientFactory httpClientFactory) : IPr
         using (response)
         {
             if (!response.IsSuccessStatusCode)
-                return await TranslateErrorAsync(response, ct);
+                return await TranslateErrorAsync(response, request.ErrorRules, ct);
 
             return request.Stream && streamTarget is not null
-                ? await ForwardStreamAsync(response, streamTarget, ct)
-                : await ReadNonStreamingAsync(response, ct);
+                ? await ForwardStreamAsync(response, request, streamTarget, ct)
+                : await ReadNonStreamingAsync(response, request, ct);
         }
     }
 
-    private static async Task<AdapterResult> ReadNonStreamingAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task<AdapterResult> ReadNonStreamingAsync(HttpResponseMessage response, AdapterChatRequest request, CancellationToken ct)
     {
         var text = await response.Content.ReadAsStringAsync(ct);
         JsonNode? node;
@@ -65,14 +67,17 @@ public class OpenAiCompatibleAdapter(IHttpClientFactory httpClientFactory) : IPr
         {
             node = null;
         }
-        if (node is not JsonObject) // non-JSON or array body = malformed upstream response
+        if (node is not JsonObject obj) // non-JSON or array body = malformed upstream response
             return new AdapterResult { Success = false, UpstreamStatus = 502, UserMessage = InternalErrorMessage };
+
+        if (request.PublicModelId is not null)
+            obj["model"] = request.PublicModelId; // obfuscation §6: never leak the provider's model id
 
         return new AdapterResult
         {
             Success = true,
-            ResponseBody = node,
-            Usage = ExtractUsage(node?["usage"]) ?? EstimateUsageFromBody(node),
+            ResponseBody = obj,
+            Usage = ExtractUsage(obj["usage"]) ?? EstimateUsageFromBody(obj),
         };
     }
 
@@ -80,7 +85,7 @@ public class OpenAiCompatibleAdapter(IHttpClientFactory httpClientFactory) : IPr
     /// Copies SSE lines through verbatim while shadow-parsing them for a usage chunk and an
     /// output-size fallback estimate. Upstream headers are never forwarded — only body lines.
     /// </summary>
-    private static async Task<AdapterResult> ForwardStreamAsync(HttpResponseMessage response, Stream target, CancellationToken ct)
+    private static async Task<AdapterResult> ForwardStreamAsync(HttpResponseMessage response, AdapterChatRequest request, Stream target, CancellationToken ct)
     {
         AdapterUsage? usage = null;
         var outputChars = 0;
@@ -95,26 +100,38 @@ public class OpenAiCompatibleAdapter(IHttpClientFactory httpClientFactory) : IPr
 
             while (await reader.ReadLineAsync(ct) is { } line)
             {
-                await writer.WriteAsync(line);
+                var outLine = line;
+
+                if (line.StartsWith("data:", StringComparison.Ordinal))
+                {
+                    var payload = line[5..].Trim();
+                    if (payload.Length > 0 && payload != "[DONE]")
+                    {
+                        try
+                        {
+                            var chunk = JsonNode.Parse(payload);
+                            usage ??= ExtractUsage(chunk?["usage"]);
+                            var delta = chunk?["choices"]?[0]?["delta"]?["content"]?.GetValue<string>();
+                            outputChars += delta?.Length ?? 0;
+
+                            // Obfuscation §6: re-stamp the provider's model id on every chunk.
+                            if (request.PublicModelId is not null && chunk is JsonObject obj && obj.ContainsKey("model"))
+                            {
+                                obj["model"] = request.PublicModelId;
+                                outLine = "data: " + obj.ToJsonString();
+                            }
+                        }
+                        catch (JsonException)
+                        {
+                            // Not our chunk to understand — forward it verbatim.
+                        }
+                    }
+                }
+
+                await writer.WriteAsync(outLine);
                 await writer.WriteAsync('\n');
                 if (line.Length == 0)
                     await writer.FlushAsync(ct); // event boundary — push the chunk to the client now
-
-                if (!line.StartsWith("data:", StringComparison.Ordinal)) continue;
-                var payload = line[5..].Trim();
-                if (payload.Length == 0 || payload == "[DONE]") continue;
-
-                try
-                {
-                    var chunk = JsonNode.Parse(payload);
-                    usage ??= ExtractUsage(chunk?["usage"]);
-                    var delta = chunk?["choices"]?[0]?["delta"]?["content"]?.GetValue<string>();
-                    outputChars += delta?.Length ?? 0;
-                }
-                catch (JsonException)
-                {
-                    // Not our chunk to understand — it was still forwarded verbatim above.
-                }
             }
             await writer.FlushAsync(ct);
         }
@@ -132,7 +149,7 @@ public class OpenAiCompatibleAdapter(IHttpClientFactory httpClientFactory) : IPr
         };
     }
 
-    private static async Task<AdapterResult> TranslateErrorAsync(HttpResponseMessage response, CancellationToken ct)
+    private static async Task<AdapterResult> TranslateErrorAsync(HttpResponseMessage response, IReadOnlyList<ErrorTranslationRule> rules, CancellationToken ct)
     {
         var status = (int)response.StatusCode;
         var retryAfter = response.Headers.RetryAfter?.Delta;
@@ -141,6 +158,33 @@ public class OpenAiCompatibleAdapter(IHttpClientFactory httpClientFactory) : IPr
         string raw;
         try { raw = await response.Content.ReadAsStringAsync(ct); }
         catch { raw = string.Empty; }
+
+        // Admin-configured translations first (channel overrides were prepended by the caller).
+        // A user_actionable rule surfaces its label; an internal rule still shows the generic
+        // message — the label is for admin log display, not the caller.
+        var matchedRule = rules.FirstOrDefault(r => r.Matches(raw));
+        if (matchedRule is { Category: "user_actionable" })
+        {
+            return new AdapterResult
+            {
+                Success = false,
+                UpstreamStatus = status,
+                UserMessage = matchedRule.Label,
+                UserActionable = true,
+                RetryAfter = retryAfter,
+            };
+        }
+        if (matchedRule is not null)
+        {
+            return new AdapterResult
+            {
+                Success = false,
+                UpstreamStatus = status,
+                UserMessage = InternalErrorMessage,
+                UserActionable = false,
+                RetryAfter = retryAfter,
+            };
+        }
 
         if (status is >= 400 and < 500 && status != 401 && status != 402 && status != 403 && status != 429)
         {
