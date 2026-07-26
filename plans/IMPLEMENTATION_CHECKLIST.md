@@ -64,12 +64,12 @@
 | Session → frontend bridge | `[ ]` | `login.js` simulates session in localStorage; backend session not yet bridged to ported views |
 
 ### Auth TODOs
-- [ ] Verify `AccountController` has GitHub login + callback actions
-- [ ] Implement demo key issuance endpoint (`POST /api/demo/key`) returning UUID
-- [ ] Demo key cookie persistence (`orchid_demo_key`, 30-day, SameSite=Strict, Secure)
-- [ ] Demo key Redis daily counter (`demo:{uuid}:daily`, TTL = end of UTC day)
-- [ ] Demo key 20-day inactivity hard-delete cron
-- [ ] Bridge ASP.NET auth session → ported frontend (currently frontend uses localStorage mock)
+- [x] ~~Verify `AccountController` has GitHub login + callback actions~~ — confirmed 2026-07-26 (`ExternalLogin`/`ExternalLoginCallback`)
+- [x] ~~Implement demo key issuance endpoint (`POST /api/demo/key`) returning UUID~~ — `DemoApiController` + `DemoKeyService.IssueAsync`, 2026-07-26
+- [x] ~~Demo key cookie persistence (`orchid_demo_key`, 30-day, SameSite=Strict, Secure)~~ — shared by `TryDemo` + `POST /api/demo/key`
+- [x] ~~Demo key Redis daily counter (`demo:{uuid}:daily`, TTL = end of UTC day)~~ — `DemoKeyService.TryConsumeAsync`/`GetRemainingAsync` (+ `GET /api/demo/remaining` for the banner pill)
+- [x] ~~Demo key 20-day inactivity hard-delete cron~~ — `DemoKeyCleanupService` (daily 03:00 UTC + catch-up run 1 min after boot)
+- [~] Bridge ASP.NET auth session → ported frontend — **API half done 2026-07-26**: `GET /api/auth/session` (exact demo shape: `{authenticated, user:{username, display_name, avatar}, tier, isAdmin}`) + JSON `POST /api/auth/logout` in `AuthApiController`. Remaining: inject `window.ORCHID_SESSION` into the ported Razor shells (Phase C port work)
 
 ---
 
@@ -77,32 +77,38 @@
 
 | Feature | Status | Notes |
 |---------|--------|-------|
-| `/v1/chat/completions` (stream + non-stream) | `[ ]` | No gateway controller exists |
+| `/v1/chat/completions` (stream + non-stream) | `[~]` | **Shipped 2026-07-26** (`GatewayController`): full pipeline (auth → reserve → queue slot → route → dispatch w/ fallback → reconcile → logs), SSE streaming passthrough. **Not yet exercised against a live provider** (no local Docker/MySQL/Redis) — first live test pending |
 | `/v1/completions` | `[ ]` | — |
 | `/v1/images/generations`, `/v1/images/edits` | `[ ]` | — |
 | `/v1/audio/speech`, `/v1/audio/transcriptions`, `/v1/audio/music` | `[ ]` | — |
 | `/v1/video/generations` | `[ ]` | — |
-| `/v1/models` (key-gated, plan-filtered) | `[ ]` | — |
-| `/v1/models/{id}` | `[ ]` | — |
-| Request queue (Redis sorted set, priority) | `[~]` | `RequestQueueItem` table exists; **no Redis queue worker service** |
-| Queue worker loop | `[ ]` | — |
-| Provider router (health, fallback, in-flight) | `[ ]` | — |
-| Provider adapters (per-provider, §Phase 7) | `[ ]` | — |
-| RPM enforcement per user (Redis `rpm:{user_id}`) | `[ ]` | Only `ChannelRpmService` (per-channel) exists |
-| Credit reservation + reconciliation | `[ ]` | — |
-| Request logs (30d) + routing logs (15d) | `[~]` | Entities exist; no write path |
-| SSE heartbeat while queued | `[ ]` | — |
-| Provider obfuscation (strip headers, translate errors) | `[ ]` | — |
+| `/v1/models` (key-gated, plan-filtered) | `[x]` | 2026-07-26 — OpenAI list shape + orchid extension fields, filtered by caller access-tier rank (`AccessTiers`) |
+| `/v1/models/{id}` | `[x]` | Same filtering; 404 `model_not_found` when out of plan |
+| Request queue (Redis sorted set, priority) | `[~]` | `[!]` **v1 deviation**: `GatewayRequestQueue` is an in-memory priority admission queue (higher priority first, FIFO within, `-1` admin bypass, global dispatch cap `Orchid:MaxConcurrentDispatch`). Completion signalling needs an in-process handle anyway (HTTP request parked); Redis sorted set only pays off multi-instance — revisit then. `RequestQueueItem` rows still written for the admin Queue view |
+| Queue worker loop | `[x]` | Event-driven admission inside `GatewayRequestQueue` (no polling hosted service needed with the slot design) |
+| Provider router (health, fallback, in-flight) | `[x]` | `ProviderRouter`: eligibility (active/health/context/free-only for demo+free), weight-then-speed order for paid (lower=faster), LRU key rotation from encrypted pool, health transitions (429→rate_limited+backoff, 402→out_of_credits+admin notification, 401/403→key down, 5xx/timeout→dead) |
+| Provider adapters (per-provider, §Phase 7) | `[~]` | `IProviderAdapter` + `OpenAiCompatibleAdapter` (streaming SSE passthrough w/ shadow usage parse, error translation phrasebook). One family only — per-provider adapters remain Phase 7 |
+| RPM enforcement per user (Redis `rpm:{user_id}`) | `[x]` | `UserRpmService`, enforced in middleware |
+| Credit reservation + reconciliation | `[x]` | `CreditService`: estimate→reserve→reconcile/release, §7 depletion order (booster fast→booster std→rollover→sub fast→sub std), ledger writes, zero-charge-on-failure |
+| Request logs (30d) + routing logs (15d) | `[~]` | Write path live for chat endpoint (obfuscated `KeyRefHash`, `ProvidersAttempted` JSON, queue wait ms). Retention **cleanup cron still missing** |
+| SSE heartbeat while queued | `[x]` | `: heartbeat` comment every `Orchid:HeartbeatIntervalSeconds` (default 15s) while awaiting a slot |
+| Provider obfuscation (strip headers, translate errors) | `[~]` | Upstream headers never forwarded (body-only copy); errors translated (fixed phrasebook — `ErrorLabels` DB table not consumed yet); non-stream body `model` re-branded to orchid slug. **TODO: stream chunks pass the provider's model id through**; wire `ErrorLabel`/`Provider.ErrorAliasOverrides` into translation |
 | `strict_params` handling | `[ ]` | Field on `User`; no enforcement |
 | Parameter stripping + `X-Orchid-Unsupported-Params` header | `[ ]` | — |
 
 ### Gateway TODOs
-- [ ] Create `ApiGatewayController` with all `/v1/*` endpoints
-- [ ] Implement API key auth middleware (`sk-orch-` prefix, hash lookup)
-- [ ] Implement demo key auth path
+- [~] Create `ApiGatewayController` with all `/v1/*` endpoints — 2026-07-26: `GatewayController` ships `/v1/chat/completions` + `/v1/models` + `/v1/models/{id}`. Remaining endpoints (completions/images/audio/video) still open
+- [ ] **First live end-to-end test** of chat completions against a configured channel (blocked here on no Docker; needs MySQL+Redis+one provider key)
+- [ ] Wire `ErrorLabels` table + `Provider.ErrorAliasOverrides` into adapter error translation (currently a fixed built-in phrasebook)
+- [ ] Re-brand `model` field inside streaming chunks (non-stream responses already re-branded)
+- [ ] Log-retention cleanup cron (30d RequestLogs / 15d RoutingLogs)
+- [ ] Provider re-probe cron (restore `rate_limited`/`dead` → `active`; fail-count threshold before `dead`)
+- [ ] `strict_params` + param stripping + `X-Orchid-Unsupported-Params` (needs `ModelProvider.SupportsParams` consumed in router)
+- [x] ~~Implement API key auth middleware (`sk-orch-` prefix, hash lookup)~~ — 2026-07-26: `Services/Gateway/` (`ApiKeyAuthenticator` SHA-256 lookup + active/expiry/credit-limit checks, `GatewayAuthMiddleware` on `/v1/*` with OpenAI-shaped errors, `GatewayCaller` in HttpContext.Items). Smoke-tested: no-auth `/v1/*` → 401 `missing_api_key`. Note: no key *generation* yet (dashboard CRUD, §7)
+- [x] ~~Implement demo key auth path~~ — bearer `demo` or bare request + `orchid_demo_key` cookie → `DemoKeyService.TryConsumeAsync` (daily quota consumed per request; 429 `demo_limit_reached` when over)
 - [ ] Build Redis-backed request queue + worker service (`IHostedService`)
 - [ ] Build provider router with health tracking + fallback
-- [ ] Per-user RPM counter service (mirror `ChannelRpmService`)
+- [x] ~~Per-user RPM counter service (mirror `ChannelRpmService`)~~ — `UserRpmService` (`rpm:{user_id}`, 60s TTL), enforced in `GatewayAuthMiddleware` using `Tier.RpmNormal` (exhausted-state RPM deferred to the Phase E exhaustion evaluator)
 - [ ] Credit reservation service (estimate → reserve → reconcile → release on fail)
 - [ ] SSE streaming + heartbeat for queued requests
 - [ ] Provider adapter interface + at least one stub adapter
@@ -130,8 +136,8 @@
 | Retention offers (churn prevention) | `[~]` | Frontend `admin.js` seeds `RETENTION_OFFERS_SEED`; no backend table |
 
 ### Billing TODOs
-- [ ] Add `UserNextCycleOffer` entity (§13 — discount/credit_bonus/both, one active per user)
-- [ ] Add retention offer entity (or store in `SystemSetting` JSON)
+- [x] ~~Add `UserNextCycleOffer` entity~~ — `Data/Entities/Offers.cs`, migration `20260726144251_AddOffersAndErrorLabels`, 2026-07-26 ("one active per user" left as a business rule for the billing service, not a DB constraint)
+- [x] ~~Add retention offer entity~~ — `RetentionOffer` (typed table, unique on `MinTenureMonths`), same migration; also added global `ErrorLabel` table (admin Settings → Error Labels; per-channel overrides stay on `Provider.ErrorAliasOverrides`)
 - [ ] Credit depletion order service (booster fast → booster std → rollover → sub fast → sub std)
 - [ ] Rollover cron job (`IHostedService` or Quartz)
 - [ ] Exhaustion state evaluator
@@ -437,6 +443,13 @@
 
 ## Changelog
 
+- **2026-07-26** — Phase A of `plans/IMPLEMENTATION_PLAN_V1.md` (new sequenced plan doc created same day from full Frontend-DEMO + backend audit):
+  - New entities `UserNextCycleOffer` (§13), `RetentionOffer`, `ErrorLabel` + migration `20260726144251_AddOffersAndErrorLabels` (verified via `dotnet ef migrations script` — still no local Docker/MySQL in this environment; run `dotnet ef database update` before next deploy, or just boot in Development: the app now auto-migrates on dev startup).
+  - `AuthApiController`: `GET /api/auth/session` + JSON `POST /api/auth/logout` matching the exact shape `index.js` already fetches.
+  - `DemoKeyService` (issuance + Redis daily counter `demo:{uuid}:daily` with end-of-UTC-day TTL, over-cap decrement guard), `DemoApiController` (`POST /api/demo/key`, `GET /api/demo/remaining`), `DemoKeyCleanupService` (20-day inactivity hard-delete, daily 03:00 UTC). `AccountController.TryDemo` refactored onto the service.
+  - Dev-only `Database.Migrate()` on boot in `Program.cs` (non-fatal if MySQL is down, mirroring the Redis boot convention).
+  - Phase B groundwork (§3 gateway steps 1–2): `ApiKeyAuthenticator` + `GatewayAuthMiddleware` (API-key & demo auth on `/v1/*`, OpenAI-shaped error bodies) + `UserRpmService` (`rpm:{user_id}`). Verified by booting the app (no MySQL/Redis available): `/api/auth/session` → `{"authenticated":false}`, unauthenticated `/v1/chat/completions` → 401 `missing_api_key`.
+  - Phase B core (§3 steps 3–6): `CreditService` (reserve/reconcile/release, §7 depletion order, ledger), `GatewayRequestQueue` (in-memory priority admission — deviation noted in §3 table), `ProviderInFlightService` (`inflight:{provider_id}`), `ProviderRouter` (eligibility/weight order/LRU key pool/health transitions + 402 admin notification), `IProviderAdapter` + `OpenAiCompatibleAdapter` (SSE passthrough, usage extraction, error phrasebook), `GatewayController` (`/v1/chat/completions` stream+non-stream with heartbeats and fallback loop, `/v1/models`, `/v1/models/{id}`), request/routing log writes. Compiles clean; endpoint gating smoke-tested; **live provider round-trip still untested** (no Docker in this environment).
 - **2026-07-21** — Initial checklist created. Identified stack deviation (Node/Oracle plan vs .NET/MySQL reality), provider→Channels direction change, and full gap analysis between Frontend-DEMO, backend entities, and plan.
 - **2026-07-21** — Shipped schema corrections + Channels key storage (checklist §1, §6 priority items 1–2):
   - Removed stale `BoosterPack` fields (`DurationDays`, `IsPermanent`, `PermanentBaseTierId`) and `UserBoosterPack.ExpiresAt` per plan v3.1.2.

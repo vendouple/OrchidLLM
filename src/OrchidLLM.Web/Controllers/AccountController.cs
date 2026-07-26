@@ -2,12 +2,11 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Mvc;
-using OrchidLLM.Web.Data;
-using OrchidLLM.Web.Data.Entities;
+using OrchidLLM.Web.Services.Demo;
 
 namespace OrchidLLM.Web.Controllers;
 
-public class AccountController(OrchidDbContext db) : Controller
+public class AccountController : Controller
 {
     [HttpGet]
     public IActionResult Login() => View();
@@ -40,25 +39,11 @@ public class AccountController(OrchidDbContext db) : Controller
 
     /// <summary>Issues a real demo session (DemoKeys row + cookie) — replaces the demo's localStorage-only flow.</summary>
     [HttpPost]
-    public async Task<IActionResult> TryDemo([FromBody] TryDemoRequest? request)
+    public async Task<IActionResult> TryDemo([FromBody] TryDemoRequest? request, [FromServices] DemoKeyService demoKeys)
     {
-        var demoKeyId = Guid.NewGuid().ToString();
-        var platform = request?.Platform == "web_mobile" ? "web_mobile" : "web_desktop";
-        var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var key = await demoKeys.IssueAsync(request?.Platform);
 
-        db.DemoKeys.Add(new DemoKey
-        {
-            Id = demoKeyId,
-            Platform = platform,
-            RequestsToday = 0,
-            TotalRequests = 0,
-            LastRequestDay = today,
-            CreatedAt = DateTime.UtcNow,
-            LastUsedAt = DateTime.UtcNow,
-        });
-        await db.SaveChangesAsync();
-
-        Response.Cookies.Append("orchid_demo_key", demoKeyId, new CookieOptions
+        Response.Cookies.Append(DemoKeyService.CookieName, key.Id, new CookieOptions
         {
             Expires = DateTimeOffset.UtcNow.AddDays(30),
             HttpOnly = true,
@@ -67,7 +52,7 @@ public class AccountController(OrchidDbContext db) : Controller
             Path = "/",
         });
 
-        return Json(new { demoKeyPreview = demoKeyId[..8] });
+        return Json(new { demoKeyPreview = key.Id[..8] });
     }
 
     [HttpPost]

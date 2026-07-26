@@ -3,6 +3,10 @@ using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.EntityFrameworkCore;
 using OrchidLLM.Web.Data;
 using OrchidLLM.Web.Data.Entities;
+using OrchidLLM.Web.Services.Billing;
+using OrchidLLM.Web.Services.Demo;
+using OrchidLLM.Web.Services.Gateway;
+using OrchidLLM.Web.Services.Gateway.Adapters;
 using OrchidLLM.Web.Services.RateLimit;
 using OrchidLLM.Web.Services.Security;
 using StackExchange.Redis;
@@ -27,7 +31,19 @@ builder.Services.AddSingleton<IConnectionMultiplexer>(_ =>
 });
 builder.Services.AddSingleton<ChannelRpmService>();
 builder.Services.AddSingleton<IProviderKeyCipher, ProviderKeyCipher>();
+builder.Services.AddScoped<DemoKeyService>();
+builder.Services.AddHostedService<DemoKeyCleanupService>();
+builder.Services.AddSingleton<UserRpmService>();
+builder.Services.AddScoped<ApiKeyAuthenticator>();
+builder.Services.AddSingleton<GatewayRequestQueue>();
+builder.Services.AddSingleton<ProviderInFlightService>();
+builder.Services.AddSingleton<OpenAiCompatibleAdapter>();
+builder.Services.AddScoped<ProviderRouter>();
+builder.Services.AddScoped<CreditService>();
 builder.Services.AddHttpClient("channel-probe", client => client.Timeout = TimeSpan.FromSeconds(6));
+// Streaming dispatch client: no HttpClient-level timeout — per-request cancellation
+// (Orchid:ChatTimeoutSeconds) governs instead, otherwise long SSE streams would be cut off.
+builder.Services.AddHttpClient(OpenAiCompatibleAdapter.HttpClientName, client => client.Timeout = Timeout.InfiniteTimeSpan);
 
 builder.Services.AddAuthentication(CookieAuthenticationDefaults.AuthenticationScheme)
     .AddCookie(options =>
@@ -126,6 +142,23 @@ builder.Services.AddAuthorization();
 
 var app = builder.Build();
 
+// Dev convenience: apply pending migrations on boot so `docker compose up` + F5 just works.
+// Production applies migrations explicitly (dotnet ef database update) before deploy.
+// Non-fatal on failure, matching the Redis AbortOnConnectFail=false convention — the app
+// still boots for offline dev; DB-backed pages just fail until MySQL is reachable.
+if (app.Environment.IsDevelopment())
+{
+    using var scope = app.Services.CreateScope();
+    try
+    {
+        scope.ServiceProvider.GetRequiredService<OrchidDbContext>().Database.Migrate();
+    }
+    catch (Exception ex)
+    {
+        app.Logger.LogWarning(ex, "Could not apply migrations on boot (is MySQL up?). Continuing without.");
+    }
+}
+
 // Configure the HTTP request pipeline.
 if (!app.Environment.IsDevelopment())
 {
@@ -136,6 +169,9 @@ if (!app.Environment.IsDevelopment())
 
 app.UseHttpsRedirection();
 app.UseRouting();
+
+// Gateway auth guards /v1/* only (API keys + demo keys); cookie auth below handles the web UI.
+app.UseMiddleware<GatewayAuthMiddleware>();
 
 app.UseAuthentication();
 app.UseAuthorization();

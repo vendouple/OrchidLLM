@@ -20,6 +20,35 @@ public class ReferralTransaction
     public DateTime GrantedAt { get; set; }
 }
 
+/// <summary>
+/// Global error-label alias (admin Settings → Error Labels in Frontend-DEMO): renames a raw
+/// upstream error into the provider-neutral message users see. Per-channel overrides live in
+/// Provider.ErrorAliasOverrides and win over these global rows. Consumed by the gateway's
+/// error-translation pipeline (plan §6 — no raw provider error text escapes unprocessed).
+/// </summary>
+public class ErrorLabel
+{
+    public int Id { get; set; }
+
+    [MaxLength(20)]
+    public string MatchType { get; set; } = "code"; // code|regex
+
+    /// <summary>Raw upstream error code or regex to match against.</summary>
+    [MaxLength(500)]
+    public string Pattern { get; set; } = string.Empty;
+
+    /// <summary>User-facing replacement label.</summary>
+    [MaxLength(500)]
+    public string Label { get; set; } = string.Empty;
+
+    /// <summary>user_actionable errors surface the label verbatim; internal ones stay generic.</summary>
+    [MaxLength(20)]
+    public string Category { get; set; } = "internal"; // user_actionable|internal
+
+    public bool IsActive { get; set; } = true;
+    public DateTime UpdatedAt { get; set; }
+}
+
 public class SystemSetting
 {
     public int Id { get; set; }

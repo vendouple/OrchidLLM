@@ -48,6 +48,10 @@ public class OrchidDbContext(DbContextOptions<OrchidDbContext> options) : DbCont
     public DbSet<ReferralTransaction> ReferralTransactions => Set<ReferralTransaction>();
     public DbSet<SystemSetting> SystemSettings => Set<SystemSetting>();
 
+    public DbSet<UserNextCycleOffer> UserNextCycleOffers => Set<UserNextCycleOffer>();
+    public DbSet<RetentionOffer> RetentionOffers => Set<RetentionOffer>();
+    public DbSet<ErrorLabel> ErrorLabels => Set<ErrorLabel>();
+
     protected override void OnModelCreating(ModelBuilder b)
     {
         // ---- Unique constraints ----
@@ -157,6 +161,18 @@ public class OrchidDbContext(DbContextOptions<OrchidDbContext> options) : DbCont
         b.Entity<UserContextTierPreference>()
             .HasOne(x => x.Model).WithMany()
             .HasForeignKey(x => x.ModelId).OnDelete(DeleteBehavior.Restrict);
+
+        // "One active offer per user" is a business rule (new offers replace pending ones),
+        // so no unique index — just a lookup index for the billing-cycle processor.
+        b.Entity<UserNextCycleOffer>().HasIndex(x => new { x.UserId, x.IsUsed });
+        b.Entity<UserNextCycleOffer>()
+            .HasOne(x => x.User).WithMany()
+            .HasForeignKey(x => x.UserId).OnDelete(DeleteBehavior.Cascade);
+        b.Entity<UserNextCycleOffer>()
+            .HasOne(x => x.CreatedByUser).WithMany()
+            .HasForeignKey(x => x.CreatedBy).OnDelete(DeleteBehavior.SetNull);
+
+        b.Entity<RetentionOffer>().HasIndex(x => x.MinTenureMonths).IsUnique();
 
         SeedData.Apply(b);
     }
